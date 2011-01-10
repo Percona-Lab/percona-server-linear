@@ -1,13 +1,16 @@
 FETCH_CMD=wget
 MASTER_SITE=http://www.percona.com/downloads/community
 MYSQL_VERSION=5.5.13
-PERCONA_SERVER ?=Percona-Server
+PERCONA_SERVER_VERSION=rel20.4
+PERCONA_SERVER         ?=Percona-Server-$(MYSQL_VERSION)-$(PERCONA_SERVER_VERSION)
+PERCONA_SERVER_SHORT_1 ?=Percona-Server-$(MYSQL_VERSION)
+PERCONA_SERVER_SHORT_2 ?=Percona-Server
 DEBUG_DIR ?= $(PERCONA_SERVER)-debug
 RELEASE_DIR ?= $(PERCONA_SERVER)-release
 SERIES ?=series
 
 CFLAGS=-fPIC -Wall -O3 -g -static-libgcc -fno-omit-frame-pointer -fno-strict-aliasing
-CXXFLAGS=-fno-exceptions  -fPIC -Wall -Wno-unused-parameter -fno-implicit-templates -fno-exceptions -fno-rtti -O3 -g -static-libgcc -fno-omit-frame-pointer -fno-strict-aliasing
+CXXFLAGS=-fno-exceptions -fPIC -Wall -Wno-unused-parameter -fno-implicit-templates -fno-exceptions -fno-rtti -O3 -g -static-libgcc -fno-omit-frame-pointer -fno-strict-aliasing
 
 CFLAGS_RELEASE=$(CFLAGS) -DDBUG_OFF -DMY_PTHREAD_FASTMUTEX=1
 CXXFLAGS_RELEASE=$(CXXFLAGS) -DDBUG_OFF -DMY_PTHREAD_FASTMUTEX=1
@@ -19,9 +22,25 @@ CONFIGURE=CFLAGS="-O2 -g -fmessage-length=0 -D_FORTIFY_SOURCE=2" CXXFLAGS="-O2 -
 REVS = $(shell bzr log | grep rev | head -1   )
 REV  = $(word 2, $(REVS) )
 
-all: main install-lic tests misc
+all: main handlersocket maatkit-udf install-lic tests misc
 	@echo ""
 	@echo "Percona Server source code is ready"
+	@echo "Now change directory to $(PERCONA_SERVER) define variables as show below"
+	@echo ""
+	export CFLAGS="-O2 -g -fmessage-length=0 -D_FORTIFY_SOURCE=2"
+	export CXXFLAGS="-O2 -g -fmessage-length=0 -D_FORTIFY_SOURCE=2"
+	export LIBS=-lrt
+	@echo ""
+	@echo "and run cmake . -DCMAKE_BUILD_TYPE=RelWithDebInfo -DBUILD_CONFIG=mysql_release -DFEATURE_SET=community -DWITH_EMBEDDED_SERVER=OFF && make all install"
+	@echo ""
+
+handlersocket:
+	cp -R HandlerSocket-Plugin-for-MySQL $(PERCONA_SERVER)/storage
+	patch -p1 -d $(PERCONA_SERVER)/storage < handlersocket.patch
+
+maatkit-udf:
+	cp -R UDF "$(PERCONA_SERVER)"
+	cd "$(PERCONA_SERVER)"/UDF && autoreconf --install
 
 configure: all
 	(cd $(PERCONA_SERVER); bash BUILD/autorun.sh; $(CONFIGURE))
@@ -53,8 +72,12 @@ main: mysql-$(MYSQL_VERSION).tar.gz
 	@echo "Prepare Percona Server sources"
 	rm -rf mysql-$(MYSQL_VERSION)
 	rm -rf $(PERCONA_SERVER);
+	rm -rf $(PERCONA_SERVER_SHORT_1);
+	rm -rf $(PERCONA_SERVER_SHORT_2);
 	tar zxf mysql-$(MYSQL_VERSION).tar.gz
 	mv mysql-$(MYSQL_VERSION) $(PERCONA_SERVER)
+	ln -s $(PERCONA_SERVER) $(PERCONA_SERVER_SHORT_1)
+	ln -s $(PERCONA_SERVER) $(PERCONA_SERVER_SHORT_2)
 	(cat `cat $(SERIES)`) | patch -p1 -d $(PERCONA_SERVER)
 	rm $(PERCONA_SERVER)/sql/sql_yacc.cc $(PERCONA_SERVER)/sql/sql_yacc.h
 
@@ -63,7 +86,7 @@ mysql-$(MYSQL_VERSION).tar.gz:
 	$(FETCH_CMD) $(MASTER_SITE)/mysql-$(MYSQL_VERSION).tar.gz
 
 tests:
-	./install_tests.sh
+	PERCONA_SERVER=${PERCONA_SERVER} sh install_tests.sh
 
 misc:
 	@echo "Installing other files"
@@ -71,4 +94,3 @@ misc:
 
 clean:
 	rm -rf mysql-$(MYSQL_VERSION) $(PERCONA_SERVER)
-	rm -f mysql-$(MYSQL_VERSION).tar.gz
