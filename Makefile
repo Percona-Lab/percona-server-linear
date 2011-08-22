@@ -1,7 +1,7 @@
 FETCH_CMD=wget
 MASTER_SITE=http://s3.amazonaws.com/percona.com/downloads/community
-MYSQL_VERSION=5.5.15
-PERCONA_SERVER_VERSION=rel20.4
+MYSQL_VERSION=5.5.18
+PERCONA_SERVER_VERSION=rel21.0
 PERCONA_SERVER         ?=Percona-Server-$(MYSQL_VERSION)-$(PERCONA_SERVER_VERSION)
 PERCONA_SERVER_SHORT_1 ?=Percona-Server-$(MYSQL_VERSION)
 PERCONA_SERVER_SHORT_2 ?=Percona-Server
@@ -22,7 +22,7 @@ CONFIGURE=CFLAGS="-O2 -g -fmessage-length=0 -D_FORTIFY_SOURCE=2" CXXFLAGS="-O2 -
 REVS = $(shell bzr log | grep rev | head -1   )
 REV  = $(word 2, $(REVS) )
 
-all: main handlersocket maatkit-udf install-lic tests misc
+all: main handlersocket maatkit-udf install-lic misc
 	@echo ""
 	@echo "Percona Server source code is ready"
 	@echo "Now change directory to $(PERCONA_SERVER) define variables as show below"
@@ -92,12 +92,9 @@ mysql-$(MYSQL_VERSION).tar.gz:
 	@echo "Downloading MySQL sources from $(MASTER_SITE)"
 	$(FETCH_CMD) $(MASTER_SITE)/mysql-$(MYSQL_VERSION).tar.gz
 
-tests:
-	PERCONA_SERVER=${PERCONA_SERVER} sh install_tests
-
 misc:
 	@echo "Installing other files"
 	install -m 644 lrusort.py $(PERCONA_SERVER)/scripts
 
 clean:
-	rm -rf mysql-$(MYSQL_VERSION) $(PERCONA_SERVER) $(PERCONA_SERVER_SHORT_1) $(PERCONA_SERVER_SHORT_2)
+	rm -rf mysql-$(MYSQL_VERSION) $(PERCONA_SERVER) $(PERCONA_SERVER_SHORT_1) $(PERCONA_SERVER_SHORT_2) $(RELEASE_DIR) $(DEBUG_DIR)
