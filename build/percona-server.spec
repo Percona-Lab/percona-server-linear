@@ -25,10 +25,10 @@
 %define mysql_vendor            Oracle and/or its affiliates
 %define percona_server_vendor	Percona, Inc
 
-%define mysql_version   5.5.18
+%define mysql_version   5.5.22
 %define redhatversion %(lsb_release -rs | awk -F. '{ print $1}')
-%define majorversion 23
-%define minorversion 0
+%define majorversion 25
+%define minorversion 2
 %define distribution  rhel%{redhatversion}
 %define percona_server_version	rel%{majorversion}.%{minorversion}
 
@@ -328,13 +328,14 @@ and applications need to dynamically load and use Percona Server.
 %build
 
 # Be strict about variables, bail at earliest opportunity, etc.
-set -u
+set -uex
+
 BuildHandlerSocket() {
     cd storage/HandlerSocket-Plugin-for-MySQL
     bash -x ./autogen.sh
     echo "Configuring HandlerSocket"
     CXX="${HS_CXX:-g++}" \
-        CXXFLAGS="$CXXFLAGS -I$RPM_BUILD_DIR/%{src_dir}/release/include" \
+        MYSQL_CFLAGS="-I $RPM_BUILD_DIR/%{src_dir}/release/include" \
         ./configure --with-mysql-source=$RPM_BUILD_DIR/%{src_dir}/%{src_dir} \
         --with-mysql-bindir=$RPM_BUILD_DIR/%{src_dir}/release/scripts \
         --with-mysql-plugindir=%{_libdir}/mysql/plugin \
@@ -442,7 +443,7 @@ for f in lexyy.c pars0grm.c pars0grm.y pars0lex.l
 do
     for d in debug release
     do
-        ln -s "../../../%{src_dir}/storage/innobase/$f" "$d/storage/innobase/"
+        ln -s "../../../%{src_dir}/storage/innobase/pars/$f" "$d/storage/innobase/"
     done
 done
 
@@ -941,8 +942,7 @@ echo "====="                                     >> $STATUS_HISTORY
 %if %{defined license_files_server}
 %doc %{license_files_server}
 %endif
-%doc %{src_dir}/Docs/ChangeLog
-%doc %{src_dir}/Docs/INFO_SRC
+%doc release/Docs/INFO_SRC
 %doc release/Docs/INFO_BIN
 %doc release/support-files/my-*.cnf
 
