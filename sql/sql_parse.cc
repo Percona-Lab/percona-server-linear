@@ -86,7 +86,6 @@
 #include "sp_cache.h"
 #include "events.h"
 #include "sql_trigger.h"
-#include "query_response_time.h"
 #include "transaction.h"
 #include "sql_audit.h"
 #include "sql_prepare.h"
@@ -2173,7 +2172,6 @@ int prepare_schema_table(THD *thd, LEX *lex, Table_ident *table_ident,
   case SCH_CHARSETS:
   case SCH_ENGINES:
   case SCH_COLLATIONS:
-  case SCH_QUERY_RESPONSE_TIME:
   case SCH_COLLATION_CHARACTER_SET_APPLICABILITY:
   case SCH_USER_PRIVILEGES:
   case SCH_SCHEMA_PRIVILEGES:
