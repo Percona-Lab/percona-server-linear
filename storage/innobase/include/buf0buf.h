@@ -1777,6 +1777,7 @@ struct buf_buddy_free_t {
 				/*!< Node of zip_free list */
 };
 
+
 /** @brief The buffer pool statistics structure. */
 struct buf_pool_stat_t{
 	ulint	n_page_gets;	/*!< number of page gets performed;
