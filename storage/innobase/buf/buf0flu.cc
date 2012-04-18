@@ -50,7 +50,7 @@ Created 11/11/1995 Heikki Tuuri
 #include "mysql/service_thd_wait.h"
 
 /** Number of pages flushed through non flush_list flushes. */
-static ulint buf_lru_flush_page_count = 0;
+// static ulint buf_lru_flush_page_count = 0;
 
 /** Flag indicating if the page_cleaner is in active state. This flag
 is set to TRUE by the page_cleaner thread when it is spawned and is set
