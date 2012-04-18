@@ -5066,6 +5066,7 @@ lock_rec_print(
 
 	putc('\n', file);
 
+	if ( srv_show_verbose_locks ) {
 	block = buf_page_try_get(space, page_no, &mtr);
 
 	for (i = 0; i < lock_rec_get_n_bits(lock); ++i) {
@@ -5091,6 +5092,7 @@ lock_rec_print(
 		}
 
 		putc('\n', file);
+	}
 	}
 
 	mtr_commit(&mtr);
@@ -5340,7 +5342,7 @@ loop:
 		}
 	}
 
-	if (!srv_print_innodb_lock_monitor) {
+        if (!srv_print_innodb_lock_monitor && !srv_show_locks_held) {
 		nth_trx++;
 		goto loop;
 	}
@@ -5433,8 +5435,8 @@ print_rec:
 
 	nth_lock++;
 
-	if (nth_lock >= 10) {
-		fputs("10 LOCKS PRINTED FOR THIS TRX:"
+	if (nth_lock >= srv_show_locks_held) {
+		fputs("TOO MANY LOCKS PRINTED FOR THIS TRX:"
 		      " SUPPRESSING FURTHER PRINTS\n",
 		      file);
 
