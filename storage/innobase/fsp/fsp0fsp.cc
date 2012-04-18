@@ -165,6 +165,9 @@ fsp_get_space_header(
 	ut_ad(id != 0 || !page_size.is_compressed());
 
 	block = buf_page_get(page_id_t(id, 0), page_size, RW_SX_LATCH, mtr);
+
+	SRV_CORRUPT_TABLE_CHECK(block, return(0););
+
 	header = FSP_HEADER_OFFSET + buf_block_get_frame(block);
 	buf_block_dbg_add_level(block, SYNC_FSP_PAGE);
 
@@ -654,6 +657,8 @@ xdes_get_descriptor(
 
 	block = buf_page_get(page_id_t(space_id, 0), page_size,
 			     RW_SX_LATCH, mtr);
+
+	SRV_CORRUPT_TABLE_CHECK(block, return(0););
 
 	buf_block_dbg_add_level(block, SYNC_FSP_PAGE);
 
@@ -1834,11 +1839,9 @@ fsp_page_create(
 	} else {
 		rw_lock_sx_lock(&block->lock);
 	}
-	mutex_enter(&block->mutex);
 
 	buf_block_buf_fix_inc(block, __FILE__, __LINE__);
 
-	mutex_exit(&block->mutex);
 	mtr_memo_push(init_mtr, block, rw_latch == RW_X_LATCH
 		      ? MTR_MEMO_PAGE_X_FIX : MTR_MEMO_PAGE_SX_FIX);
 
@@ -2175,6 +2178,8 @@ fsp_seg_inode_page_find_free(
 	const page_size_t&	page_size,
 	mtr_t*			mtr)
 {
+	SRV_CORRUPT_TABLE_CHECK(page, return(ULINT_UNDEFINED););
+
 	for (; i < FSP_SEG_INODES_PER_PAGE(page_size); i++) {
 
 		fseg_inode_t*	inode;
@@ -2282,6 +2287,8 @@ fsp_alloc_seg_inode(
 
 	page = buf_block_get_frame(block);
 
+	SRV_CORRUPT_TABLE_CHECK(page, return(0););
+
 	n = fsp_seg_inode_page_find_free(page, 0, page_size, mtr);
 
 	ut_a(n != ULINT_UNDEFINED);
@@ -2383,6 +2390,8 @@ fseg_inode_try_get(
 	inode = fut_get_ptr(space, page_size, inode_addr, RW_SX_LATCH, mtr,
 			    block);
 
+	SRV_CORRUPT_TABLE_CHECK(inode, return(0););
+
 	if (UNIV_UNLIKELY(!mach_read_from_8(inode + FSEG_ID))) {
 
 		inode = NULL;
@@ -2412,7 +2421,9 @@ fseg_inode_get(
 {
 	fseg_inode_t*	inode
 		= fseg_inode_try_get(header, space, page_size, mtr, block);
-	ut_a(inode);
+
+	SRV_CORRUPT_TABLE_CHECK(inode, ; /* do nothing */);
+
 	return(inode);
 }
 
@@ -3561,6 +3572,12 @@ fseg_free_page_low(
 	descr = xdes_get_descriptor(page_id.space(), page_id.page_no(),
 				    page_size, mtr);
 
+	SRV_CORRUPT_TABLE_CHECK(descr,
+	{
+		/* The page may be corrupt. pass it. */
+		return;
+	});
+
 	if (xdes_mtr_get_bit(descr, XDES_FREE_BIT,
 			     page_id.page_no() % FSP_EXTENT_SIZE, mtr)) {
 		fputs("InnoDB: Dump of the tablespace extent descriptor: ",
@@ -3823,6 +3840,12 @@ fseg_free_step(
 
 	descr = xdes_get_descriptor(space_id, header_page, page_size, mtr);
 
+	SRV_CORRUPT_TABLE_CHECK(descr,
+	{
+		/* The page may be corrupt. pass it. */
+		return(TRUE);
+	});
+
 	/* Check that the header resides on a page which has not been
 	freed yet */
 
@@ -3905,6 +3928,12 @@ fseg_free_step_not_header(
 	buf_block_t*		iblock;
 
 	inode = fseg_inode_get(header, space_id, page_size, mtr, &iblock);
+	SRV_CORRUPT_TABLE_CHECK(inode,
+		{
+			/* ignore the corruption */
+			return(TRUE);
+		});
+
 	fil_block_check_type(iblock, FIL_PAGE_INODE, mtr);
 
 	descr = fseg_get_first_extent(inode, space_id, page_size, mtr);
