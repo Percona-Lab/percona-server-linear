@@ -1331,6 +1331,9 @@ SHOW_COMP_OPTION have_geometry, have_rtree_keys;
 SHOW_COMP_OPTION have_compress;
 SHOW_COMP_OPTION have_profiling;
 SHOW_COMP_OPTION have_statement_timeout = SHOW_OPTION_DISABLED;
+SHOW_COMP_OPTION have_backup_locks;
+SHOW_COMP_OPTION have_backup_safe_binlog_info;
+SHOW_COMP_OPTION have_snapshot_cloning;
 
 char *enforce_storage_engine = nullptr;
 
@@ -3659,6 +3662,10 @@ SHOW_VAR com_status_vars[] = {
     {"commit",
      (char *)offsetof(System_status_var, com_stat[(uint)SQLCOM_COMMIT]),
      SHOW_LONG_STATUS, SHOW_SCOPE_ALL},
+    {"create_compression_dictionary",
+     (char *)offsetof(System_status_var,
+                      com_stat[(uint)SQLCOM_CREATE_COMPRESSION_DICTIONARY]),
+     SHOW_LONG_STATUS, SHOW_SCOPE_ALL},
     {"create_db",
      (char *)offsetof(System_status_var, com_stat[(uint)SQLCOM_CREATE_DB]),
      SHOW_LONG_STATUS, SHOW_SCOPE_ALL},
@@ -3716,6 +3723,10 @@ SHOW_VAR com_status_vars[] = {
      (char *)offsetof(System_status_var, com_stat[(uint)SQLCOM_DELETE_MULTI]),
      SHOW_LONG_STATUS, SHOW_SCOPE_ALL},
     {"do", (char *)offsetof(System_status_var, com_stat[(uint)SQLCOM_DO]),
+     SHOW_LONG_STATUS, SHOW_SCOPE_ALL},
+    {"drop_compression_dictionary",
+     (char *)offsetof(System_status_var,
+                      com_stat[(uint)SQLCOM_DROP_COMPRESSION_DICTIONARY]),
      SHOW_LONG_STATUS, SHOW_SCOPE_ALL},
     {"drop_db",
      (char *)offsetof(System_status_var, com_stat[(uint)SQLCOM_DROP_DB]),
@@ -3814,6 +3825,10 @@ SHOW_VAR com_status_vars[] = {
     {"lock_tables",
      (char *)offsetof(System_status_var, com_stat[(uint)SQLCOM_LOCK_TABLES]),
      SHOW_LONG_STATUS, SHOW_SCOPE_ALL},
+    {"lock_tables_for_backup",
+     (char *)offsetof(System_status_var,
+                      com_stat[(uint)SQLCOM_LOCK_TABLES_FOR_BACKUP]),
+     SHOW_LONG_STATUS, SHOW_SCOPE_ALL},
     {"optimize",
      (char *)offsetof(System_status_var, com_stat[(uint)SQLCOM_OPTIMIZE]),
      SHOW_LONG_STATUS, SHOW_SCOPE_ALL},
@@ -3903,6 +3918,10 @@ SHOW_VAR com_status_vars[] = {
     {"show_charsets",
      (char *)offsetof(System_status_var, com_stat[(uint)SQLCOM_SHOW_CHARSETS]),
      SHOW_LONG_STATUS, SHOW_SCOPE_ALL},
+    {"show_client_statistics",
+     (char *)offsetof(System_status_var,
+                      com_stat[(uint)SQLCOM_SHOW_CLIENT_STATS]),
+     SHOW_LONG_STATUS, SHOW_SCOPE_ALL},
     {"show_collations",
      (char *)offsetof(System_status_var,
                       com_stat[(uint)SQLCOM_SHOW_COLLATIONS]),
@@ -3963,6 +3982,10 @@ SHOW_VAR com_status_vars[] = {
     {"show_grants",
      (char *)offsetof(System_status_var, com_stat[(uint)SQLCOM_SHOW_GRANTS]),
      SHOW_LONG_STATUS, SHOW_SCOPE_ALL},
+    {"show_index_statistics",
+     (char *)offsetof(System_status_var,
+                      com_stat[(uint)SQLCOM_SHOW_INDEX_STATS]),
+     SHOW_LONG_STATUS, SHOW_SCOPE_ALL},
     {"show_keys",
      (char *)offsetof(System_status_var, com_stat[(uint)SQLCOM_SHOW_KEYS]),
      SHOW_LONG_STATUS, SHOW_SCOPE_ALL},
@@ -4017,6 +4040,10 @@ SHOW_VAR com_status_vars[] = {
      (char *)offsetof(System_status_var,
                       com_stat[(uint)SQLCOM_SHOW_STORAGE_ENGINES]),
      SHOW_LONG_STATUS, SHOW_SCOPE_ALL},
+    {"show_table_statistics",
+     (char *)offsetof(System_status_var,
+                      com_stat[(uint)SQLCOM_SHOW_TABLE_STATS]),
+     SHOW_LONG_STATUS, SHOW_SCOPE_ALL},
     {"show_table_status",
      (char *)offsetof(System_status_var,
                       com_stat[(uint)SQLCOM_SHOW_TABLE_STATUS]),
@@ -4024,8 +4051,16 @@ SHOW_VAR com_status_vars[] = {
     {"show_tables",
      (char *)offsetof(System_status_var, com_stat[(uint)SQLCOM_SHOW_TABLES]),
      SHOW_LONG_STATUS, SHOW_SCOPE_ALL},
+    {"show_thread_statistics",
+     (char *)offsetof(System_status_var,
+                      com_stat[(uint)SQLCOM_SHOW_THREAD_STATS]),
+     SHOW_LONG_STATUS, SHOW_SCOPE_ALL},
     {"show_triggers",
      (char *)offsetof(System_status_var, com_stat[(uint)SQLCOM_SHOW_TRIGGERS]),
+     SHOW_LONG_STATUS, SHOW_SCOPE_ALL},
+    {"show_user_statistics",
+     (char *)offsetof(System_status_var,
+                      com_stat[(uint)SQLCOM_SHOW_USER_STATS]),
      SHOW_LONG_STATUS, SHOW_SCOPE_ALL},
     {"show_variables",
      (char *)offsetof(System_status_var, com_stat[(uint)SQLCOM_SHOW_VARIABLES]),
@@ -5824,6 +5859,44 @@ static int init_server_components() {
     if (ha_is_storage_engine_disabled(default_tmp_se_handle))
       LogErr(WARNING_LEVEL, ER_DISABLED_STORAGE_ENGINE_AS_DEFAULT,
              "default_tmp_storage_engine", default_tmp_storage_engine);
+  }
+
+  /*
+    Validate any enforced storage engine
+  */
+  if (enforce_storage_engine && !opt_initialize && !opt_noacl) {
+    const LEX_CSTRING name{enforce_storage_engine,
+                           strlen(enforce_storage_engine)};
+    plugin_ref plugin;
+    if ((plugin = ha_resolve_by_name(nullptr, &name, false))) {
+      handlerton *hton = plugin_data<handlerton *>(plugin);
+      const LEX_CSTRING defname{default_storage_engine,
+                                strlen(default_storage_engine)};
+      plugin_ref defplugin;
+      handlerton *defhton;
+      if ((defplugin = ha_resolve_by_name(nullptr, &defname, false))) {
+        defhton = plugin_data<handlerton *>(defplugin);
+        if (defhton != hton) {
+          sql_print_warning(
+              "Default storage engine (%s)"
+              " is not the same as enforced storage engine (%s)",
+              default_storage_engine, enforce_storage_engine);
+        }
+      }
+      if (ha_is_storage_engine_disabled(hton)) {
+        sql_print_error(
+            "enforced storage engine %s is among disabled storage "
+            "engines",
+            enforce_storage_engine);
+        unireg_abort(MYSQLD_ABORT_EXIT);
+      }
+      plugin_unlock(nullptr, defplugin);
+      plugin_unlock(nullptr, plugin);
+    } else {
+      sql_print_error("Unknown/unsupported storage engine: %s",
+                      enforce_storage_engine);
+      unireg_abort(MYSQLD_ABORT_EXIT);
+    }
   }
 
   if (total_ha_2pc > 1 || (1 == total_ha_2pc && opt_bin_log)) {
@@ -9920,6 +9993,7 @@ static int get_options(int *argc_ptr, char ***argv_ptr) {
   init_log_slow_verbosity();
   init_slow_query_log_use_global_control();
   init_log_slow_sp_statements();
+
 
   if (opt_short_log_format) opt_specialflag |= SPECIAL_SHORT_LOG_FORMAT;
 
