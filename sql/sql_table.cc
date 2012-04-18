@@ -56,6 +56,7 @@
 #include "table_cache.h"
 #include "sql_trigger.h"               // change_trigger_table_name
 #include <mysql/psi/mysql_table.h>
+#include "mysql.h"			// in_bootstrap & opt_noacl
 #include "partitioning/partition_handler.h" // Partition_handler
 #include "log.h"
 #include "binlog.h"
@@ -8719,8 +8720,8 @@ remove_secondary_keys(THD *thd, HA_CREATE_INFO* create_info, TABLE *table,
   for (uint key_idx= 0; key_idx < table->s->keys; key_idx++) {
     KEY* key = table->key_info + key_idx;
     KEY_PART_INFO* key_parts_buf=
-           (KEY_PART_INFO*) thd->alloc(sizeof(KEY_PART_INFO) *
-                                       key->user_defined_key_parts);
+      (KEY_PART_INFO*) thd->alloc(sizeof(KEY_PART_INFO) *
+                                  key->user_defined_key_parts);
     for (uint key_part_idx= 0;
          key_part_idx < key->user_defined_key_parts;
          key_part_idx++) {
@@ -9659,7 +9660,6 @@ bool mysql_alter_table(THD *thd, const char *new_db, const char *new_name,
   */
   if (!(new_table->file->ha_table_flags() & HA_NO_COPY_ON_ALTER))
   {
-
     /*
       Check if we can temporarily remove secondary indexes from the table
       before copying the data and recreate them later to utilize InnoDB fast
@@ -10497,11 +10497,28 @@ static bool check_engine(THD *thd, const char *db_name,
   DBUG_ENTER("check_engine");
   handlerton **new_engine= &create_info->db_type;
   handlerton *req_engine= *new_engine;
+  handlerton *enf_engine= NULL;
+
   bool no_substitution=
         MY_TEST(thd->variables.sql_mode & MODE_NO_ENGINE_SUBSTITUTION);
+
+  if (!opt_bootstrap && !opt_noacl)
+    enf_engine= ha_enforce_handlerton(thd);
+
   if (!(*new_engine= ha_checktype(thd, ha_legacy_type(req_engine),
                                   no_substitution, 1)))
     DBUG_RETURN(true);
+
+  if (enf_engine)
+  {
+    if (enf_engine != *new_engine && no_substitution)
+    {
+      const char *engine_name= ha_resolve_storage_engine_name(req_engine);
+      my_error(ER_UNKNOWN_STORAGE_ENGINE, MYF(0), engine_name, engine_name);
+      DBUG_RETURN(TRUE);
+    }
+    *new_engine= enf_engine;
+  }
 
   if (req_engine && req_engine != *new_engine)
   {
