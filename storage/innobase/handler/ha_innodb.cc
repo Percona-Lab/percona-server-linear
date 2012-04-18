@@ -22511,7 +22511,7 @@ mysql_declare_plugin(innobase){
     i_s_innodb_ft_index_cache, i_s_innodb_ft_index_table, i_s_innodb_tables,
     i_s_innodb_tablestats, i_s_innodb_indexes, i_s_innodb_tablespaces,
     i_s_innodb_columns, i_s_innodb_virtual, i_s_innodb_cached_indexes,
-    i_s_innodb_session_temp_tablespaces
+    i_s_innodb_changed_pages, i_s_innodb_session_temp_tablespaces
 
     mysql_declare_plugin_end;
 
