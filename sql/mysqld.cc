@@ -10479,6 +10479,7 @@ PSI_mutex_key key_LOCK_query_plan;
 PSI_mutex_key key_LOCK_thd_query;
 PSI_mutex_key key_LOCK_cost_const;
 PSI_mutex_key key_LOCK_current_cond;
+PSI_mutex_key key_LOCK_temporary_tables;
 PSI_mutex_key key_RELAYLOG_LOCK_commit;
 PSI_mutex_key key_RELAYLOG_LOCK_commit_queue;
 PSI_mutex_key key_RELAYLOG_LOCK_done;
@@ -11088,6 +11089,7 @@ static void init_server_psi_keys(void) {
       "At this point, the real statement type is unknown, "
       "the type will be refined after parsing the event.";
   mysql_statement_register(category, &stmt_info_rpl, 1);
+
 #endif
 
   /* Common client and server code. */
