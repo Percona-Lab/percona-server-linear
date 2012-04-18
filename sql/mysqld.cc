@@ -2433,6 +2433,7 @@ SHOW_VAR com_status_vars[]= {
   {"show_binlog_events",   (char*) offsetof(STATUS_VAR, com_stat[(uint) SQLCOM_SHOW_BINLOG_EVENTS]),         SHOW_LONG_STATUS, SHOW_SCOPE_ALL},
   {"show_binlogs",         (char*) offsetof(STATUS_VAR, com_stat[(uint) SQLCOM_SHOW_BINLOGS]),               SHOW_LONG_STATUS, SHOW_SCOPE_ALL},
   {"show_charsets",        (char*) offsetof(STATUS_VAR, com_stat[(uint) SQLCOM_SHOW_CHARSETS]),              SHOW_LONG_STATUS, SHOW_SCOPE_ALL},
+  {"show_client_statistics",(char*) offsetof(STATUS_VAR, com_stat[(uint) SQLCOM_SHOW_CLIENT_STATS]),         SHOW_LONG_STATUS, SHOW_SCOPE_ALL},
   {"show_collations",      (char*) offsetof(STATUS_VAR, com_stat[(uint) SQLCOM_SHOW_COLLATIONS]),            SHOW_LONG_STATUS, SHOW_SCOPE_ALL},
   {"show_create_db",       (char*) offsetof(STATUS_VAR, com_stat[(uint) SQLCOM_SHOW_CREATE_DB]),             SHOW_LONG_STATUS, SHOW_SCOPE_ALL},
   {"show_create_event",    (char*) offsetof(STATUS_VAR, com_stat[(uint) SQLCOM_SHOW_CREATE_EVENT]),          SHOW_LONG_STATUS, SHOW_SCOPE_ALL},
@@ -2450,6 +2451,7 @@ SHOW_VAR com_status_vars[]= {
   {"show_function_code",   (char*) offsetof(STATUS_VAR, com_stat[(uint) SQLCOM_SHOW_FUNC_CODE]),             SHOW_LONG_STATUS, SHOW_SCOPE_ALL},
   {"show_function_status", (char*) offsetof(STATUS_VAR, com_stat[(uint) SQLCOM_SHOW_STATUS_FUNC]),           SHOW_LONG_STATUS, SHOW_SCOPE_ALL},
   {"show_grants",          (char*) offsetof(STATUS_VAR, com_stat[(uint) SQLCOM_SHOW_GRANTS]),                SHOW_LONG_STATUS, SHOW_SCOPE_ALL},
+  {"show_index_statistics",(char*) offsetof(STATUS_VAR, com_stat[(uint) SQLCOM_SHOW_INDEX_STATS]),           SHOW_LONG_STATUS, SHOW_SCOPE_ALL},
   {"show_keys",            (char*) offsetof(STATUS_VAR, com_stat[(uint) SQLCOM_SHOW_KEYS]),                  SHOW_LONG_STATUS, SHOW_SCOPE_ALL},
   {"show_master_status",   (char*) offsetof(STATUS_VAR, com_stat[(uint) SQLCOM_SHOW_MASTER_STAT]),           SHOW_LONG_STATUS, SHOW_SCOPE_ALL},
   {"show_open_tables",     (char*) offsetof(STATUS_VAR, com_stat[(uint) SQLCOM_SHOW_OPEN_TABLES]),           SHOW_LONG_STATUS, SHOW_SCOPE_ALL},
@@ -2465,9 +2467,12 @@ SHOW_VAR com_status_vars[]= {
   {"show_slave_status",    (char*) offsetof(STATUS_VAR, com_stat[(uint) SQLCOM_SHOW_SLAVE_STAT]),            SHOW_LONG_STATUS, SHOW_SCOPE_ALL},
   {"show_status",          (char*) offsetof(STATUS_VAR, com_stat[(uint) SQLCOM_SHOW_STATUS]),                SHOW_LONG_STATUS, SHOW_SCOPE_ALL},
   {"show_storage_engines", (char*) offsetof(STATUS_VAR, com_stat[(uint) SQLCOM_SHOW_STORAGE_ENGINES]),       SHOW_LONG_STATUS, SHOW_SCOPE_ALL},
+  {"show_table_statistics",(char*) offsetof(STATUS_VAR, com_stat[(uint) SQLCOM_SHOW_TABLE_STATS]),           SHOW_LONG_STATUS, SHOW_SCOPE_ALL},
   {"show_table_status",    (char*) offsetof(STATUS_VAR, com_stat[(uint) SQLCOM_SHOW_TABLE_STATUS]),          SHOW_LONG_STATUS, SHOW_SCOPE_ALL},
   {"show_tables",          (char*) offsetof(STATUS_VAR, com_stat[(uint) SQLCOM_SHOW_TABLES]),                SHOW_LONG_STATUS, SHOW_SCOPE_ALL},
+  {"show_thread_statistics",(char*) offsetof(STATUS_VAR, com_stat[(uint) SQLCOM_SHOW_THREAD_STATS]),         SHOW_LONG_STATUS, SHOW_SCOPE_ALL},
   {"show_triggers",        (char*) offsetof(STATUS_VAR, com_stat[(uint) SQLCOM_SHOW_TRIGGERS]),              SHOW_LONG_STATUS, SHOW_SCOPE_ALL},
+  {"show_user_statistics", (char*) offsetof(STATUS_VAR, com_stat[(uint) SQLCOM_SHOW_USER_STATS]),            SHOW_LONG_STATUS, SHOW_SCOPE_ALL},
   {"show_variables",       (char*) offsetof(STATUS_VAR, com_stat[(uint) SQLCOM_SHOW_VARIABLES]),             SHOW_LONG_STATUS, SHOW_SCOPE_ALL},
   {"show_warnings",        (char*) offsetof(STATUS_VAR, com_stat[(uint) SQLCOM_SHOW_WARNS]),                 SHOW_LONG_STATUS, SHOW_SCOPE_ALL},
   {"show_create_user",     (char*) offsetof(STATUS_VAR, com_stat[(uint) SQLCOM_SHOW_CREATE_USER]),           SHOW_LONG_STATUS, SHOW_SCOPE_ALL},
@@ -4125,6 +4130,43 @@ a file name for --log-bin-index option", opt_binlog_index_name);
 
   }
 
+  /*
+    Validate any enforced storage engine
+  */
+  if (enforce_storage_engine && !opt_bootstrap && !opt_noacl)
+  {
+    LEX_STRING name= { enforce_storage_engine,
+      strlen(enforce_storage_engine) };
+    plugin_ref plugin;
+    if ((plugin= ha_resolve_by_name(0, &name, false)))
+    {
+      handlerton *hton = plugin_data<handlerton *>(plugin);
+      LEX_STRING defname= { default_storage_engine,
+        strlen(default_storage_engine) };
+      plugin_ref defplugin;
+      handlerton* defhton;
+      if ((defplugin= ha_resolve_by_name(0, &defname, false)))
+      {
+        defhton = plugin_data<handlerton *>(defplugin);
+        if (defhton != hton)
+        {
+          sql_print_warning("Default storage engine (%s)"
+            " is not the same as enforced storage engine (%s)",
+            default_storage_engine,
+            enforce_storage_engine);
+        }
+      }
+      plugin_unlock(0, defplugin);
+      plugin_unlock(0, plugin);
+    }
+    else
+    {
+      sql_print_error("Unknown/unsupported storage engine: %s",
+                    enforce_storage_engine);
+      unireg_abort(1);
+    }
+  }
+
   if (total_ha_2pc > 1 || (1 == total_ha_2pc && opt_bin_log))
   {
     if (opt_bin_log)
@@ -5318,14 +5360,14 @@ void adjust_open_files_limit(ulong *requested_open_files)
   ulong effective_open_files;
 
   /* MyISAM requires two file handles per table. */
-  limit_1= 10 + max_connections + table_cache_size * 2;
+  limit_1= 10 + max_connections + extra_max_connections + table_cache_size * 2;
 
   /*
     We are trying to allocate no less than max_connections*5 file
     handles (i.e. we are trying to set the limit so that they will
     be available).
   */
-  limit_2= max_connections * 5;
+  limit_2= (max_connections + extra_max_connections) * 5;
 
   /* Try to allocate no less than 5000 by default. */
   limit_3= open_files_limit ? open_files_limit : 5000;
@@ -7506,6 +7548,10 @@ bool check_ghost_options()
 }
 
 
+/* defined in sys_vars.cc */
+extern void init_log_slow_verbosity();
+extern void init_slow_query_log_use_global_control();
+
 /**
   Get server options from the command line,
   and perform related server initializations.
@@ -7683,6 +7729,8 @@ static int get_options(int *argc_ptr, char ***argv_ptr)
   global_system_variables.long_query_time= (ulonglong)
     (global_system_variables.long_query_time_double * 1e6);
 
+  init_log_slow_verbosity();
+  init_slow_query_log_use_global_control();
   if (opt_short_log_format)
     opt_specialflag|= SPECIAL_SHORT_LOG_FORMAT;
 
