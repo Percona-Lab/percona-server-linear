@@ -564,6 +564,17 @@ char *thd_security_context(MYSQL_THD thd, char *buffer, unsigned int length,
 void thd_inc_row_count(MYSQL_THD thd);
 int thd_allow_batch(MYSQL_THD thd);
 
+void increment_thd_innodb_stats(MYSQL_THD thd,
+                    unsigned long long trx_id,
+                    long io_reads,
+                    long long io_read,
+                    long io_reads_wait_timer,
+                    long lock_que_wait_timer,
+                    long que_wait_timer,
+                    long page_access);
+unsigned long thd_log_slow_verbosity(const MYSQL_THD thd);
+int thd_opt_slow_log();
+#define EXTENDED_SLOWLOG
 /**
   Create a temporary file.
 
