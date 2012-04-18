@@ -4272,7 +4272,8 @@ rec_loop:
 	if (UNIV_UNLIKELY(next_offs >= UNIV_PAGE_SIZE - PAGE_DIR)) {
 
 wrong_offs:
-		if (srv_pass_corrupt_table && !trx_sys_sys_space(index->table->space)) {
+		if (srv_pass_corrupt_table && index->table->space != 0 &&
+		    index->table->space < SRV_LOG_SPACE_FIRST_ID) {
 			index->table->is_corrupt = TRUE;
 			fil_space_set_corrupt(index->table->space);
 		}
