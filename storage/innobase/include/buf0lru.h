@@ -91,8 +91,9 @@ bool
 buf_LRU_free_page(
 /*==============*/
 	buf_page_t*	bpage,	/*!< in: block to be freed */
-	bool		zip)	/*!< in: true if should remove also the
+	bool		zip,	/*!< in: true if should remove also the
 				compressed page of an uncompressed page */
+	ibool		have_LRU_mutex)
 	__attribute__((nonnull));
 /******************************************************************//**
 Try to free a replaceable block.
@@ -162,7 +163,8 @@ UNIV_INTERN
 void
 buf_LRU_block_free_non_file_page(
 /*=============================*/
-	buf_block_t*	block);	/*!< in: block, must not contain a file page */
+	buf_block_t*	block,	/*!< in: block, must not contain a file page */
+	ibool		have_page_hash_mutex);
 /******************************************************************//**
 Adds a block to the LRU list. Please make sure that the zip_size is
 already set into the page zip when invoking the function, so that we
