@@ -251,7 +251,9 @@ not_to_recover:
 			return(0);
 		}
 
-		ut_error;
+		SRV_CORRUPT_TABLE_CHECK(*err == DB_SUCCESS,
+					bpage->is_corrupt = true;);
+
 	}
 
 	if (sync) {

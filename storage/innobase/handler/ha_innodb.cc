@@ -19444,6 +19444,25 @@ static MYSQL_SYSVAR_BOOL(sync_debug, srv_sync_debug,
   NULL, NULL, FALSE);
 #endif /* UNIV_DEBUG */
 
+const char *corrupt_table_action_names[]=
+{
+  "assert", /* 0 */
+  "warn", /* 1 */
+  "salvage", /* 2 */
+  NullS
+};
+TYPELIB corrupt_table_action_typelib=
+{
+  array_elements(corrupt_table_action_names) - 1, "corrupt_table_action_typelib",
+};
+static	MYSQL_SYSVAR_ENUM(corrupt_table_action, srv_pass_corrupt_table,
+  PLUGIN_VAR_RQCMDARG,
+  "Warn corruptions of user tables as 'corrupt table' instead of not crashing itself, "
+  "when used with file_per_table. "
+  "All file io for the datafile after detected as corrupt are disabled, "
+  "except for the deletion.",
+  NULL, NULL, 0, &corrupt_table_action_typelib);
+
 static struct st_mysql_sys_var* innobase_system_variables[]= {
   MYSQL_SYSVAR(api_trx_level),
   MYSQL_SYSVAR(api_bk_commit_interval),
@@ -19609,6 +19628,7 @@ static struct st_mysql_sys_var* innobase_system_variables[]= {
   MYSQL_SYSVAR(disable_resize_buffer_pool_debug),
   MYSQL_SYSVAR(sync_debug),
 #endif /* UNIV_DEBUG */
+  MYSQL_SYSVAR(corrupt_table_action),
   NULL
 };
 

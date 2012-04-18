@@ -1287,6 +1287,7 @@ fil_space_create(
 	if (space != NULL) {
 		mutex_exit(&fil_system->mutex);
 
+		ut_ad(space->id != id);
 		ib::warn() << "Tablespace '" << name << "' exists in the"
 			" cache with id " << space->id << " != " << id;
 
@@ -1341,6 +1342,8 @@ fil_space_create(
 
 	HASH_INSERT(fil_space_t, name_hash, fil_system->name_hash,
 		    ut_fold_string(name), space);
+
+	space->is_corrupt = false;
 
 	UT_LIST_ADD_LAST(fil_system->space_list, space);
 
@@ -7096,3 +7099,24 @@ test_make_filepath()
 }
 #endif /* UNIV_ENABLE_UNIT_TEST_MAKE_FILEPATH */
 /* @} */
+
+/*************************************************************************
+functions to access is_corrupt flag of fil_space_t*/
+
+void
+fil_space_set_corrupt(
+/*==================*/
+	ulint	space_id)
+{
+	fil_space_t*	space;
+
+	mutex_enter(&fil_system->mutex);
+
+	space = fil_space_get_by_id(space_id);
+
+	if (space) {
+		space->is_corrupt = true;
+	}
+
+	mutex_exit(&fil_system->mutex);
+}

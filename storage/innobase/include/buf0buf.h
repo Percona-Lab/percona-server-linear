@@ -912,7 +912,6 @@ buf_page_print(
 	const byte*		read_buf,
 	const page_size_t&	page_size,
 	ulint			flags);
-
 /********************************************************************//**
 Decompress a block.
 @return TRUE if successful */
@@ -1224,7 +1223,7 @@ buf_block_get_frame(
 	const buf_block_t*	block)	/*!< in: pointer to the control block */
 	__attribute__((warn_unused_result));
 #else /* UNIV_DEBUG */
-# define buf_block_get_frame(block) (block)->frame
+# define buf_block_get_frame(block) (block ? (block)->frame : 0)
 #endif /* UNIV_DEBUG */
 /*********************************************************************//**
 Gets the compressed page descriptor corresponding to an uncompressed page
@@ -1691,6 +1690,7 @@ public:
 					0 if the block was never accessed
 					in the buffer pool. Protected by
 					block mutex */
+	bool		is_corrupt;
 # ifdef UNIV_DEBUG
 	ibool		file_page_was_freed;
 					/*!< this is set to TRUE when
