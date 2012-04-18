@@ -1246,6 +1246,22 @@ void THD::awake(THD::killed_state state_to_set) {
   DBUG_VOID_RETURN;
 }
 
+/* extend for kill session of idle transaction from engine */
+extern "C" int thd_command(const THD *thd) { return (int)thd->get_command(); }
+
+extern "C" long long thd_start_time(const THD *thd) {
+  return (long long)thd->start_time.tv_sec;
+}
+
+extern "C" void thd_kill(ulong id) {
+  Find_thd_with_id find_thd_with_id(id, false);
+  THD *thd = Global_THD_manager::get_instance()->find_thd(&find_thd_with_id);
+  if (!thd) return;
+
+  thd->awake(THD::KILL_CONNECTION);
+  mysql_mutex_unlock(&thd->LOCK_thd_data);
+}
+
 /**
   Close the Vio associated this session.
 
