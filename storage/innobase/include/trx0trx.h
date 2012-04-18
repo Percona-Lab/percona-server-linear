@@ -759,6 +759,7 @@ struct trx_t{
 					this is set to 1 then registered should
 					also be set to 1. This is used in the
 					XA code */
+	unsigned	called_commit_ordered:1;/* 1 if innobase_commit_ordered has run. */
 	/*------------------------------*/
 	ulint		check_unique_secondary;
 					/*!< normally TRUE, but if the user
