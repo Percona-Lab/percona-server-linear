@@ -954,6 +954,7 @@ enum enum_schema_tables : int {
   SCH_FIRST = 0,
   SCH_COLUMN_PRIVILEGES = SCH_FIRST,
   SCH_ENGINES,
+  SCH_GLOBAL_TEMPORARY_TABLES,
   SCH_OPEN_TABLES,
   SCH_OPTIMIZER_TRACE,
   SCH_PLUGINS,
@@ -961,6 +962,7 @@ enum enum_schema_tables : int {
   SCH_PROFILES,
   SCH_SCHEMA_PRIVILEGES,
   SCH_TABLE_PRIVILEGES,
+  SCH_TEMPORARY_TABLES,
   SCH_USER_PRIVILEGES,
   SCH_TMP_TABLE_COLUMNS,
   SCH_TMP_TABLE_KEYS,
@@ -5032,7 +5034,8 @@ class handler {
         m_lock_type(F_UNLCK),
         ha_share(nullptr),
         m_update_generated_read_fields(false),
-        m_unique(nullptr) {
+        m_unique(nullptr),
+        cloned(false) {
     DBUG_PRINT("info", ("handler created F_UNLCK %d F_RDLCK %d F_WRLCK %d",
                         F_UNLCK, F_RDLCK, F_WRLCK));
     memset(index_rows_read, 0, sizeof(index_rows_read));
@@ -7665,6 +7668,13 @@ public:
   void unlock_shared_ha_data();
 
   friend class DsMrr_impl;
+
+ private:
+  /**
+    If true, the current handler is a clone. In that case certain invariants
+    such as table->in_use == current_thd are relaxed to support cloning a
+    handler belonging to a different thread. */
+  bool cloned;
 };
 
 /* Temporary Table handle for opening uncached table */
