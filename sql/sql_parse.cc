@@ -436,6 +436,9 @@ void init_update_queries(void)
    sql_command_flags[SQLCOM_SHOW_TABLES]=       (CF_STATUS_COMMAND |
                                                  CF_SHOW_TABLE_COMMAND |
                                                  CF_REEXECUTION_FRAGILE);
+   sql_command_flags[SQLCOM_SHOW_TEMPORARY_TABLES]=       (CF_STATUS_COMMAND |
+                                                 CF_SHOW_TABLE_COMMAND |
+                                                 CF_REEXECUTION_FRAGILE);
   sql_command_flags[SQLCOM_SHOW_TABLE_STATUS]= (CF_STATUS_COMMAND |
                                                 CF_SHOW_TABLE_COMMAND |
                                                 CF_REEXECUTION_FRAGILE);
@@ -1881,6 +1884,8 @@ int prepare_schema_table(THD *thd, LEX *lex, Table_ident *table_ident,
 
   case SCH_TABLE_NAMES:
   case SCH_TABLES:
+  case SCH_TEMPORARY_TABLES:
+  case SCH_GLOBAL_TEMPORARY_TABLES:
   case SCH_VIEWS:
   case SCH_TRIGGERS:
   case SCH_EVENTS:
@@ -2529,6 +2534,7 @@ mysql_execute_command(THD *thd)
   case SQLCOM_SHOW_STATUS_FUNC:
   case SQLCOM_SHOW_DATABASES:
   case SQLCOM_SHOW_TABLES:
+  case SQLCOM_SHOW_TEMPORARY_TABLES:
   case SQLCOM_SHOW_TRIGGERS:
   case SQLCOM_SHOW_TABLE_STATUS:
   case SQLCOM_SHOW_OPEN_TABLES:
@@ -5342,6 +5348,8 @@ static bool check_show_access(THD *thd, TABLE_LIST *table)
 
   case SCH_TABLE_NAMES:
   case SCH_TABLES:
+  case SCH_TEMPORARY_TABLES:
+  case SCH_GLOBAL_TEMPORARY_TABLES:
   case SCH_VIEWS:
   case SCH_TRIGGERS:
   case SCH_EVENTS:
