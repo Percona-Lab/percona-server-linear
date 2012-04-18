@@ -483,6 +483,9 @@ cleanup:
     my_ok(thd, deleted);
     DBUG_PRINT("info",("%ld records deleted",(long) deleted));
   }
+
+  thd->updated_row_count+= deleted;
+
   DBUG_RETURN(thd->is_error() || thd->killed);
 
 #ifdef WITH_PARTITION_STORAGE_ENGINE
@@ -1089,6 +1092,7 @@ bool multi_delete::send_eof()
   {
     ::my_ok(thd, deleted);
   }
+  thd->updated_row_count+= deleted;
   return 0;
 }
 
