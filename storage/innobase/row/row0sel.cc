@@ -60,6 +60,7 @@ Created 12/19/1997 Heikki Tuuri
 #include "ha_prototypes.h"
 #include "srv0mon.h"
 #include "ut0new.h"
+#include "srv0start.h"
 
 /* Maximum number of rows to prefetch; MySQL interface has another parameter */
 #define SEL_MAX_N_PREFETCH	16
@@ -5058,6 +5059,12 @@ rec_loop:
 
 	rec = btr_pcur_get_rec(pcur);
 
+	SRV_CORRUPT_TABLE_CHECK(rec,
+	{
+		err = DB_CORRUPTION;
+		goto lock_wait_or_error;
+	});
+
 	ut_ad(!!page_rec_is_comp(rec) == comp);
 
 	if (page_rec_is_infimum(rec)) {
@@ -5128,7 +5135,14 @@ rec_loop:
 	if (UNIV_UNLIKELY(next_offs >= UNIV_PAGE_SIZE - PAGE_DIR)) {
 
 wrong_offs:
-		if (srv_force_recovery == 0 || moves_up == FALSE) {
+		if (srv_pass_corrupt_table && index->table->space != 0 &&
+		    index->table->space < SRV_LOG_SPACE_FIRST_ID) {
+			index->table->is_corrupt = true;
+			fil_space_set_corrupt(index->table->space);
+		}
+
+		if ((srv_force_recovery == 0 || moves_up == FALSE)
+		    && srv_pass_corrupt_table <= 1) {
 			ib::error() << "Rec address "
 				<< static_cast<const void*>(rec)
 				<< ", buf block fix count "
@@ -5175,7 +5189,9 @@ wrong_offs:
 
 	offsets = rec_get_offsets(rec, index, offsets, ULINT_UNDEFINED, &heap);
 
-	if (UNIV_UNLIKELY(srv_force_recovery > 0)) {
+	if (UNIV_UNLIKELY(srv_force_recovery > 0
+			  || (index->table->is_corrupt &&
+			      srv_pass_corrupt_table == 2))) {
 		if (!rec_validate(rec, offsets)
 		    || !btr_index_rec_validate(rec, index, FALSE)) {
 
