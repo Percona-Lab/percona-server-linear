@@ -232,6 +232,7 @@ dberr_t
 buf_pool_init(
 /*=========*/
 	ulint	size,		/*!< in: Size of the total pool in bytes */
+	ibool	populate,	/*!< in: Force virtual page preallocation */
 	ulint	n_instances);	/*!< in: Number of instances */
 /********************************************************************//**
 Frees the buffer pool at shutdown.  This must not be invoked before
@@ -1556,11 +1557,11 @@ struct buf_page_t{
 
 	UT_LIST_NODE_T(buf_page_t) LRU;
 					/*!< node of the LRU list */
-//#ifdef UNIV_DEBUG
+#ifdef UNIV_DEBUG
 	ibool		in_LRU_list;	/*!< TRUE if the page is in
 					the LRU list; used in
 					debugging */
-//#endif /* UNIV_DEBUG */
+#endif /* UNIV_DEBUG */
 	unsigned	old:1;		/*!< TRUE if the block is in the old
 					blocks in buf_pool->LRU_old */
 	unsigned	freed_page_clock:31;/*!< the value of
@@ -1576,6 +1577,7 @@ struct buf_page_t{
 					0 if the block was never accessed
 					in the buffer pool. Protected by
 					block mutex */
+	ibool		is_corrupt;
 # if defined UNIV_DEBUG_FILE_ACCESSES || defined UNIV_DEBUG
 	ibool		file_page_was_freed;
 					/*!< this is set to TRUE when
@@ -1730,15 +1732,6 @@ Compute the hash fold value for blocks in buf_pool->zip_hash. */
 #define BUF_POOL_ZIP_FOLD_BPAGE(b) BUF_POOL_ZIP_FOLD((buf_block_t*) (b))
 /* @} */
 
-/** A chunk of buffers.  The buffer pool is allocated in chunks. */
-struct buf_chunk_struct{
-	ulint		mem_size;	/*!< allocated size of the chunk */
-	ulint		size;		/*!< size of frames[] and blocks[] */
-	void*		mem;		/*!< pointer to the memory area which
-					was allocated for the frames */
-	buf_block_t*	blocks;		/*!< array of buffer control blocks */
-};
-
 /** @brief The buffer pool statistics structure. */
 struct buf_pool_stat_t{
 	ulint	n_page_gets;	/*!< number of page gets performed;
@@ -1766,6 +1759,7 @@ struct buf_pool_stat_t{
 				buf_page_peek_if_too_old() */
 	ulint	LRU_bytes;	/*!< LRU size in bytes */
 	ulint	flush_list_bytes;/*!< flush_list size in bytes */
+	ulint	buf_lru_flush_page_count;
 };
 
 /** Statistics of buddy blocks of a given size. */
