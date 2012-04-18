@@ -109,10 +109,6 @@ extern ulong opt_log_throttle_queries_not_using_indexes;
 extern bool opt_disable_networking, opt_skip_show_db;
 extern bool opt_skip_name_resolve;
 extern bool opt_ignore_builtin_innodb;
-#ifdef HAVE_RESPONSE_TIME_DISTRIBUTION
-extern ulong   opt_query_response_time_range_base;
-extern my_bool opt_query_response_time_stats;
-#endif // HAVE_RESPONSE_TIME_DISTRIBUTION
 extern my_bool opt_character_set_client_handshake;
 extern MYSQL_PLUGIN_IMPORT bool volatile abort_loop;
 extern bool in_bootstrap;
@@ -263,8 +259,6 @@ extern ulong back_log;
 extern char language[FN_REFLEN];
 extern "C" MYSQL_PLUGIN_IMPORT ulong server_id;
 extern ulong concurrency;
-/* flashcache */
-extern int cachedev_fd;
 extern time_t server_start_time, flush_status_time;
 extern char *opt_mysql_tmpdir, mysql_charsets_dir[];
 extern int mysql_unpacked_real_data_home_len;
@@ -330,8 +324,6 @@ extern char* enforce_storage_engine;
 extern char* utility_user;
 extern char* utility_user_password;
 extern char* utility_user_schema_access;
-
-extern ulonglong opt_log_warnings_suppress;
 
 /*
   THR_MALLOC is a key which will be used to set/get MEM_ROOT** for a thread,
