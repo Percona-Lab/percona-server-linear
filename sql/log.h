@@ -343,7 +343,7 @@ public:
              uint user_host_len, my_thread_id thread_id,
              const char *command_type, uint command_type_len,
              const char *sql_text, uint sql_text_len);
-  bool write(THD *thd, time_t current_time, time_t query_start_arg,
+  bool write(THD *thd, ulonglong current_time, time_t query_start_arg,
              const char *user_host, uint user_host_len,
              ulonglong query_utime, ulonglong lock_utime, bool is_command,
              const char *sql_text, uint sql_text_len);
@@ -379,7 +379,7 @@ public:
   virtual bool init()= 0;
   virtual void cleanup()= 0;
 
-  virtual bool log_slow(THD *thd, time_t current_time,
+  virtual bool log_slow(THD *thd, ulonglong current_time,
                         time_t query_start_arg, const char *user_host,
                         uint user_host_len, ulonglong query_utime,
                         ulonglong lock_utime, bool is_command,
@@ -406,7 +406,7 @@ public:
   virtual bool init();
   virtual void cleanup();
 
-  virtual bool log_slow(THD *thd, time_t current_time,
+  virtual bool log_slow(THD *thd, ulonglong current_utime,
                         time_t query_start_arg, const char *user_host,
                         uint user_host_len, ulonglong query_utime,
                         ulonglong lock_utime, bool is_command,
@@ -438,7 +438,7 @@ public:
   virtual bool init();
   virtual void cleanup();
 
-  virtual bool log_slow(THD *thd, time_t current_time,
+  virtual bool log_slow(THD *thd, ulonglong current_utime,
                         time_t query_start_arg, const char *user_host,
                         uint user_host_len, ulonglong query_utime,
                         ulonglong lock_utime, bool is_command,
