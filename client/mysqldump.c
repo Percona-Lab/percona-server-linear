@@ -1944,7 +1944,9 @@ static void print_xml_row(FILE *xml_file, const char *row_name,
       {
         create_stmt_ptr= (*row)[i];
         create_stmt_len= lengths[i];
+#ifndef DBUG_OFF
         body_found= 1;
+#endif
       }
       else
       {
@@ -2387,10 +2389,10 @@ static uint dump_routines_for_db(char *db)
           {
             if (opt_xml)
             {
-              if (i)                            // Procedures.
+              if (i)                            /* Procedures. */
                 print_xml_row(sql_file, "routine", routine_res, &row,
                               "Create Procedure");
-              else                              // Functions.
+              else                              /* Functions. */
                 print_xml_row(sql_file, "routine", routine_res, &row,
                               "Create Function");
               continue;
