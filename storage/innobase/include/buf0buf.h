@@ -1303,6 +1303,7 @@ class buf_page_t {
                         0 if the block was never accessed
                         in the buffer pool. Protected by
                         block mutex */
+  bool is_corrupt;
 #ifdef UNIV_DEBUG
   ibool file_page_was_freed;
   /*!< this is set to TRUE when
