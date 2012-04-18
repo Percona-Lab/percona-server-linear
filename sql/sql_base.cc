@@ -1784,6 +1784,7 @@ bool close_temporary_tables(THD *thd) {
   mysql_ha_rm_temporary_tables(thd);
   if (!mysql_bin_log.is_open()) {
     TABLE *tmp_next;
+    mysql_mutex_lock(&thd->LOCK_temporary_tables);
     for (TABLE *t = thd->temporary_tables; t; t = tmp_next) {
       tmp_next = t->next;
       mysql_lock_remove(thd, thd->lock, t);
@@ -1798,6 +1799,7 @@ bool close_temporary_tables(THD *thd) {
     }
 
     thd->temporary_tables = 0;
+    mysql_mutex_unlock(&thd->LOCK_temporary_tables);
     if (thd->slave_thread) {
       atomic_slave_open_temp_tables -= slave_closed_temp_tables;
       thd->rli_slave->get_c_rli()->atomic_channel_open_temp_tables -=
@@ -1843,6 +1845,7 @@ bool close_temporary_tables(THD *thd) {
     Insertion sort of temp tables by pseudo_thread_id to build ordered list
     of sublists of equal pseudo_thread_id
   */
+  mysql_mutex_lock(&thd->LOCK_temporary_tables);
 
   for (prev_table = thd->temporary_tables, table = prev_table->next; table;
        prev_table = table, table = table->next) {
@@ -2012,6 +2015,8 @@ bool close_temporary_tables(THD *thd) {
       slave_closed_temp_tables++;
     }
   }
+  thd->temporary_tables = 0;
+  mysql_mutex_unlock(&thd->LOCK_temporary_tables);
   lex->drop_temporary = sav_drop_temp;
   lex->sql_command = sav_sql_command;
 
@@ -2019,7 +2024,6 @@ bool close_temporary_tables(THD *thd) {
     thd->variables.option_bits &=
         ~OPTION_QUOTE_SHOW_CREATE; /* restore option */
 
-  thd->temporary_tables = 0;
   if (thd->slave_thread) {
     atomic_slave_open_temp_tables -= slave_closed_temp_tables;
     thd->rli_slave->get_c_rli()->atomic_channel_open_temp_tables -=
@@ -2336,6 +2340,8 @@ void close_temporary_table(THD *thd, TABLE *table, bool free_share,
              ("closing table: '%s'.'%s' %p  alias: '%s'", table->s->db.str,
               table->s->table_name.str, table, table->alias));
 
+  mysql_mutex_lock(&thd->LOCK_temporary_tables);
+
   if (table->prev) {
     table->prev->next = table->next;
     if (table->prev->next) table->next->prev = table->prev;
@@ -2358,6 +2364,9 @@ void close_temporary_table(THD *thd, TABLE *table, bool free_share,
     --thd->rli_slave->get_c_rli()->atomic_channel_open_temp_tables;
   }
   close_temporary(thd, table, free_share, delete_table);
+
+  mysql_mutex_unlock(&thd->LOCK_temporary_tables);
+
 }
 
 /*
@@ -6898,6 +6907,7 @@ TABLE *open_table_uncached(THD *thd, const char *path, const char *db,
         !thd->is_current_stmt_binlog_disabled() &&
         !thd->is_current_stmt_binlog_format_row());
     /* growing temp list at the head */
+    mysql_mutex_lock(&thd->LOCK_temporary_tables);
     tmp_table->next = thd->temporary_tables;
     if (tmp_table->next) tmp_table->next->prev = tmp_table;
     thd->temporary_tables = tmp_table;
@@ -6906,6 +6916,7 @@ TABLE *open_table_uncached(THD *thd, const char *path, const char *db,
       ++atomic_slave_open_temp_tables;
       ++thd->rli_slave->get_c_rli()->atomic_channel_open_temp_tables;
     }
+    mysql_mutex_unlock(&thd->LOCK_temporary_tables);
   }
   tmp_table->pos_in_table_list = NULL;
 
