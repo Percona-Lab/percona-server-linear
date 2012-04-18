@@ -2117,6 +2117,14 @@ dict_allocate_mem_intrinsic_cache(
                 dict_index_t*           index);
 
 #endif /* !UNIV_HOTBACKUP */
+/*************************************************************************
+set is_corrupt flag by space_id*/
+
+void
+dict_table_set_corrupt_by_space(
+/*============================*/
+	ulint	space_id,
+	bool	need_mutex);
 
 #ifndef UNIV_NONINL
 #include "dict0dict.ic"
