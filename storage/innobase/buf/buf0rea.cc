@@ -117,9 +117,12 @@ buf_read_page_low(
 	ulint			mode,
 	const page_id_t&	page_id,
 	const page_size_t&	page_size,
-	bool			unzip)
+	bool			unzip,
+	trx_t*			trx)
 {
 	buf_page_t*	bpage;
+
+	ut_ad(!trx || trx->take_stats);
 
 	*err = DB_SUCCESS;
 
@@ -224,9 +227,9 @@ not_to_recover:
 
 	IORequest	request(type | IORequest::READ);
 
-	*err = fil_io(
+	*err = _fil_io(
 		request, sync, page_id, page_size, 0, page_size.physical(),
-		dst, bpage);
+		dst, bpage, trx);
 
 	if (sync) {
 		thd_wait_end(NULL);
@@ -287,7 +290,8 @@ ulint
 buf_read_ahead_random(
 	const page_id_t&	page_id,
 	const page_size_t&	page_size,
-	ibool			inside_ibuf)
+	ibool			inside_ibuf,
+	trx_t*			trx)
 {
 	buf_pool_t*	buf_pool = buf_pool_get(page_id);
 	ulint		recent_blocks	= 0;
@@ -298,6 +302,8 @@ buf_read_ahead_random(
 	ulint		i;
 	const ulint	buf_read_ahead_random_area
 				= BUF_READ_AHEAD_AREA(buf_pool);
+
+	ut_ad(!trx || trx->take_stats);
 
 	if (!srv_random_read_ahead) {
 		/* Disabled by user */
@@ -394,7 +400,7 @@ read_ahead:
 				&err, false,
 				IORequest::DO_NOT_WAKE,
 				ibuf_mode,
-				cur_page_id, page_size, false);
+				cur_page_id, page_size, false, trx);
 
 			if (err == DB_TABLESPACE_DELETED) {
 				ib::warn() << "Random readahead trying to"
@@ -438,10 +444,13 @@ released by the i/o-handler thread.
 ibool
 buf_read_page(
 	const page_id_t&	page_id,
-	const page_size_t&	page_size)
+	const page_size_t&	page_size,
+	trx_t*			trx)
 {
 	ulint		count;
 	dberr_t		err;
+
+	ut_ad(!trx || trx->take_stats);
 
 	/* We do synchronous IO because our AIO completion code
 	is sub-optimal. See buf_page_io_complete(), we have to
@@ -451,7 +460,7 @@ buf_read_page(
 
 	count = buf_read_page_low(
 		&err, true,
-		0, BUF_READ_ANY_PAGE, page_id, page_size, false);
+		0, BUF_READ_ANY_PAGE, page_id, page_size, false, trx);
 
 	srv_stats.buf_pool_reads.add(count);
 
@@ -487,7 +496,7 @@ buf_read_page_background(
 		&err, sync,
 		IORequest::DO_NOT_WAKE | IORequest::IGNORE_MISSING,
 		BUF_READ_ANY_PAGE,
-		page_id, page_size, false);
+		page_id, page_size, false, NULL);
 
 	srv_stats.buf_pool_reads.add(count);
 
@@ -531,7 +540,8 @@ ulint
 buf_read_ahead_linear(
 	const page_id_t&	page_id,
 	const page_size_t&	page_size,
-	ibool			inside_ibuf)
+	ibool			inside_ibuf,
+	trx_t*			trx)
 {
 	buf_pool_t*	buf_pool = buf_pool_get(page_id);
 	buf_page_t*	bpage;
@@ -548,6 +558,8 @@ buf_read_ahead_linear(
 	const ulint	buf_read_ahead_linear_area
 		= BUF_READ_AHEAD_AREA(buf_pool);
 	ulint		threshold;
+
+	ut_ad(!trx || trx->take_stats);
 
 	/* check if readahead is disabled */
 	if (!srv_read_ahead_threshold) {
@@ -752,7 +764,7 @@ buf_read_ahead_linear(
 			count += buf_read_page_low(
 				&err, false,
 				IORequest::DO_NOT_WAKE,
-				ibuf_mode, cur_page_id, page_size, false);
+				ibuf_mode, cur_page_id, page_size, false, trx);
 
 			if (err == DB_TABLESPACE_DELETED) {
 				ib::warn() << "linear readahead trying to"
@@ -838,7 +850,7 @@ buf_read_ibuf_merge_pages(
 				  sync && (i + 1 == n_stored),
 				  0,
 				  BUF_READ_ANY_PAGE, page_id, page_size,
-				  true);
+				  true, NULL);
 
 		if (err == DB_TABLESPACE_DELETED) {
 			/* We have deleted or are deleting the single-table
@@ -947,13 +959,13 @@ not_to_recover:
 				&err, true,
 				0,
 				BUF_READ_ANY_PAGE,
-				cur_page_id, page_size, true);
+				cur_page_id, page_size, true, NULL);
 		} else {
 			buf_read_page_low(
 				&err, false,
 				IORequest::DO_NOT_WAKE,
 				BUF_READ_ANY_PAGE,
-				cur_page_id, page_size, true);
+				cur_page_id, page_size, true, NULL);
 		}
 	}
 
