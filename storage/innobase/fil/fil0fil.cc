@@ -944,7 +944,8 @@ class Fil_shard {
   @retval DB_TABLESPACE_DELETED if the tablespace does not exist */
   dberr_t do_io(const IORequest &type, bool sync, const page_id_t &page_id,
                 const page_size_t &page_size, ulint byte_offset, ulint len,
-                void *buf, void *message) MY_ATTRIBUTE((warn_unused_result));
+                void *buf, void *message, trx_t *trx)
+      MY_ATTRIBUTE((warn_unused_result));
 
   /** Iterate through all persistent tablespace files
   (FIL_TYPE_TABLESPACE) returning the nodes via callback function cbk.
@@ -5724,7 +5725,8 @@ static dberr_t fil_write_zeros(const fil_node_t *file, ulint page_size,
         os_file_write(request, file->name, file->handle, buf, offset, n_bytes);
 #else  /* UNIV_HOTBACKUP */
     err = os_aio_func(request, AIO_mode::SYNC, file->name, file->handle, buf,
-                      offset, n_bytes, read_only_mode, nullptr, nullptr);
+                      offset, n_bytes, read_only_mode, nullptr, nullptr,
+                      file->space->id, nullptr);
 #endif /* UNIV_HOTBACKUP */
 
     if (err != DB_SUCCESS) {
@@ -6998,8 +7000,8 @@ dberr_t Fil_shard::do_redo_io(const IORequest &type, const page_id_t &page_id,
 @retval DB_TABLESPACE_DELETED if the tablespace does not exist */
 dberr_t Fil_shard::do_io(const IORequest &type, bool sync,
                          const page_id_t &page_id, const page_size_t &page_size,
-                         ulint byte_offset, ulint len, void *buf,
-                         void *message) {
+                         ulint byte_offset, ulint len, void *buf, void *message,
+                         trx_t *trx) {
   IORequest req_type(type);
 
   ut_ad(req_type.validate());
@@ -7230,7 +7232,7 @@ dberr_t Fil_shard::do_io(const IORequest &type, bool sync,
   err = os_aio(
       req_type, aio_mode, file->name, file->handle, buf, offset, len,
       fsp_is_system_temporary(page_id.space()) ? false : srv_read_only_mode,
-      file, message);
+      file, message, page_id.space(), trx);
 
 #endif /* UNIV_HOTBACKUP */
 
@@ -7368,13 +7370,13 @@ void fil_aio_wait(ulint segment) {
 @return error code
 @retval DB_SUCCESS on success
 @retval DB_TABLESPACE_DELETED if the tablespace does not exist */
-dberr_t fil_io(const IORequest &type, bool sync, const page_id_t &page_id,
-               const page_size_t &page_size, ulint byte_offset, ulint len,
-               void *buf, void *message) {
+dberr_t _fil_io(const IORequest &type, bool sync, const page_id_t &page_id,
+                const page_size_t &page_size, ulint byte_offset, ulint len,
+                void *buf, void *message, trx_t *trx) {
   auto shard = fil_system->shard_by_id(page_id.space());
 
   return (shard->do_io(type, sync, page_id, page_size, byte_offset, len, buf,
-                       message));
+                       message, trx));
 }
 
 /** If the tablespace is on the unflushed list and there are no pending
