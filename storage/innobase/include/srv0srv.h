@@ -452,6 +452,7 @@ extern my_bool	srv_purge_view_update_only_debug;
 extern ulint	srv_fatal_semaphore_wait_threshold;
 #define SRV_SEMAPHORE_WAIT_EXTENSION	7200
 extern ulint	srv_dml_needed_delay;
+extern lint	srv_kill_idle_transaction;
 
 #define SRV_MAX_N_IO_THREADS	130
 
