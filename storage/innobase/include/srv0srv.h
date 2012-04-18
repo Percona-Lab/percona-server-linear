@@ -470,12 +470,6 @@ extern my_bool srv_print_all_deadlocks;
 
 extern my_bool	srv_cmp_per_index_enabled;
 
-/** Time in seconds between automatic buffer pool dumps */
-extern uint srv_auto_lru_dump;
-
-/** Whether startup should be blocked until buffer pool is fully restored */
-extern ibool srv_blocking_lru_restore;
-
 /** Status variables to be passed to MySQL */
 extern struct export_var_t export_vars;
 
@@ -678,16 +672,6 @@ UNIV_INTERN
 os_thread_ret_t
 DECLARE_THREAD(srv_redo_log_follow_thread)(
 /*=======================*/
-	void*	arg);	/*!< in: a dummy parameter required by
-			os_thread_create */
-/*********************************************************************//**
-A thread which restores the buffer pool from a dump file on startup and does
-periodic buffer pool dumps.
-@return	a dummy parameter */
-UNIV_INTERN
-os_thread_ret_t
-srv_LRU_dump_restore_thread(
-/*====================*/
 	void*	arg);	/*!< in: a dummy parameter required by
 			os_thread_create */
 /******************************************************************//**
