@@ -332,6 +332,15 @@ extern ulong net_buffer_length;
 
 extern LEX_CSTRING sql_statement_names[(uint) SQLCOM_END + 1];
 
+extern uint mysqld_extra_port;
+
+extern ulonglong opt_log_warnings_suppress;
+
+extern char* enforce_storage_engine;
+
+extern char* utility_user;
+extern char* utility_user_password;
+extern char* utility_user_schema_access;
 /*
   THR_MALLOC is a key which will be used to set/get MEM_ROOT** for a thread,
   using my_set_thread_local()/my_get_thread_local().
