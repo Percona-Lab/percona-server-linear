@@ -3091,7 +3091,7 @@ buf_page_t *buf_page_get_zip(const page_id_t &page_id,
     /* Page not in buf_pool: needs to be read from file */
 
     ut_ad(!hash_lock);
-    buf_read_page(page_id, page_size);
+    buf_read_page(page_id, page_size, NULL);
 
 #if defined UNIV_DEBUG || defined UNIV_BUF_DEBUG
     ut_a(++buf_dbg_counter % 5771 || buf_validate());
@@ -3408,7 +3408,8 @@ struct Buf_fetch {
       : m_page_id(page_id),
         m_page_size(page_size),
         m_is_temp_space(fsp_is_system_temporary(page_id.space())),
-        m_buf_pool(buf_pool_get(m_page_id)) {}
+        m_buf_pool(buf_pool_get(m_page_id)),
+        m_trx(innobase_get_trx_for_slow_log()) {}
 
   buf_block_t *single_page();
 
@@ -3445,6 +3446,7 @@ struct Buf_fetch {
   size_t m_retries{};
   buf_pool_t *m_buf_pool{};
   rw_lock_t *m_hash_lock{};
+  trx_t *const m_trx;  // For InnoDB slow query log extensions
 
   friend T;
 };
@@ -3822,12 +3824,12 @@ void Buf_fetch<T>::read_page() {
   auto sync = m_mode != Page_fetch::SCAN;
 
   if (sync) {
-    success = buf_read_page(m_page_id, m_page_size);
+    success = buf_read_page(m_page_id, m_page_size, m_trx);
   } else {
     dberr_t err;
 
     auto ret = buf_read_page_low(&err, false, 0, BUF_READ_ANY_PAGE, m_page_id,
-                                 m_page_size, false);
+                                 m_page_size, false, m_trx);
     success = ret > 0;
 
     if (success) {
@@ -3842,7 +3844,7 @@ void Buf_fetch<T>::read_page() {
 
   if (success) {
     if (sync) {
-      buf_read_ahead_random(m_page_id, m_page_size, ibuf_inside(m_mtr));
+      buf_read_ahead_random(m_page_id, m_page_size, ibuf_inside(m_mtr), m_trx);
     }
     m_retries = 0;
   } else if (m_retries < BUF_PAGE_READ_MAX_RETRIES) {
@@ -4141,7 +4143,7 @@ buf_block_t *Buf_fetch<T>::single_page() {
       access_time == 0) {
     /* In the case of a first access, try to apply linear read-ahead */
 
-    buf_read_ahead_linear(m_page_id, m_page_size, ibuf_inside(m_mtr));
+    buf_read_ahead_linear(m_page_id, m_page_size, ibuf_inside(m_mtr), m_trx);
   }
 
 #ifdef UNIV_IBUF_COUNT_DEBUG
@@ -4300,7 +4302,8 @@ bool buf_page_optimistic_get(ulint rw_latch, buf_block_t *block,
  
   if (access_time == 0) {
     /* In the case of a first access, try to apply linear read-ahead */
-    buf_read_ahead_linear(block->page.id, block->page.size, ibuf_inside(mtr));
+    buf_read_ahead_linear(block->page.id, block->page.size, ibuf_inside(mtr),
+                          NULL);
   }
 
 #ifdef UNIV_IBUF_COUNT_DEBUG

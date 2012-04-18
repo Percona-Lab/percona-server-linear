@@ -67,6 +67,8 @@ string so that it never conflicts with MySQL schema directory. */
 /** File node of a tablespace or the log data space */
 struct fil_node_t;
 
+struct trx_t;
+
 extern bool os_has_said_disk_full;
 
 /** Number of pending read operations */
@@ -1137,6 +1139,7 @@ os_file_close_no_error_handling
 os_file_rename
 os_aio
 os_file_read
+os_file_read_trx
 os_file_read_no_error_handling
 os_file_read_no_error_handling_int_fd
 os_file_write
@@ -1163,13 +1166,15 @@ The wrapper functions have the prefix of "innodb_". */
   pfs_os_file_close_no_error_handling_func(file, __FILE__, __LINE__)
 
 #define os_aio(type, mode, name, file, buf, offset, n, read_only, message1,    \
-               message2)                                                       \
+               message2, space_id, trx)                                        \
   pfs_os_aio_func(type, mode, name, file, buf, offset, n, read_only, message1, \
-                  message2, __FILE__, __LINE__)
+                  message2, space_id, trx, __FILE__, __LINE__)
 
-#define os_file_read_pfs(type, file_name, file, buf, offset, n)          \
-  pfs_os_file_read_func(type, file_name, file, buf, offset, n, __FILE__, \
-                        __LINE__)
+#define os_file_read_pfs(type, file_name, file, buf, offset, n) \
+  pfs_os_file_read_func(type, file_name, file, buf, offset, n, nullptr, __FILE__, __LINE__)
+
+#define os_file_read_trx_pfs(file, buf, offset, n, trx) \
+  pfs_os_file_read_func(file, buf, offset, n, trx, __FILE__, __LINE__)
 
 #define os_file_read_first_page_pfs(type, file_name, file, buf, n)          \
   pfs_os_file_read_first_page_func(type, file_name, file, buf, n, __FILE__, \
@@ -1320,9 +1325,9 @@ os_file_read() which requests a synchronous read operation.
 @param[in]	src_line	line where the func invoked
 @return DB_SUCCESS if request was successful */
 UNIV_INLINE
-dberr_t pfs_os_file_read_func(IORequest &type, const char *file_name,
-                              pfs_os_file_t file, void *buf, os_offset_t offset,
-                              ulint n, const char *src_file, uint src_line);
+dberr_t pfs_os_file_read_func(IORequest &type, const char *file_name, pfs_os_file_t file, void *buf,
+                              os_offset_t offset, ulint n, trx_t *trx,
+                              const char *src_file, uint src_line);
 
 /** NOTE! Please use the corresponding macro os_file_read_first_page(),
 not directly this function!
@@ -1425,7 +1430,8 @@ UNIV_INLINE
 dberr_t pfs_os_aio_func(IORequest &type, AIO_mode mode, const char *name,
                         pfs_os_file_t file, void *buf, os_offset_t offset,
                         ulint n, bool read_only, fil_node_t *m1, void *m2,
-                        const char *src_file, uint src_line);
+                        space_id_t space_id, trx_t *trx, const char *src_file,
+                        uint src_line);
 
 /** NOTE! Please use the corresponding macro os_file_write(), not directly
 this function!
@@ -1560,9 +1566,9 @@ to original un-instrumented file I/O APIs */
   os_file_close_no_error_handling_func(file)
 
 #define os_aio(type, mode, name, file, buf, offset, n, read_only, message1, \
-               message2)                                                    \
+               message2, space_id, trx)                                     \
   os_aio_func(type, mode, name, file, buf, offset, n, read_only, message1,  \
-              message2)
+              message2, space_id, trx)
 
 #define os_file_read_pfs(type, file_name, file, buf, offset, n) \
   os_file_read_func(type, file_name, file, buf, offset, n)
@@ -1580,6 +1586,9 @@ to original un-instrumented file I/O APIs */
 #define os_file_read_no_error_handling_int_fd(type, file_name, file, buf, \
                                               offset, n, o)               \
   os_file_read_no_error_handling_func(type, file_name, file, buf, offset, n, o)
+
+#define os_file_read_trx_pfs(file, buf, offset, n, trx) \
+  os_file_read_func(file, buf, offset, n, trx)
 
 #define os_file_write_pfs(type, name, file, buf, offset, n) \
   os_file_write_func(type, name, file, buf, offset, n)
@@ -1763,9 +1772,9 @@ Requests a synchronous read operation.
 @param[in]	offset		file offset where to read
 @param[in]	n		number of bytes to read
 @return DB_SUCCESS if request was successful */
-dberr_t os_file_read_func(IORequest &type, const char *file_name,
-                          os_file_t file, void *buf, os_offset_t offset,
-                          ulint n) MY_ATTRIBUTE((warn_unused_result));
+dberr_t os_file_read_func(IORequest &type, const char* file_name, os_file_t file, void *buf,
+                          os_offset_t offset, ulint n, trx_t *trx)
+    MY_ATTRIBUTE((warn_unused_result));
 
 /** NOTE! Use the corresponding macro os_file_read_first_page(),
 not directly this function!
@@ -1899,7 +1908,8 @@ Requests an asynchronous i/o operation.
 @return DB_SUCCESS or error code */
 dberr_t os_aio_func(IORequest &type, AIO_mode aio_mode, const char *name,
                     pfs_os_file_t file, void *buf, os_offset_t offset, ulint n,
-                    bool read_only, fil_node_t *m1, void *m2);
+                    bool read_only, fil_node_t *m1, void *m2,
+                    space_id_t space_id, trx_t *trx);
 
 /** Wakes up all async i/o threads so that they know to exit themselves in
 shutdown. */
