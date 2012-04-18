@@ -774,6 +774,11 @@ static inline void my_micro_time_to_timeval(ulonglong micro_time,
   tm->tv_usec = (long)(micro_time % 1000000);
 }
 
+struct QUERY_START_TIME_INFO {
+  struct timeval start_time;
+  ulonglong start_utime;
+};
+
 /**
   @class THD
   For each client connection we create a separate thread with THD serving as
@@ -2684,6 +2689,14 @@ class THD : public MDL_context_owner,
     utime_after_lock = my_micro_time();
     MYSQL_SET_STATEMENT_LOCK_TIME(m_statement_psi,
                                   (utime_after_lock - start_utime));
+  }
+  void get_time(QUERY_START_TIME_INFO *time_info) const noexcept {
+    time_info->start_time = start_time;
+    time_info->start_utime = start_utime;
+  }
+  void set_time(const QUERY_START_TIME_INFO &time_info) noexcept {
+    start_time = time_info.start_time;
+    start_utime = time_info.start_utime;
   }
   inline bool is_fsp_truncate_mode() const {
     return (variables.sql_mode & MODE_TIME_TRUNCATE_FRACTIONAL);
