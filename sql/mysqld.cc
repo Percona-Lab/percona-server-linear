@@ -8467,6 +8467,7 @@ PSI_mutex_key key_LOCK_tc;
 PSI_mutex_key key_LOCK_des_key_file;
 #endif /* HAVE_OPENSSL */
 
+PSI_mutex_key key_LOCK_temporary_tables;
 PSI_mutex_key key_BINLOG_LOCK_commit;
 PSI_mutex_key key_BINLOG_LOCK_commit_queue;
 PSI_mutex_key key_BINLOG_LOCK_done;
@@ -8569,7 +8570,6 @@ static PSI_mutex_info all_server_mutexes[]=
   { &key_LOCK_slave_net_timeout, "LOCK_slave_net_timeout", PSI_FLAG_GLOBAL},
   { &key_LOCK_server_started, "LOCK_server_started", PSI_FLAG_GLOBAL},
 #if !defined(EMBEDDED_LIBRARY) && !defined(_WIN32)
-  { &key_LOCK_socket_listener_active, "LOCK_socket_listener_active", PSI_FLAG_GLOBAL},
   { &key_LOCK_start_signal_handler, "LOCK_start_signal_handler", PSI_FLAG_GLOBAL},
 #endif
   { &key_LOCK_status, "LOCK_status", PSI_FLAG_GLOBAL},
@@ -9392,6 +9392,7 @@ void init_server_psi_keys(void)
   stmt_info_rpl.m_name= "relay_log";
   stmt_info_rpl.m_flags= PSI_FLAG_MUTABLE;
   mysql_statement_register(category, &stmt_info_rpl, 1);
+
 #endif
 
   /* Common client and server code. */
@@ -9401,4 +9402,3 @@ void init_server_psi_keys(void)
 }
 
 #endif /* HAVE_PSI_INTERFACE */
-
