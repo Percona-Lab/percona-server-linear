@@ -444,7 +444,6 @@ void lex_start(THD *thd)
   lex->describe= DESCRIBE_NONE;
   lex->subqueries= FALSE;
   lex->context_analysis_only= 0;
-  lex->disable_flashcache= FALSE;
   lex->derived_tables= 0;
   lex->safe_to_cache_query= 1;
   lex->leaf_tables_insert= 0;
@@ -3741,6 +3740,8 @@ static void fix_prepare_info_in_table_list(THD *thd, TABLE_LIST *tbl)
     The passed WHERE and HAVING are to be saved for the future executions.
     This function saves it, and returns a copy which can be thrashed during
     this execution of the statement. By saving/thrashing here we mean only
+    We also save the chain of ORDER::next in group_list, in case
+    the list is modified by remove_const().
     AND/OR trees.
     We also save the chain of ORDER::next in group_list and order_list, in
     case the list is modified by remove_const().
@@ -4108,4 +4109,8 @@ void binlog_unsafe_map_init()
   UNSAFE(LEX::STMT_WRITES_TEMP_NON_TRANS_TABLE, LEX::STMT_READS_NON_TRANS_TABLE,
      BINLOG_DIRECT_OFF & TRX_CACHE_NOT_EMPTY);
 }
+#endif
+
+#ifdef HAVE_EXPLICIT_TEMPLATE_INSTANTIATION
+template class Mem_root_array<ORDER*, true>;
 #endif
