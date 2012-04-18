@@ -39,6 +39,11 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include <sql_time.h>
 #include <sys/types.h>
 #include <time.h>
+#include "sql/debug_sync.h"
+#include "sql/item.h"
+#include "sql/item_cmpfunc.h"
+#include "sql/item_func.h"
+#include "sql/item_sum.h"
 
 #include "auth_acls.h"
 #include "btr0btr.h"
@@ -66,6 +71,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "pars0pars.h"
 #include "sql/sql_class.h" /* For THD */
 #include "srv0mon.h"
+#include "srv0srv.h"
 #include "srv0start.h"
 #include "srv0tmp.h"
 #include "trx0i_s.h"
@@ -1504,6 +1510,7 @@ static int i_s_cmpmem_fill_low(THD *thd, Table_ref *tables, bool reset) {
     }
 
     mutex_exit(&buf_pool->zip_free_mutex);
+
 
     for (uint x = 0; x <= BUF_BUDDY_SIZES; x++) {
       const buf_buddy_stat_t::snapshot_t *buddy_stat = &buddy_stat_local[x];
