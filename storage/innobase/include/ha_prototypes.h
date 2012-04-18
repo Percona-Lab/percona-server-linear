@@ -385,6 +385,17 @@ buffer pool size.
 @param[in]	buf_pool_size	given value of buffer pool size.*/
 void innodb_set_buf_pool_size(long long buf_pool_size);
 
+/** Get the transaction of the current connection handle, if either exists.
+@return transaction of the current connection handle or NULL. */
+MY_NODISCARD
+trx_t *innobase_get_trx(void);
+
+/** Get the transaction of the current connection handle if slow query log
+InnoDB extended statistics should be collected.
+@return transaction object if statistics should be collected, or NULL. */
+MY_NODISCARD
+trx_t *innobase_get_trx_for_slow_log(void);
+
 /** Gets the InnoDB transaction handle for a MySQL handler object, creates
 an InnoDB transaction struct if the corresponding MySQL thread struct still
 lacks one.

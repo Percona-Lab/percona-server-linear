@@ -1726,6 +1726,25 @@ trx_t *&thd_to_trx(THD *thd) {
   return (innodb_session->m_trx);
 }
 
+/** Get the transaction of the current connection handle, if either exists.
+@return transaction of the current connection handle, or NULL. */
+trx_t *innobase_get_trx(void) {
+  THD *const thd = current_thd;
+  if (UNIV_UNLIKELY(!thd)) return (nullptr);
+
+  return (thd_to_trx(thd));
+}
+
+/** Get the transaction of the current connection handle if slow query log
+InnoDB extended statistics should be collected.
+@return transaction object if statistics should be collected, or NULL. */
+trx_t *innobase_get_trx_for_slow_log(void) {
+  THD *thd = current_thd;
+  trx_t *trx = thd ? thd_to_trx(thd) : nullptr;
+  if (trx && UNIV_UNLIKELY(trx->take_stats)) return (trx);
+  return (nullptr);
+}
+
 /** Check if statement is of type INSERT .... SELECT that involves
 use of intrinsic tables.
 @param[in]	user_thd	thread handler
