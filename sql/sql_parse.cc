@@ -6325,7 +6325,7 @@ const CHARSET_INFO *get_bin_collation(const CHARSET_INFO *cs) {
 static uint kill_one_thread(THD *thd, my_thread_id id, bool only_kill_query) {
   THD *tmp = NULL;
   uint error = ER_NO_SUCH_THREAD;
-  Find_thd_with_id find_thd_with_id(id);
+  Find_thd_with_id find_thd_with_id(id, false);
 
   DBUG_ENTER("kill_one_thread");
   DBUG_PRINT("enter", ("id=%u only_kill=%d", id, only_kill_query));
