@@ -625,10 +625,12 @@ struct TABLE;
 enum enum_schema_tables
 {
   SCH_CHARSETS= 0,
+  SCH_CLIENT_STATS,
   SCH_COLLATIONS,
   SCH_COLLATION_CHARACTER_SET_APPLICABILITY,
   SCH_COLUMNS,
   SCH_COLUMN_PRIVILEGES,
+  SCH_INDEX_STATS,
   SCH_ENGINES,
   SCH_EVENTS,
   SCH_FILES,
@@ -656,9 +658,12 @@ enum enum_schema_tables
   SCH_TABLE_CONSTRAINTS,
   SCH_TABLE_NAMES,
   SCH_TABLE_PRIVILEGES,
+  SCH_TABLE_STATS,
   SCH_TEMPORARY_TABLES,
+  SCH_THREAD_STATS,
   SCH_TRIGGERS,
   SCH_USER_PRIVILEGES,
+  SCH_USER_STATS,
   SCH_VARIABLES,
   SCH_VIEWS
 };
@@ -2110,6 +2115,9 @@ public:
   Item *pushed_idx_cond;
   uint pushed_idx_cond_keyno;  /* The index which the above condition is for */
 
+  ulonglong rows_read;
+  ulonglong rows_changed;
+  ulonglong index_rows_read[MAX_KEY];
   /**
     next_insert_id is the next value which should be inserted into the
     auto_increment column: in a inserting-multi-row statement (like INSERT
@@ -2237,7 +2245,8 @@ public:
     ref_length(sizeof(my_off_t)),
     ft_handler(0), inited(NONE),
     implicit_emptied(0),
-    pushed_cond(0), pushed_idx_cond(NULL), pushed_idx_cond_keyno(MAX_KEY),
+    pushed_cond(0), pushed_idx_cond(NULL),
+    pushed_idx_cond_keyno(MAX_KEY), rows_read(0), rows_changed(0),
     next_insert_id(0), insert_id_for_cur_row(0),
     auto_inc_intervals_count(0),
     m_psi(NULL),
@@ -2249,6 +2258,7 @@ public:
       DBUG_PRINT("info",
                  ("handler created F_UNLCK %d F_RDLCK %d F_WRLCK %d",
                   F_UNLCK, F_RDLCK, F_WRLCK));
+      memset(index_rows_read, 0, sizeof(index_rows_read));
     }
   virtual ~handler(void)
   {
@@ -2368,6 +2378,8 @@ public:
   {
     table= table_arg;
     table_share= share;
+    rows_read= rows_changed= 0;
+    memset(index_rows_read, 0, sizeof(index_rows_read));
   }
   /* Estimates calculation */
 
@@ -2989,6 +3001,8 @@ public:
   virtual bool is_crashed() const  { return 0; }
   virtual bool auto_repair() const { return 0; }
 
+  void update_global_table_stats();
+  void update_global_index_stats();
 
 #define CHF_CREATE_FLAG 0
 #define CHF_DELETE_FLAG 1
@@ -3833,6 +3847,7 @@ extern ulong total_ha, total_ha_2pc;
 /* lookups */
 handlerton *ha_default_handlerton(THD *thd);
 handlerton *ha_default_temp_handlerton(THD *thd);
+handlerton *ha_enforce_handlerton(THD *thd);
 /**
   Resolve handlerton plugin by name, without checking for "DEFAULT" or
   HTON_NOT_USER_SELECTABLE.
@@ -3965,6 +3980,9 @@ int ha_recover(HASH *commit_list);
 int ha_commit_low(THD *thd, bool all, bool run_after_commit= true);
 int ha_prepare_low(THD *thd, bool all);
 int ha_rollback_low(THD *thd, bool all);
+
+bool ha_flush_changed_page_bitmaps();
+bool ha_purge_changed_page_bitmaps(ulonglong lsn);
 
 /* transactions: these functions never call handlerton functions directly */
 int ha_enable_transaction(THD *thd, bool on);
