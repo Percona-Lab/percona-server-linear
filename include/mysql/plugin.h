@@ -624,6 +624,19 @@ int thd_allow_batch(MYSQL_THD thd);
 
 void thd_mark_transaction_to_rollback(MYSQL_THD thd, int all);
 
+void increment_thd_innodb_stats(MYSQL_THD thd,
+                    unsigned long long trx_id,
+                    long io_reads,
+                    long long io_read,
+                    long io_reads_wait_timer,
+                    long lock_que_wait_timer,
+                    long que_wait_timer,
+                    long page_access);
+
+unsigned long thd_log_slow_verbosity(const MYSQL_THD thd);
+
+int thd_opt_slow_log();
+
 /**
   Create a temporary file.
 
