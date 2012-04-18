@@ -1303,6 +1303,8 @@ class buf_page_t {
   buffer pool. Protected by block mutex */
   unsigned access_time;
 
+  bool is_corrupt;
+
 #ifdef UNIV_DEBUG
   /** This is set to TRUE when fsp frees a page in buffer pool;
   protected by buf_pool->zip_mutex or buf_block_t::mutex. */
