@@ -1126,7 +1126,7 @@ class Fil_shard {
   [[nodiscard]] dberr_t do_io(const IORequest &type, bool sync,
                               const page_id_t &page_id,
                               const page_size_t &page_size, ulint byte_offset,
-                              ulint len, void *buf, void *message);
+                              ulint len, void *buf, void *message, trx_t *trx);
 
   /** Iterate through all persistent tablespace files (FIL_TYPE_TABLESPACE)
   returning the nodes via callback function cbk.
@@ -6614,7 +6614,8 @@ static dberr_t fil_write_zeros(const fil_node_t *file, ulint page_size,
         os_file_write(request, file->name, file->handle, buf, offset, n_bytes);
 #else  /* UNIV_HOTBACKUP */
     err = os_aio_func(request, AIO_mode::SYNC, file->name, file->handle, buf,
-                      offset, n_bytes, read_only_mode, nullptr, nullptr);
+                      offset, n_bytes, read_only_mode, nullptr, nullptr,
+                      file->space->id, nullptr);
 #endif /* UNIV_HOTBACKUP */
 
     if (err != DB_SUCCESS) {
@@ -7855,8 +7856,8 @@ dberr_t Fil_shard::do_redo_io(const IORequest &type, const page_id_t &page_id,
 
 dberr_t Fil_shard::do_io(const IORequest &type, bool sync,
                          const page_id_t &page_id, const page_size_t &page_size,
-                         ulint byte_offset, ulint len, void *buf,
-                         void *message) {
+                         ulint byte_offset, ulint len, void *buf, void *message,
+                         trx_t *trx) {
   IORequest req_type(type);
 
   ut_ad(req_type.validate());
@@ -8150,7 +8151,7 @@ dberr_t Fil_shard::do_io(const IORequest &type, bool sync,
   err = os_aio(
       req_type, aio_mode, file->name, file->handle, buf, offset, len,
       fsp_is_system_temporary(page_id.space()) ? false : srv_read_only_mode,
-      file, message);
+      file, message, page_id.space(), trx);
 
 #endif /* UNIV_HOTBACKUP */
 
@@ -8276,9 +8277,26 @@ void fil_aio_wait(ulint segment) {
 }
 #endif /* !UNIV_HOTBACKUP */
 
-dberr_t fil_io(const IORequest &type, bool sync, const page_id_t &page_id,
-               const page_size_t &page_size, ulint byte_offset, ulint len,
-               void *buf, void *message) {
+/** Read or write data from a file.
+@param[in]	type		IO context
+@param[in]	sync		If true then do synchronous IO
+@param[in]	page_id		page id
+@param[in]	page_size	page size
+@param[in]	byte_offset	remainder of offset in bytes; in aio this
+                                must be divisible by the OS block size
+@param[in]	len		how many bytes to read or write; this must
+                                not cross a file boundary; in AIO this must
+                                be a block size multiple
+@param[in,out]	buf		buffer where to store read data or from where
+                                to write; in AIO this must be appropriately
+                                aligned
+@param[in]	message		message for AIO handler if !sync, else ignored
+@return error code
+@retval DB_SUCCESS on success
+@retval DB_TABLESPACE_DELETED if the tablespace does not exist */
+dberr_t _fil_io(const IORequest &type, bool sync, const page_id_t &page_id,
+                const page_size_t &page_size, ulint byte_offset, ulint len,
+                void *buf, void *message, trx_t *trx) {
   auto shard = fil_system->shard_by_id(page_id.space());
 #ifdef UNIV_DEBUG
   if (!sync) {
@@ -8291,7 +8309,7 @@ dberr_t fil_io(const IORequest &type, bool sync, const page_id_t &page_id,
   ut_ad(shard->id() != REDO_SHARD);
 
   auto const err = shard->do_io(type, sync, page_id, page_size, byte_offset,
-                                len, buf, message);
+                                len, buf, message, trx);
 #ifdef UNIV_DEBUG
   /* If the error prevented async io, then we haven't actually transfered the
   io responsibility at all, so we revert the debug io responsibility info. */
