@@ -46,6 +46,8 @@ Created 10/21/1995 Heikki Tuuri
 /** File node of a tablespace or the log data space */
 struct fil_node_t;
 
+struct trx_t;
+
 extern bool	os_has_said_disk_full;
 
 /** Number of pending read operations */
@@ -1190,13 +1192,18 @@ The wrapper functions have the prefix of "innodb_". */
 	pfs_os_file_close_func(file, __FILE__, __LINE__)
 
 # define os_aio(type, mode, name, file, buf, offset,			\
-		n, read_only, message1, message2)			\
+		n, read_only, message1, message2, space_id, trx)	\
 	pfs_os_aio_func(type, mode, name, file, buf, offset,		\
-			n, read_only, message1, message2,		\
-			__FILE__, __LINE__)
+			n, read_only, message1, message2, space_id,	\
+			trx, __FILE__, __LINE__)
 
 # define os_file_read(type, file, buf, offset, n)			\
-	pfs_os_file_read_func(type, file, buf, offset, n, __FILE__, __LINE__)
+	pfs_os_file_read_func(type, file, buf, offset, n, NULL,		\
+			      __FILE__, __LINE__)
+
+# define os_file_read_trx(file, buf, offset, n, trx)			\
+	pfs_os_file_read_func(file, buf, offset, n, trx,		\
+			      __FILE__, __LINE__)
 
 # define os_file_read_no_error_handling(type, file, buf, offset, n, o)	\
 	pfs_os_file_read_no_error_handling_func(			\
@@ -1345,6 +1352,7 @@ pfs_os_file_read_func(
 	void*		buf,
 	os_offset_t	offset,
 	ulint		n,
+	trx_t*		trx,
 	const char*	src_file,
 	ulint		src_line);
 
@@ -1409,6 +1417,8 @@ pfs_os_aio_func(
 	bool		read_only,
 	fil_node_t*	m1,
 	void*		m2,
+	ulint		space_id,
+	trx_t*		trx,
 	const char*	src_file,
 	ulint		src_line);
 
@@ -1533,15 +1543,18 @@ to original un-instrumented file I/O APIs */
 # define os_file_close(file)	os_file_close_func(file)
 
 # define os_aio(type, mode, name, file, buf, offset,			\
-		n, read_only, message1, message2)			\
+		n, read_only, message1, message2, space_id, trx)	\
 	os_aio_func(type, mode, name, file, buf, offset,		\
-		n, read_only, message1, message2)
+		n, read_only, message1, message2, space_id, trx)
 
 # define os_file_read(type, file, buf, offset, n)			\
 	os_file_read_func(type, file, buf, offset, n)
 
 # define os_file_read_no_error_handling(type, file, buf, offset, n, o)	\
 	os_file_read_no_error_handling_func(type, file, buf, offset, n, o)
+
+# define os_file_read_trx(file, buf, offset, n, trx)	\
+	os_file_read_func(file, buf, offset, n, trx)
 
 # define os_file_write(type, name, file, buf, offset, n)		\
 	os_file_write_func(type, name, file, buf, offset, n)
@@ -1659,7 +1672,8 @@ os_file_read_func(
 	os_file_t	file,
 	void*		buf,
 	os_offset_t	offset,
-	ulint		n)
+	ulint		n,
+	trx_t*		trx)
 	__attribute__((warn_unused_result));
 
 /** Rewind file to its start, read at most size - 1 bytes from it to str, and
@@ -1821,7 +1835,9 @@ os_aio_func(
 	ulint		n,
 	bool		read_only,
 	fil_node_t*	m1,
-	void*		m2);
+	void*		m2,
+	ulint		space_id,
+	trx_t*		trx);
 
 /** Wakes up all async i/o threads so that they know to exit themselves in
 shutdown. */
