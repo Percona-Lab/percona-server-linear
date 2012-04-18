@@ -215,6 +215,15 @@ static void trx_init(trx_t *trx) {
 
   trx->error_index = nullptr;
 
+  trx->io_reads = 0;
+  trx->io_read = 0;
+  trx->io_reads_wait_timer = 0;
+  trx->lock_que_wait_timer = 0;
+  trx->innodb_que_wait_timer = 0;
+  trx->distinct_page_access = 0;
+  trx->distinct_page_access_hash = NULL;
+  trx->take_stats = false;
+
   /* During asynchronous rollback, we should reset forced rollback flag
   only after rollback is complete to avoid race with the thread owning
   the transaction. */
@@ -522,6 +531,11 @@ trx_t *trx_allocate_for_mysql(void) {
 
   trx_sys_mutex_exit();
 
+  if (UNIV_UNLIKELY(trx->take_stats)) {
+    trx->distinct_page_access_hash = static_cast<byte *>(
+        ut_zalloc(DPAH_SIZE, mem_key_trx_distinct_page_access_hash));
+  }
+
   return (trx);
 }
 
@@ -618,6 +632,11 @@ void trx_free_prepared_or_active_recovered(trx_t *trx) {
                                 linked to another session in future.
 */
 inline void trx_disconnect_from_mysql(trx_t *trx, bool prepared) {
+  if (trx->distinct_page_access_hash) {
+    ut_free(trx->distinct_page_access_hash);
+    trx->distinct_page_access_hash = NULL;
+  }
+
   trx_sys_mutex_enter();
 
   ut_ad(trx->in_mysql_trx_list);
@@ -2081,6 +2100,11 @@ written */
     trx->state.store(TRX_STATE_NOT_STARTED, std::memory_order_relaxed);
   }
 
+  if (UNIV_LIKELY_NULL(trx->distinct_page_access_hash)) {
+    ut_free(trx->distinct_page_access_hash);
+    trx->distinct_page_access_hash = NULL;
+  }
+
   /* trx->in_mysql_trx_list would hold between
   trx_allocate_for_mysql() and trx_free_for_mysql(). It does not
   hold for recovered transactions or system transactions. */
@@ -2296,9 +2320,17 @@ void trx_commit_or_rollback_prepare(trx_t *trx) /*!< in/out: transaction */
       query thread to the suspended state */
 
       if (trx->lock.que_state == TRX_QUE_LOCK_WAIT) {
+        ib_uint64_t now;
+
         ut_a(trx->lock.wait_thr != nullptr);
         trx->lock.wait_thr->state = QUE_THR_SUSPENDED;
         trx->lock.wait_thr = nullptr;
+
+        if (UNIV_UNLIKELY(trx->take_stats)) {
+          now = ut_time_monotonic_us();
+          trx->lock_que_wait_timer +=
+              (ulint)(now - trx->lock_que_wait_ustarted);
+        }
 
         trx->lock.que_state = TRX_QUE_RUNNING;
       }

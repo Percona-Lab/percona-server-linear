@@ -50,6 +50,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 #include "os0file.h"
 #include "sql_const.h"
 #include "srv0srv.h"
+#include "trx0trx.h"
 #include "srv0start.h"
 #ifndef UNIV_HOTBACKUP
 #include "os0event.h"
@@ -325,6 +326,8 @@ struct Slot {
   to the caller of os_aio_simulated_handle */
   bool io_already_done{false};
 
+  space_id_t space_id;
+
   /** The file node for which the IO is requested. */
   fil_node_t *m1{nullptr};
 
@@ -445,7 +448,8 @@ class AIO {
   @return pointer to slot */
   Slot *reserve_slot(IORequest &type, fil_node_t *m1, void *m2,
                      pfs_os_file_t file, const char *name, void *buf,
-                     os_offset_t offset, ulint len, const file::Block *e_block)
+                     os_offset_t offset, ulint len, const file::Block *e_block,
+                     space_id_t space_id)
       MY_ATTRIBUTE((warn_unused_result));
 
   /** @return number of reserved slots */
@@ -5262,25 +5266,43 @@ static MY_ATTRIBUTE((warn_unused_result)) dberr_t
 @param[out]	buf		buffer where to read
 @param[in]	offset		file offset from the start where to read
 @param[in]	n		number of bytes to read, starting from offset
+@param[in,out]	trx		transaction to account the read to, or NULL
 @param[out]	err		DB_SUCCESS or error code
 @return number of bytes read, -1 if error */
 static MY_ATTRIBUTE((warn_unused_result)) ssize_t
     os_file_pread(IORequest &type, os_file_t file, void *buf, ulint n,
-                  os_offset_t offset, dberr_t *err) {
+                  os_offset_t offset, trx_t *trx, dberr_t *err) {
 #ifdef UNIV_HOTBACKUP
   static meb::Mutex meb_mutex;
 
   meb_mutex.lock();
 #endif /* UNIV_HOTBACKUP */
+  ib_uint64_t start_time;
+  ib_uint64_t finish_time;
+
   ++os_n_file_reads;
 #ifdef UNIV_HOTBACKUP
   meb_mutex.unlock();
 #endif /* UNIV_HOTBACKUP */
 
+  if (UNIV_LIKELY_NULL(trx)) {
+    ut_ad(trx->take_stats);
+    trx->io_reads++;
+    trx->io_read += n;
+    start_time = ut_time_monotonic_us();
+  } else {
+    start_time = 0;
+  }
+
   os_n_pending_reads.fetch_add(1);
   MONITOR_ATOMIC_INC(MONITOR_OS_PENDING_READS);
 
   ssize_t n_bytes = os_file_io(type, file, buf, n, offset, err, nullptr);
+
+  if (UNIV_UNLIKELY(start_time != 0)) {
+    finish_time = ut_time_monotonic_us();
+    trx->io_reads_wait_timer += (ulint)(finish_time - start_time);
+  }
 
   os_n_pending_reads.fetch_sub(1);
   MONITOR_ATOMIC_DEC(MONITOR_OS_PENDING_READS);
@@ -5298,11 +5320,12 @@ static MY_ATTRIBUTE((warn_unused_result)) ssize_t
 @param[in]	n		number of bytes to read, starting from offset
 @param[out]	o		number of bytes actually read
 @param[in]	exit_on_err	if true then exit on error
+@param[in,out]	trx		transaction to account the read to, or NULL
 @return DB_SUCCESS or error code */
 static MY_ATTRIBUTE((warn_unused_result)) dberr_t
     os_file_read_page(IORequest &type, const char *file_name, os_file_t file,
                       void *buf, os_offset_t offset, ulint n, ulint *o,
-                      bool exit_on_err) {
+                      bool exit_on_err, trx_t *trx) {
   dberr_t err(DB_ERROR_UNSET);
 
 #ifdef UNIV_HOTBACKUP
@@ -5310,6 +5333,8 @@ static MY_ATTRIBUTE((warn_unused_result)) dberr_t
 
   meb_mutex.lock();
 #endif /* UNIV_HOTBACKUP */
+  ut_ad(!trx || trx->take_stats);
+
   os_bytes_read_since_printout += n;
 #ifdef UNIV_HOTBACKUP
   meb_mutex.unlock();
@@ -5321,7 +5346,7 @@ static MY_ATTRIBUTE((warn_unused_result)) dberr_t
   for (;;) {
     ssize_t n_bytes;
 
-    n_bytes = os_file_pread(type, file, buf, n, offset, &err);
+    n_bytes = os_file_pread(type, file, buf, n, offset, trx, &err);
 
     if (o != nullptr) {
       *o = n_bytes;
@@ -5629,7 +5654,7 @@ bool os_file_set_size(const char *name, pfs_os_file_t file, os_offset_t offset,
     special mechanism to wait before it returns back. */
 
     err = os_aio(request, AIO_mode::SYNC, name, file, buf, current_size,
-                 n_bytes, read_only, nullptr, nullptr);
+                 n_bytes, read_only, nullptr, nullptr, 0, nullptr);
 #endif /* UNIV_HOTBACKUP */
 
     if (err != DB_SUCCESS) {
@@ -5746,11 +5771,12 @@ Requests a synchronous read operation of page 0 of IBD file.
 @return DB_SUCCESS if request was successful, DB_IO_ERROR on failure */
 dberr_t os_file_read_func(IORequest &type, const char *file_name,
                           os_file_t file, void *buf, os_offset_t offset,
-                          ulint n) {
+                          ulint n, trx_t *trx) {
   ut_ad(type.is_read());
+  ut_ad(!trx || trx->take_stats);
 
-  return (
-      os_file_read_page(type, file_name, file, buf, offset, n, nullptr, true));
+  return (os_file_read_page(type, file_name, file, buf, offset, n, nullptr,
+                            true, trx));
 }
 
 /** NOTE! Use the corresponding macro os_file_read_first_page(),
@@ -5767,14 +5793,14 @@ dberr_t os_file_read_first_page_func(IORequest &type, const char *file_name,
   ut_ad(type.is_read());
 
   dberr_t err = os_file_read_page(type, file_name, file, buf, 0,
-                                  UNIV_ZIP_SIZE_MIN, nullptr, true);
+                                  UNIV_ZIP_SIZE_MIN, nullptr, true, nullptr);
 
   if (err == DB_SUCCESS) {
     uint32_t flags = fsp_header_get_flags(static_cast<byte *>(buf));
     const page_size_t page_size(flags);
     ut_ad(page_size.physical() <= n);
     err = os_file_read_page(type, file_name, file, buf, 0, page_size.physical(),
-                            nullptr, true);
+                            nullptr, true, nullptr);
   }
   return (err);
 }
@@ -5812,7 +5838,7 @@ static dberr_t os_file_copy_read_write(os_file_t src_file,
     }
 
     err = os_file_read_func(read_request, nullptr, src_file, &buf, src_offset,
-                            request_size);
+                            request_size, nullptr);
 
     if (err != DB_SUCCESS) {
       return (err);
@@ -5922,7 +5948,7 @@ dberr_t os_file_read_no_error_handling_func(IORequest &type,
                                             ulint *o) {
   ut_ad(type.is_read());
 
-  return (os_file_read_page(type, file_name, file, buf, offset, n, o, false));
+  return (os_file_read_page(type, file_name, file, buf, offset, n, o, false, nullptr));
 }
 
 /** NOTE! Use the corresponding macro os_file_write(), not directly this
@@ -6093,7 +6119,7 @@ dberr_t os_file_write_zeros(pfs_os_file_t file, const char *name,
     err = os_file_write(request, name, file, buf, offset, n_bytes);
 #else
     err = os_aio(request, AIO_mode::SYNC, name, file, buf, offset, n_bytes,
-                 read_only_mode, NULL, NULL);
+                 read_only_mode, nullptr, nullptr, 0, nullptr);
 #endif /* UNIV_HOTBACKUP */
 
     if (err != DB_SUCCESS) {
@@ -6732,7 +6758,7 @@ ulint AIO::get_segment_no_from_slot(const AIO *array, const Slot *slot) {
 Slot *AIO::reserve_slot(IORequest &type, fil_node_t *m1, void *m2,
                         pfs_os_file_t file, const char *name, void *buf,
                         os_offset_t offset, ulint len,
-                        const file::Block *e_block) {
+                        const file::Block *e_block, space_id_t space_id) {
 #ifdef WIN_ASYNC_IO
   ut_a((len & 0xFFFFFFFFUL) == len);
 #endif /* WIN_ASYNC_IO */
@@ -6838,6 +6864,7 @@ Slot *AIO::reserve_slot(IORequest &type, fil_node_t *m1, void *m2,
   slot->err = DB_SUCCESS;
   slot->original_len = static_cast<uint32>(len);
   slot->io_already_done = false;
+  slot->space_id = space_id;
   slot->buf_block = nullptr;
   slot->encrypt_log_buf = nullptr;
 
@@ -7240,7 +7267,8 @@ static dberr_t os_aio_windows_handler(ulint segment, ulint pos, fil_node_t **m1,
 
 dberr_t os_aio_func(IORequest &type, AIO_mode aio_mode, const char *name,
                     pfs_os_file_t file, void *buf, os_offset_t offset, ulint n,
-                    bool read_only, fil_node_t *m1, void *m2) {
+                    bool read_only, fil_node_t *m1, void *m2,
+                    space_id_t space_id, trx_t *trx) {
 #ifdef WIN_ASYNC_IO
   BOOL ret = TRUE;
 #endif /* WIN_ASYNC_IO */
@@ -7283,7 +7311,7 @@ dberr_t os_aio_func(IORequest &type, AIO_mode aio_mode, const char *name,
     and os_file_write_func() */
 
     if (type.is_read()) {
-      return (os_file_read_func(type, name, file.m_file, buf, offset, n));
+      return (os_file_read_func(type, name, file.m_file, buf, offset, n, trx));
     }
 
     ut_ad(type.is_write());
@@ -7294,10 +7322,15 @@ try_again:
 
   auto array = AIO::select_slot_array(type, read_only, aio_mode);
 
-  auto slot =
-      array->reserve_slot(type, m1, m2, file, name, buf, offset, n, e_block);
+  auto slot = array->reserve_slot(type, m1, m2, file, name, buf, offset, n,
+                                  e_block, space_id);
 
   if (type.is_read()) {
+    if (trx) {
+      trx->io_reads++;
+      trx->io_read += n;
+    }
+
     if (srv_use_native_aio) {
       ++os_n_file_reads;
 
@@ -7562,8 +7595,8 @@ class SimulatedAIOHandler {
   /** Do the file read
   @param[in,out]	slot		Slot that has the IO context */
   void read(Slot *slot) {
-    dberr_t err = os_file_read_func(slot->type, slot->name, slot->file.m_file,
-                                    slot->ptr, slot->offset, slot->len);
+    dberr_t err = os_file_read_func(slot->type, slot->name, slot->file.m_file, slot->ptr,
+                                    slot->offset, slot->len, nullptr);
     ut_a(err == DB_SUCCESS);
   }
 
