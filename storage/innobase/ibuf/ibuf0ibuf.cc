@@ -3533,6 +3533,8 @@ ibuf_insert_low(
 
 	ut_ad(!(thr_get_trx(thr)->fake_changes));
 
+	ut_ad(!(thr_get_trx(thr)->fake_changes));
+
 	do_merge = FALSE;
 
 	/* Perform dirty reads of ibuf->size and ibuf->max_size, to
