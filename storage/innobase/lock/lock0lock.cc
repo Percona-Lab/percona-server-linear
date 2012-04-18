@@ -1136,7 +1136,7 @@ lock_rec_has_expl(
 /*********************************************************************//**
 Checks if some other transaction has a lock request in the queue.
 @return lock or NULL */
-static
+static __attribute__((warn_unused_result))
 const lock_t*
 lock_rec_other_has_expl_req(
 /*========================*/
@@ -5765,6 +5765,7 @@ lock_rec_insert_check_and_lock(
 	      || dict_index_is_clust(index)
 	      || (flags & BTR_CREATE_FLAG));
 	ut_ad(mtr->is_named_space(index->space));
+	ut_ad((flags & BTR_NO_LOCKING_FLAG) || thr);
 
 	if (flags & BTR_NO_LOCKING_FLAG) {
 
@@ -7476,10 +7477,6 @@ DeadlockChecker::check_and_resolve(const lock_t* lock, const trx_t* trx)
 
 			rollback_print(victim_trx, lock);
 
-			MONITOR_INC(MONITOR_DEADLOCK);
-
-			break;
-
 		} else if (victim_trx != 0 && victim_trx != trx) {
 
 			ut_ad(victim_trx == checker.m_wait_lock->trx);
@@ -7488,6 +7485,7 @@ DeadlockChecker::check_and_resolve(const lock_t* lock, const trx_t* trx)
 
 			lock_deadlock_found = true;
 
+			// TODO laurynas: fishy
 			MONITOR_INC(MONITOR_DEADLOCK);
 		}
 
@@ -7499,6 +7497,8 @@ DeadlockChecker::check_and_resolve(const lock_t* lock, const trx_t* trx)
 		print("*** WE ROLL BACK TRANSACTION (2)\n");
 
 		lock_deadlock_found = true;
+
+		MONITOR_INC(MONITOR_DEADLOCK);
 	}
 
 	return(victim_trx);
