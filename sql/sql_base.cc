@@ -1554,12 +1554,16 @@ bool close_temporary_tables(THD *thd)
   if (!mysql_bin_log.is_open())
   {
     TABLE *tmp_next;
+
+    mysql_mutex_lock(&thd->LOCK_temporary_tables);
     for (table= thd->temporary_tables; table; table= tmp_next)
     {
       tmp_next= table->next;
       close_temporary(table, 1, 1);
     }
     thd->temporary_tables= 0;
+    mysql_mutex_unlock(&thd->LOCK_temporary_tables);
+
     DBUG_RETURN(FALSE);
   }
 
@@ -1571,6 +1575,8 @@ bool close_temporary_tables(THD *thd)
   bool found_user_tables= FALSE;
 
   memcpy(buf, stub, stub_len);
+
+  mysql_mutex_lock(&thd->LOCK_temporary_tables);
 
   /*
     Insertion sort of temp tables by pseudo_thread_id to build ordered list
@@ -1694,6 +1700,8 @@ bool close_temporary_tables(THD *thd)
   if (!was_quote_show)
     thd->variables.option_bits&= ~OPTION_QUOTE_SHOW_CREATE; /* restore option */
   thd->temporary_tables=0;
+
+  mysql_mutex_unlock(&thd->LOCK_temporary_tables);
 
   DBUG_RETURN(error);
 }
@@ -2089,6 +2097,8 @@ void close_temporary_table(THD *thd, TABLE *table,
                           table->s->db.str, table->s->table_name.str,
                           (long) table, table->alias));
 
+  mysql_mutex_lock(&thd->LOCK_temporary_tables);
+
   if (table->prev)
   {
     table->prev->next= table->next;
@@ -2115,6 +2125,9 @@ void close_temporary_table(THD *thd, TABLE *table,
     modify_slave_open_temp_tables(thd, -1);
   }
   close_temporary(table, free_share, delete_table);
+
+  mysql_mutex_unlock(&thd->LOCK_temporary_tables);
+
   DBUG_VOID_RETURN;
 }
 
@@ -6103,6 +6116,7 @@ TABLE *open_table_uncached(THD *thd, const char *path, const char *db,
   if (add_to_temporary_tables_list)
   {
     /* growing temp list at the head */
+    mysql_mutex_lock(&thd->LOCK_temporary_tables);
     tmp_table->next= thd->temporary_tables;
     if (tmp_table->next)
       tmp_table->next->prev= tmp_table;
@@ -6110,6 +6124,7 @@ TABLE *open_table_uncached(THD *thd, const char *path, const char *db,
     thd->temporary_tables->prev= 0;
     if (thd->slave_thread)
       modify_slave_open_temp_tables(thd, 1);
+    mysql_mutex_unlock(&thd->LOCK_temporary_tables);
   }
   tmp_table->pos_in_table_list= 0;
 
