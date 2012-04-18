@@ -1572,7 +1572,7 @@ ibool thd_trx_is_auto_commit(THD *thd) /*!< in: thread handle, can be NULL */
           thd_is_select(thd));
 }
 
-extern "C" time_t thd_start_time(const THD *thd);
+extern "C" long long thd_start_time(const THD *thd);
 
 /** Get the thread start time.
  @return the thread start time in seconds since the epoch. */
