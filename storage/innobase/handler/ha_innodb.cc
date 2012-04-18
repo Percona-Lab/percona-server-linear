@@ -6194,6 +6194,12 @@ int ha_innobase::open(const char *name, int, uint open_flags,
     is_part = NULL;
   }
 
+  if (UNIV_UNLIKELY(ib_table && ib_table->is_corrupt &&
+                    srv_pass_corrupt_table <= 1)) {
+    free_share(m_share);
+    DBUG_RETURN(HA_ERR_CRASHED_ON_USAGE);
+  }
+
   /* For encrypted table, check if the encryption info in data
   file can't be retrieved properly, mark it as corrupted. */
   if (ib_table != NULL && dict_table_is_encrypted(ib_table) &&
@@ -13131,6 +13137,8 @@ int ha_innobase::truncate_impl(const char *name, TABLE *form,
     DBUG_RETURN(HA_ERR_TABLESPACE_MISSING);
   }
 
+  if (UNIV_UNLIKELY(innodb_table->is_corrupt)) DBUG_RETURN(HA_ERR_CRASHED);
+
   trx_t *trx = check_trx_exists(thd);
   innobase_register_trx(ht, thd, trx);
 
@@ -20052,6 +20060,24 @@ static MYSQL_SYSVAR_STR(directories, innobase_directories,
                         "'innodb-data-home-dir;innodb-undo-directory;datadir'",
                         NULL, NULL, NULL);
 
+static const char *corrupt_table_action_names[] = {"assert",  /* 0 */
+                                                   "warn",    /* 1 */
+                                                   "salvage", /* 2 */
+                                                   NullS};
+
+static TYPELIB corrupt_table_action_typelib = {
+    array_elements(corrupt_table_action_names) - 1,
+    "corrupt_table_action_typelib", corrupt_table_action_names, nullptr};
+
+static MYSQL_SYSVAR_ENUM(
+    corrupt_table_action, srv_pass_corrupt_table, PLUGIN_VAR_RQCMDARG,
+    "Warn corruptions of user tables as 'corrupt table' instead of not "
+    "crashing itself, "
+    "when used with file_per_table. "
+    "All file io for the datafile after detected as corrupt are disabled, "
+    "except for the deletion.",
+    nullptr, nullptr, 0, &corrupt_table_action_typelib);
+
 static SYS_VAR *innobase_system_variables[] = {
     MYSQL_SYSVAR(api_trx_level),
     MYSQL_SYSVAR(api_bk_commit_interval),
@@ -20249,6 +20275,7 @@ static SYS_VAR *innobase_system_variables[] = {
     MYSQL_SYSVAR(buffer_pool_debug),
     MYSQL_SYSVAR(ddl_log_crash_reset_debug),
 #endif /* UNIV_DEBUG */
+    MYSQL_SYSVAR(corrupt_table_action),
     NULL};
 
 mysql_declare_plugin(innobase){

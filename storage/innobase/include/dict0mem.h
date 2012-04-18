@@ -1948,6 +1948,8 @@ detect this and will eventually quit sooner. */
   proceeding SELECT as part of UPDATE. */
   ib_uint64_t sess_trx_id;
 
+  bool is_corrupt;
+
 #ifdef UNIV_DEBUG
 /** Value of 'magic_n'. */
 #define DICT_TABLE_MAGIC_N 76333786
