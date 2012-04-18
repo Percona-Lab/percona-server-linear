@@ -1777,6 +1777,7 @@ bool close_temporary_tables(THD *thd)
   if (!mysql_bin_log.is_open())
   {
     TABLE *tmp_next;
+    mysql_mutex_lock(&thd->LOCK_temporary_tables);
     for (TABLE *t= thd->temporary_tables; t; t= tmp_next)
     {
       tmp_next= t->next;
@@ -1793,6 +1794,7 @@ bool close_temporary_tables(THD *thd)
       thd->rli_slave->get_c_rli()->channel_open_temp_tables.atomic_add(-slave_closed_temp_tables);
     }
 #endif
+    mysql_mutex_unlock(&thd->LOCK_temporary_tables);
 
     DBUG_RETURN(FALSE);
   }
@@ -1826,6 +1828,8 @@ bool close_temporary_tables(THD *thd)
 
   memcpy(buf_trans, stub, stub_len);
   memcpy(buf_non_trans, stub, stub_len);
+
+  mysql_mutex_lock(&thd->LOCK_temporary_tables);
 
   /*
     Insertion sort of temp tables by pseudo_thread_id to build ordered list
@@ -2014,6 +2018,8 @@ bool close_temporary_tables(THD *thd)
     thd->rli_slave->get_c_rli()->channel_open_temp_tables.atomic_add(-slave_closed_temp_tables);
   }
 #endif
+
+  mysql_mutex_unlock(&thd->LOCK_temporary_tables);
 
   DBUG_RETURN(error);
 }
@@ -2405,6 +2411,8 @@ void close_temporary_table(THD *thd, TABLE *table,
                           table->s->db.str, table->s->table_name.str,
                           (long) table, table->alias));
 
+  mysql_mutex_lock(&thd->LOCK_temporary_tables);
+
   if (table->prev)
   {
     table->prev->next= table->next;
@@ -2434,6 +2442,9 @@ void close_temporary_table(THD *thd, TABLE *table,
   }
 #endif
   close_temporary(table, free_share, delete_table);
+
+  mysql_mutex_unlock(&thd->LOCK_temporary_tables);
+
   DBUG_VOID_RETURN;
 }
 
@@ -6841,6 +6852,7 @@ TABLE *open_table_uncached(THD *thd, const char *path, const char *db,
   if (add_to_temporary_tables_list)
   {
     /* growing temp list at the head */
+    mysql_mutex_lock(&thd->LOCK_temporary_tables);
     tmp_table->next= thd->temporary_tables;
     if (tmp_table->next)
       tmp_table->next->prev= tmp_table;
@@ -6853,6 +6865,7 @@ TABLE *open_table_uncached(THD *thd, const char *path, const char *db,
       thd->rli_slave->get_c_rli()->channel_open_temp_tables.atomic_add(1);
     }
 #endif
+    mysql_mutex_unlock(&thd->LOCK_temporary_tables);
   }
   tmp_table->pos_in_table_list= NULL;
 
