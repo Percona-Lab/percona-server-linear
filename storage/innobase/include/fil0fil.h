@@ -132,6 +132,7 @@ extern fil_addr_t	fil_addr_null;
 #define FIL_PAGE_SPACE_ID  FIL_PAGE_ARCH_LOG_NO_OR_SPACE_ID
 
 #define FIL_PAGE_DATA		38	/*!< start of the data on the page */
+#define FIL_PAGE_DATA_ALIGN_32	40
 /* @} */
 /** File page trailer @{ */
 #define FIL_PAGE_END_LSN_OLD_CHKSUM 8	/*!< the low 4 bytes of this are used
