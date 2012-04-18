@@ -61,6 +61,7 @@ table_name COLLATE utf8_general_ci not like 'innodb_%';
 select * from v1;
 c
 CHARACTER_SETS
+CLIENT_STATISTICS
 COLLATIONS
 COLLATION_CHARACTER_SET_APPLICABILITY
 COLUMNS
@@ -90,9 +91,12 @@ TABLES
 TABLESPACES
 TABLE_CONSTRAINTS
 TABLE_PRIVILEGES
+TABLE_STATISTICS
 TEMPORARY_TABLES
+THREAD_STATISTICS
 TRIGGERS
 USER_PRIVILEGES
+USER_STATISTICS
 VIEWS
 VIEW_ROUTINE_USAGE
 VIEW_TABLE_USAGE
@@ -611,14 +615,16 @@ where table_schema='information_schema'
 order by table_name collate utf8_general_ci limit 2;
 TABLE_NAME	TABLE_TYPE	ENGINE
 CHARACTER_SETS	SYSTEM VIEW	NULL
-COLLATIONS	SYSTEM VIEW	NULL
+CLIENT_STATISTICS	SYSTEM VIEW	NULL
 show tables from information_schema like "T%";
 Tables_in_information_schema (T%)
 TABLES
 TABLESPACES
 TABLE_CONSTRAINTS
 TABLE_PRIVILEGES
+TABLE_STATISTICS
 TEMPORARY_TABLES
+THREAD_STATISTICS
 TRIGGERS
 create database information_schema;
 ERROR 42000: Access denied for user 'root'@'localhost' to database 'information_schema'
@@ -629,7 +635,9 @@ TABLES	SYSTEM VIEW
 TABLESPACES	SYSTEM VIEW
 TABLE_CONSTRAINTS	SYSTEM VIEW
 TABLE_PRIVILEGES	SYSTEM VIEW
+TABLE_STATISTICS	SYSTEM VIEW
 TEMPORARY_TABLES	SYSTEM VIEW
+THREAD_STATISTICS	SYSTEM VIEW
 TRIGGERS	SYSTEM VIEW
 create table t1(a int);
 ERROR 42000: Access denied for user 'root'@'localhost' to database 'information_schema'
@@ -643,7 +651,9 @@ TABLES
 TABLESPACES
 TABLE_CONSTRAINTS
 TABLE_PRIVILEGES
+TABLE_STATISTICS
 TEMPORARY_TABLES
+THREAD_STATISTICS
 TRIGGERS
 select table_name from tables where table_name='user';
 TABLE_NAME
@@ -828,6 +838,7 @@ COLUMN_PRIVILEGES	TABLE_NAME	select
 COLUMN_STATISTICS	TABLE_NAME	select
 FILES	TABLE_NAME	select
 GLOBAL_TEMPORARY_TABLES	TABLE_NAME	select
+INDEX_STATISTICS	TABLE_NAME	select
 INNODB_BUFFER_PAGE	TABLE_NAME	select
 INNODB_BUFFER_PAGE_LRU	TABLE_NAME	select
 INNODB_CMP_PER_INDEX	table_name	select
@@ -840,6 +851,7 @@ ST_GEOMETRY_COLUMNS	TABLE_NAME	select
 TABLES	TABLE_NAME	select
 TABLE_CONSTRAINTS	TABLE_NAME	select
 TABLE_PRIVILEGES	TABLE_NAME	select
+TABLE_STATISTICS	TABLE_NAME	select
 TEMPORARY_TABLES	TABLE_NAME	select
 VIEWS	TABLE_NAME	select
 VIEW_ROUTINE_USAGE	TABLE_NAME	select
@@ -1294,6 +1306,7 @@ and t.table_name not like 'INNODB_%'
 group by t.table_name order by num1, t.table_name COLLATE utf8_general_ci;
 TABLE_NAME	group_concat(t.table_schema, '.', t.table_name)	num1
 CHARACTER_SETS	information_schema.CHARACTER_SETS	1
+CLIENT_STATISTICS	information_schema.CLIENT_STATISTICS	1
 COLLATIONS	information_schema.COLLATIONS	1
 COLUMNS	information_schema.COLUMNS	1
 COLUMN_PRIVILEGES	information_schema.COLUMN_PRIVILEGES	1
@@ -1321,9 +1334,12 @@ TABLES	information_schema.TABLES	1
 TABLESPACES	information_schema.TABLESPACES	1
 TABLE_CONSTRAINTS	information_schema.TABLE_CONSTRAINTS	1
 TABLE_PRIVILEGES	information_schema.TABLE_PRIVILEGES	1
+TABLE_STATISTICS	information_schema.TABLE_STATISTICS	1
 TEMPORARY_TABLES	information_schema.TEMPORARY_TABLES	1
+THREAD_STATISTICS	information_schema.THREAD_STATISTICS	1
 TRIGGERS	information_schema.TRIGGERS	1
 USER_PRIVILEGES	information_schema.USER_PRIVILEGES	1
+USER_STATISTICS	information_schema.USER_STATISTICS	1
 VIEWS	information_schema.VIEWS	1
 VIEW_ROUTINE_USAGE	information_schema.VIEW_ROUTINE_USAGE	1
 VIEW_TABLE_USAGE	information_schema.VIEW_TABLE_USAGE	1
@@ -1663,6 +1679,12 @@ SELECT length(CAST(b AS CHAR)) FROM ubig;
 length(CAST(b AS CHAR))
 20
 DROP TABLE ubig;
+grant usage on *.* to mysqltest_1@localhost;
+Warnings:
+Warning	1287	Using GRANT for creating new user is deprecated and will be removed in future release. Create new user with CREATE USER statement.
+select 1 from information_schema.tables where table_schema=repeat('a', 2000);
+1
+drop user mysqltest_1@localhost;
 End of 5.1 tests.
 create function f1 (p1 int, p2 datetime, p3 decimal(10,2))
 returns char(10) return null;
