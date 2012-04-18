@@ -614,6 +614,7 @@ lock_sys_create(
 	lock_sys->timeout_event = os_event_create();
 
 	lock_sys->rec_hash = hash_create(n_cells);
+	lock_sys->rec_num = 0;
 
 	if (!srv_read_only_mode) {
 		lock_latest_err_file = os_file_create_tmpfile();
@@ -1853,6 +1854,8 @@ lock_rec_create(
 	HASH_INSERT(lock_t, hash, lock_sys->rec_hash,
 		    lock_rec_fold(space, page_no), lock);
 
+	lock_sys->rec_num++;
+
 	if (!caller_owns_trx_mutex) {
 		trx_mutex_enter(trx);
 	}
@@ -1904,6 +1907,9 @@ lock_rec_enqueue_waiting(
 	trx_t*			trx;
 	lock_t*			lock;
 	trx_id_t		victim_trx_id;
+	ulint			sec;
+	ulint			ms;
+
 
 	ut_ad(lock_mutex_own());
 	ut_ad(!srv_read_only_mode);
@@ -1981,6 +1987,11 @@ lock_rec_enqueue_waiting(
 
 	trx->lock.was_chosen_as_deadlock_victim = FALSE;
 	trx->lock.wait_started = ut_time();
+
+	if (innobase_get_slow_log() && trx->take_stats) {
+		ut_usectime(&sec, &ms);
+		trx->lock_que_wait_ustarted = (ib_uint64_t)sec * 1000000 + ms;
+	}
 
 	ut_a(que_thr_stop(thr));
 
@@ -2484,6 +2495,7 @@ lock_rec_dequeue_from_page(
 
 	HASH_DELETE(lock_t, hash, lock_sys->rec_hash,
 		    lock_rec_fold(space, page_no), in_lock);
+	lock_sys->rec_num--;
 
 	UT_LIST_REMOVE(trx_locks, trx_lock->trx_locks, in_lock);
 
@@ -2534,6 +2546,7 @@ lock_rec_discard(
 
 	HASH_DELETE(lock_t, hash, lock_sys->rec_hash,
 		    lock_rec_fold(space, page_no), in_lock);
+	lock_sys->rec_num--;
 
 	UT_LIST_REMOVE(trx_locks, trx_lock->trx_locks, in_lock);
 
@@ -4028,6 +4041,8 @@ lock_deadlock_check_and_resolve(
 	if (victim_trx_id != 0) {
 		ut_a(victim_trx_id == trx->id);
 
+		srv_stats.lock_deadlock_count.inc();
+
 		lock_deadlock_fputs("*** WE ROLL BACK TRANSACTION (2)\n");
 
 		lock_deadlock_found = TRUE;
@@ -4254,6 +4269,8 @@ lock_table_enqueue_waiting(
 	trx_t*		trx;
 	lock_t*		lock;
 	trx_id_t	victim_trx_id;
+	ulint		sec;
+	ulint		ms;
 
 	ut_ad(lock_mutex_own());
 	ut_ad(!srv_read_only_mode);
@@ -4327,6 +4344,11 @@ lock_table_enqueue_waiting(
 	trx->lock.wait_started = ut_time();
 	trx->lock.was_chosen_as_deadlock_victim = FALSE;
 
+	if (innobase_get_slow_log() && trx->take_stats) {
+		ut_usectime(&sec, &ms);
+		trx->lock_que_wait_ustarted = (ib_uint64_t)sec * 1000000 + ms;
+	}
+
 	ut_a(que_thr_stop(thr));
 
 	MONITOR_INC(MONITOR_TABLELOCK_WAIT);
@@ -4398,6 +4420,10 @@ lock_table(
 	ut_a(flags == 0);
 
 	trx = thr_get_trx(thr);
+
+	if (trx->fake_changes && mode == LOCK_IX) {
+		mode = LOCK_IS;
+	}
 
 	/* Look for equal or stronger locks the same trx already
 	has on the table. No need to acquire the lock mutex here
@@ -5386,14 +5412,17 @@ loop:
 			lock_mutex_exit();
 			mutex_exit(&trx_sys->mutex);
 
-			mtr_start(&mtr);
+			if (srv_show_verbose_locks) {
 
-			buf_page_get_gen(space, zip_size, page_no,
-					 RW_NO_LATCH, NULL,
-					 BUF_GET_POSSIBLY_FREED,
-					 __FILE__, __LINE__, &mtr);
+				mtr_start(&mtr);
 
-			mtr_commit(&mtr);
+				buf_page_get_gen(space, zip_size, page_no,
+						 RW_NO_LATCH, NULL,
+						 BUF_GET_POSSIBLY_FREED,
+						 __FILE__, __LINE__, &mtr);
+
+				mtr_commit(&mtr);
+			}
 
 			load_page_first = FALSE;
 
@@ -5922,6 +5951,11 @@ lock_rec_insert_check_and_lock(
 	}
 
 	trx = thr_get_trx(thr);
+
+	if (trx->fake_changes) {
+		return(DB_SUCCESS);
+	}
+
 	next_rec = page_rec_get_next_const(rec);
 	next_rec_heap_no = page_rec_get_heap_no(next_rec);
 
@@ -6121,6 +6155,10 @@ lock_clust_rec_modify_check_and_lock(
 		return(DB_SUCCESS);
 	}
 
+	if (thr && thr_get_trx(thr)->fake_changes) {
+		return(DB_SUCCESS);
+	}
+
 	heap_no = rec_offs_comp(offsets)
 		? rec_get_heap_no_new(rec)
 		: rec_get_heap_no_old(rec);
@@ -6180,6 +6218,10 @@ lock_sec_rec_modify_check_and_lock(
 
 	if (flags & BTR_NO_LOCKING_FLAG) {
 
+		return(DB_SUCCESS);
+	}
+
+	if (thr && thr_get_trx(thr)->fake_changes) {
 		return(DB_SUCCESS);
 	}
 
@@ -6276,6 +6318,15 @@ lock_sec_rec_read_check_and_lock(
 		return(DB_SUCCESS);
 	}
 
+	if (UNIV_UNLIKELY((thr && thr_get_trx(thr)->fake_changes))) {
+		if (!srv_fake_changes_locks) {
+			return(DB_SUCCESS);
+		}
+		if (mode == LOCK_X) {
+			mode = LOCK_S;
+		}
+	}
+
 	heap_no = page_rec_get_heap_no(rec);
 
 	/* Some transaction may have an implicit x-lock on the record only
@@ -6352,6 +6403,15 @@ lock_clust_rec_read_check_and_lock(
 	if (flags & BTR_NO_LOCKING_FLAG) {
 
 		return(DB_SUCCESS);
+	}
+
+	if (UNIV_UNLIKELY((thr && thr_get_trx(thr)->fake_changes))) {
+		if (!srv_fake_changes_locks) {
+			return(DB_SUCCESS);
+		}
+		if (mode == LOCK_X) {
+			mode = LOCK_S;
+		}
 	}
 
 	heap_no = page_rec_get_heap_no(rec);
