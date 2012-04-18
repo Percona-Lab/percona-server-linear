@@ -1418,10 +1418,12 @@ buf_chunk_init(
 	buf_block_t*	block;
 	byte*		frame;
 	ulint		i;
+	ulint		size_target;
 
 	/* Round down to a multiple of page size,
 	although it already should be. */
 	mem_size = ut_2pow_round(mem_size, UNIV_PAGE_SIZE);
+	size_target = (mem_size / UNIV_PAGE_SIZE) - 1;
 	/* Reserve space for the block descriptors. */
 	mem_size += ut_2pow_round((mem_size / UNIV_PAGE_SIZE) * (sizeof *block)
 				  + (UNIV_PAGE_SIZE - 1), UNIV_PAGE_SIZE);
@@ -1474,6 +1476,10 @@ buf_chunk_init(
 		}
 
 		chunk->size = size;
+	}
+
+	if (chunk->size > size_target) {
+		chunk->size = size_target;
 	}
 
 	/* Init block structs and assign frames for them. Then we
@@ -1596,6 +1602,12 @@ buf_chunk_not_freed(
 			buf_page_mutex_enter(block);
 			ready = buf_flush_ready_for_replace(&block->page);
 			buf_page_mutex_exit(block);
+
+			if (UNIV_UNLIKELY(block->page.is_corrupt)) {
+				/* corrupt page may remain, it can be
+				skipped */
+				break;
+			}
 
 			if (!ready) {
 
@@ -3631,6 +3643,13 @@ lookup:
 		/* There is no compressed page. */
 err_exit:
 		rw_lock_s_unlock(hash_lock);
+		return(NULL);
+	}
+
+	if (UNIV_UNLIKELY(bpage->is_corrupt && srv_pass_corrupt_table <= 1)) {
+
+		rw_lock_s_unlock(hash_lock);
+
 		return(NULL);
 	}
 
@@ -5724,17 +5743,18 @@ buf_page_io_complete(
 
 		if (bpage->size.is_compressed()) {
 			frame = bpage->zip.data;
-			buf_pool->n_pend_unzip++;
+			os_atomic_increment_ulint(&buf_pool->n_pend_unzip, 1);
 
 			if (uncompressed
 			    && !buf_zip_decompress((buf_block_t*) bpage,
 						   FALSE)) {
 
-				buf_pool->n_pend_unzip--;
+				os_atomic_decrement_ulint(
+					&buf_pool->n_pend_unzip, 1);
 				compressed_page = false;
 				goto corrupt;
 			}
-			buf_pool->n_pend_unzip--;
+			os_atomic_decrement_ulint(&buf_pool->n_pend_unzip, 1);
 		} else {
 			ut_a(uncompressed);
 			frame = ((buf_block_t*) bpage)->frame;
@@ -5859,6 +5879,7 @@ corrupt:
 				}
 			}
 		}
+		} /**/
 
 		DBUG_EXECUTE_IF("buf_page_import_corrupt_failure",
 				page_not_corrupt:  bpage = bpage; );
@@ -6814,7 +6835,7 @@ buf_print_io_instance(
 
 	fprintf(file,
 		"Buffer pool size        %lu\n"
-		"Buffer pool size, bytes %lu\n"
+		"Buffer pool size, bytes " ULINTPF "\n"
 		"Free buffers            %lu\n"
 		"Database pages          %lu\n"
 		"Old database pages      %lu\n"
