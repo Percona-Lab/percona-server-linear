@@ -800,6 +800,15 @@
    fun:buf_buddy_free_low
    fun:buf_buddy_free
 }
+{
+   zlib longest_match false positive
+   Memcheck:Cond
+   fun:longest_match
+   fun:deflate_slow
+   fun:deflate
+   fun:compress
+   fun:my_compress_alloc
+}
 
 #
 # NDB packfrm vs deflate
@@ -884,7 +893,7 @@
    fun:malloc
    fun:CRYPTO_malloc
    fun:sk_new
-   fun:load_builtin_compressions
+   ...
    fun:SSL_COMP_get_compression_methods
    fun:SSL_library_init
 }
@@ -959,6 +968,20 @@
    fun:malloc_info
 }
 
+# TokuDB suppressions
+{
+   tls_variables_1
+   Memcheck:Leak
+   fun:memalign
+   fun:__tls_get_addr
+}
+
+{
+   tls_variables_2
+   Memcheck:Leak
+   fun:memalign
+   fun:tls_get_addr_tail
+}
 
 #supress warnings from openssl random generator
 
