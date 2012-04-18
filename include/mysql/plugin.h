@@ -578,6 +578,8 @@ int thd_opt_slow_log();
 
 #define EXTENDED_FOR_USERSTAT
 
+#define EXTENDED_FOR_COMMIT_ORDERED
+
 /**
   Create a temporary file.
 
