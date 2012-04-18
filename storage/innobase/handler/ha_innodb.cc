@@ -398,6 +398,7 @@ static PSI_mutex_info all_innodb_mutexes[] = {
 	PSI_KEY(ibuf_bitmap_mutex),
 	PSI_KEY(ibuf_mutex),
 	PSI_KEY(ibuf_pessimistic_insert_mutex),
+	PSI_KEY(log_bmp_sys_mutex),
 	PSI_KEY(log_sys_mutex),
 	PSI_KEY(mutex_list_mutex),
 	PSI_KEY(page_zip_stat_per_index_mutex),
@@ -18585,6 +18586,7 @@ static my_bool	innodb_purge_run_now = TRUE;
 static my_bool	innodb_purge_stop_now = TRUE;
 static my_bool	innodb_log_checkpoint_now = TRUE;
 static my_bool	innodb_buf_flush_list_now = TRUE;
+static my_bool	innodb_track_redo_log_now = TRUE;
 static uint	innodb_merge_threshold_set_all_debug
 	= DICT_INDEX_MERGE_THRESHOLD_DEFAULT;
 
@@ -19065,6 +19067,12 @@ static MYSQL_SYSVAR_BOOL(buf_flush_list_now, innodb_buf_flush_list_now,
   PLUGIN_VAR_OPCMDARG,
   "Force dirty page flush now",
   NULL, buf_flush_list_now_set, FALSE);
+
+static MYSQL_SYSVAR_BOOL(track_redo_log_now,
+  innodb_track_redo_log_now,
+  PLUGIN_VAR_OPCMDARG,
+  "Force log tracker to catch up with checkpoint now",
+  NULL, track_redo_log_now_set, FALSE);
 
 static MYSQL_SYSVAR_UINT(merge_threshold_set_all_debug,
   innodb_merge_threshold_set_all_debug,
@@ -20117,6 +20125,7 @@ static struct st_mysql_sys_var* innobase_system_variables[]= {
   MYSQL_SYSVAR(purge_stop_now),
   MYSQL_SYSVAR(log_checkpoint_now),
   MYSQL_SYSVAR(buf_flush_list_now),
+  MYSQL_SYSVAR(track_redo_log_now),
   MYSQL_SYSVAR(merge_threshold_set_all_debug),
 #endif /* UNIV_DEBUG */
 #if defined UNIV_DEBUG || defined UNIV_PERF_DEBUG
