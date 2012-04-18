@@ -950,6 +950,10 @@ void remove_ssl_err_thread_state();
   Interface to get the number of VCPUs.
 */
 unsigned int thd_get_num_vcpus();
+
+int thd_command(const MYSQL_THD thd);
+long long thd_start_time(const MYSQL_THD thd);
+void thd_kill(unsigned long id);
 #ifdef __cplusplus
 }
 #endif
