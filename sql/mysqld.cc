@@ -458,8 +458,14 @@ my_bool relay_log_recovery;
 my_bool opt_sync_frm, opt_allow_suspicious_udfs;
 my_bool opt_secure_auth= 0;
 char* opt_secure_file_priv;
+my_bool opt_secure_file_priv_noarg= FALSE;
 my_bool opt_log_slow_admin_statements= 0;
 my_bool opt_log_slow_slave_statements= 0;
+my_bool opt_log_slow_sp_statements= 0;
+my_bool opt_slow_query_log_timestamp_always= 0;
+ulonglong opt_slow_query_log_use_global_control= 0;
+ulong opt_slow_query_log_timestamp_precision= 0;
+ulong opt_slow_query_log_rate_type= 0;
 my_bool lower_case_file_system= 0;
 my_bool opt_large_pages= 0;
 my_bool opt_super_large_pages= 0;
@@ -469,7 +475,7 @@ uint   opt_large_page_size= 0;
 MYSQL_PLUGIN_IMPORT uint    opt_debug_sync_timeout= 0;
 #endif /* defined(ENABLED_DEBUG_SYNC) */
 my_bool opt_old_style_user_limits= 0, trust_function_creators= 0;
-my_bool opt_optimizer_fix= 0;
+my_bool opt_userstat= 0, opt_thread_statistics= 0;
 /*
   True if there is at least one per-hour limit for some user, so we should
   check them before each query (and possibly reset counters when hour is
@@ -712,6 +718,14 @@ SHOW_COMP_OPTION have_geometry, have_rtree_keys;
 SHOW_COMP_OPTION have_crypt, have_compress;
 SHOW_COMP_OPTION have_profiling;
 
+ulonglong opt_log_warnings_suppress= 0;
+
+char* enforce_storage_engine= NULL;
+
+char* utility_user= NULL;
+char* utility_user_password= NULL;
+char* utility_user_schema_access= NULL;
+
 /* Thread specific variables */
 
 pthread_key(MEM_ROOT**,THR_MALLOC);
@@ -727,6 +741,9 @@ mysql_mutex_t
   LOCK_connection_count, LOCK_error_messages;
 mysql_mutex_t LOCK_sql_rand;
 
+mysql_mutex_t
+  LOCK_stats, LOCK_global_user_client_stats,
+  LOCK_global_table_stats, LOCK_global_index_stats;
 /**
   The below lock protects access to two global server variables:
   max_prepared_stmt_count and prepared_stmt_count. These variables
@@ -1230,6 +1247,7 @@ int deny_severity = LOG_WARNING;
 #endif /* HAVE_LIBWRAP */
 #ifdef HAVE_QUERY_CACHE
 ulong query_cache_min_res_unit= QUERY_CACHE_MIN_RESULT_DATA_SIZE;
+my_bool opt_query_cache_strip_comments= FALSE;
 Query_cache query_cache;
 #endif
 #ifdef HAVE_SMEM
@@ -1905,6 +1923,13 @@ void clean_up(bool print_message)
   my_free(opt_bin_logname);
   bitmap_free(&temp_pool);
   free_max_user_conn();
+#ifndef EMBEDDED_LIBRARY
+  free_global_user_stats();
+  free_global_client_stats();
+  free_global_thread_stats();
+  free_global_table_stats();
+  free_global_index_stats();
+#endif
 #ifdef HAVE_REPLICATION
   end_slave_list();
 #endif
@@ -2025,6 +2050,10 @@ static void clean_up_mutexes()
   mysql_cond_destroy(&COND_thread_cache);
   mysql_cond_destroy(&COND_flush_thread_cache);
   mysql_cond_destroy(&COND_manager);
+  mysql_mutex_destroy(&LOCK_stats);
+  mysql_mutex_destroy(&LOCK_global_user_client_stats);
+  mysql_mutex_destroy(&LOCK_global_table_stats);
+  mysql_mutex_destroy(&LOCK_global_index_stats);
 }
 #endif /*EMBEDDED_LIBRARY*/
 
@@ -3545,6 +3574,7 @@ SHOW_VAR com_status_vars[]= {
   {"show_binlog_events",   (char*) offsetof(STATUS_VAR, com_stat[(uint) SQLCOM_SHOW_BINLOG_EVENTS]), SHOW_LONG_STATUS},
   {"show_binlogs",         (char*) offsetof(STATUS_VAR, com_stat[(uint) SQLCOM_SHOW_BINLOGS]), SHOW_LONG_STATUS},
   {"show_charsets",        (char*) offsetof(STATUS_VAR, com_stat[(uint) SQLCOM_SHOW_CHARSETS]), SHOW_LONG_STATUS},
+  {"show_client_statistics",(char*) offsetof(STATUS_VAR, com_stat[(uint) SQLCOM_SHOW_CLIENT_STATS]), SHOW_LONG_STATUS},
   {"show_collations",      (char*) offsetof(STATUS_VAR, com_stat[(uint) SQLCOM_SHOW_COLLATIONS]), SHOW_LONG_STATUS},
   {"show_create_db",       (char*) offsetof(STATUS_VAR, com_stat[(uint) SQLCOM_SHOW_CREATE_DB]), SHOW_LONG_STATUS},
   {"show_create_event",    (char*) offsetof(STATUS_VAR, com_stat[(uint) SQLCOM_SHOW_CREATE_EVENT]), SHOW_LONG_STATUS},
@@ -3562,6 +3592,7 @@ SHOW_VAR com_status_vars[]= {
   {"show_function_code",   (char*) offsetof(STATUS_VAR, com_stat[(uint) SQLCOM_SHOW_FUNC_CODE]), SHOW_LONG_STATUS},
   {"show_function_status", (char*) offsetof(STATUS_VAR, com_stat[(uint) SQLCOM_SHOW_STATUS_FUNC]), SHOW_LONG_STATUS},
   {"show_grants",          (char*) offsetof(STATUS_VAR, com_stat[(uint) SQLCOM_SHOW_GRANTS]), SHOW_LONG_STATUS},
+  {"show_index_statistics",(char*) offsetof(STATUS_VAR, com_stat[(uint) SQLCOM_SHOW_INDEX_STATS]), SHOW_LONG_STATUS},
   {"show_keys",            (char*) offsetof(STATUS_VAR, com_stat[(uint) SQLCOM_SHOW_KEYS]), SHOW_LONG_STATUS},
   {"show_master_status",   (char*) offsetof(STATUS_VAR, com_stat[(uint) SQLCOM_SHOW_MASTER_STAT]), SHOW_LONG_STATUS},
   {"show_open_tables",     (char*) offsetof(STATUS_VAR, com_stat[(uint) SQLCOM_SHOW_OPEN_TABLES]), SHOW_LONG_STATUS},
@@ -3575,11 +3606,15 @@ SHOW_VAR com_status_vars[]= {
   {"show_relaylog_events", (char*) offsetof(STATUS_VAR, com_stat[(uint) SQLCOM_SHOW_RELAYLOG_EVENTS]), SHOW_LONG_STATUS},
   {"show_slave_hosts",     (char*) offsetof(STATUS_VAR, com_stat[(uint) SQLCOM_SHOW_SLAVE_HOSTS]), SHOW_LONG_STATUS},
   {"show_slave_status",    (char*) offsetof(STATUS_VAR, com_stat[(uint) SQLCOM_SHOW_SLAVE_STAT]), SHOW_LONG_STATUS},
+  {"show_slave_status_nolock", (char*) offsetof(STATUS_VAR, com_stat[(uint) SQLCOM_SHOW_SLAVE_NOLOCK_STAT]), SHOW_LONG_STATUS},
   {"show_status",          (char*) offsetof(STATUS_VAR, com_stat[(uint) SQLCOM_SHOW_STATUS]), SHOW_LONG_STATUS},
   {"show_storage_engines", (char*) offsetof(STATUS_VAR, com_stat[(uint) SQLCOM_SHOW_STORAGE_ENGINES]), SHOW_LONG_STATUS},
+  {"show_table_statistics",(char*) offsetof(STATUS_VAR, com_stat[(uint) SQLCOM_SHOW_TABLE_STATS]), SHOW_LONG_STATUS},
   {"show_table_status",    (char*) offsetof(STATUS_VAR, com_stat[(uint) SQLCOM_SHOW_TABLE_STATUS]), SHOW_LONG_STATUS},
   {"show_tables",          (char*) offsetof(STATUS_VAR, com_stat[(uint) SQLCOM_SHOW_TABLES]), SHOW_LONG_STATUS},
+  {"show_thread_statistics",(char*) offsetof(STATUS_VAR, com_stat[(uint) SQLCOM_SHOW_THREAD_STATS]), SHOW_LONG_STATUS},
   {"show_triggers",        (char*) offsetof(STATUS_VAR, com_stat[(uint) SQLCOM_SHOW_TRIGGERS]), SHOW_LONG_STATUS},
+  {"show_user_statistics", (char*) offsetof(STATUS_VAR, com_stat[(uint) SQLCOM_SHOW_USER_STATS]), SHOW_LONG_STATUS},
   {"show_variables",       (char*) offsetof(STATUS_VAR, com_stat[(uint) SQLCOM_SHOW_VARIABLES]), SHOW_LONG_STATUS},
   {"show_warnings",        (char*) offsetof(STATUS_VAR, com_stat[(uint) SQLCOM_SHOW_WARNS]), SHOW_LONG_STATUS},
   {"slave_start",          (char*) offsetof(STATUS_VAR, com_stat[(uint) SQLCOM_SLAVE_START]), SHOW_LONG_STATUS},
@@ -4282,6 +4317,13 @@ static int init_thread_environment()
   mysql_mutex_init(key_LOCK_server_started,
                    &LOCK_server_started, MY_MUTEX_INIT_FAST);
   mysql_cond_init(key_COND_server_started, &COND_server_started, NULL);
+  mysql_mutex_init(key_LOCK_stats, &LOCK_stats, MY_MUTEX_INIT_FAST);
+  mysql_mutex_init(key_LOCK_global_user_client_stats,
+    &LOCK_global_user_client_stats, MY_MUTEX_INIT_FAST);
+  mysql_mutex_init(key_LOCK_global_table_stats,
+    &LOCK_global_table_stats, MY_MUTEX_INIT_FAST);
+  mysql_mutex_init(key_LOCK_global_index_stats,
+    &LOCK_global_index_stats, MY_MUTEX_INIT_FAST);
   sp_cache_init();
 #ifdef HAVE_EVENT_SCHEDULER
   Events::init_mutexes();
@@ -4929,7 +4971,13 @@ a file name for --log-bin-index option", opt_binlog_index_name);
   if (!DEFAULT_ERRMSGS[0][0])
     unireg_abort(1);
 
+#ifndef EMBEDDED_LIBRARY
+  init_global_table_stats();
+  init_global_index_stats();
+#endif
+
   /* We have to initialize the storage engines before CSV logging */
+
   if (ha_init())
   {
     sql_print_error("Can't init databases");
@@ -4984,6 +5032,41 @@ a file name for --log-bin-index option", opt_binlog_index_name);
   if (initialize_storage_engine(default_tmp_storage_engine, " temp",
                                 &global_system_variables.temp_table_plugin))
     unireg_abort(1);
+
+  /*
+    Validate any enforced storage engine
+  */
+  if (enforce_storage_engine)
+  {
+    LEX_STRING name= { enforce_storage_engine,
+      strlen(enforce_storage_engine) };
+    plugin_ref plugin;
+    if ((plugin= ha_resolve_by_name(0, &name, false)))
+    {
+      handlerton *hton = plugin_data(plugin, handlerton*);
+      LEX_STRING defname= { default_storage_engine,
+        strlen(default_storage_engine) };
+      plugin_ref defplugin;
+      handlerton* defhton;
+      if ((defplugin= ha_resolve_by_name(0, &defname, false)))
+      {
+        defhton = plugin_data(defplugin, handlerton*);
+        if (defhton != hton)
+        {
+          sql_print_warning("Default storage engine (%s)"
+            " is not the same as enforced storage engine (%s)",
+            default_storage_engine,
+            enforce_storage_engine);
+        }
+      }
+    }
+    else
+    {
+      sql_print_error("Unknown/unsupported storage engine: %s",
+                    enforce_storage_engine);
+      unireg_abort(1);
+    }
+  }
 
   if (total_ha_2pc > 1 || (1 == total_ha_2pc && opt_bin_log))
   {
@@ -5053,6 +5136,10 @@ a file name for --log-bin-index option", opt_binlog_index_name);
     if (purge_time >= 0)
       mysql_bin_log.purge_logs_before_date(purge_time, true);
   }
+  if (opt_bin_log && max_binlog_files)
+  {
+    mysql_bin_log.purge_logs_maximum_number(max_binlog_files);
+  }
 #endif
 
   if (opt_myisam_log)
@@ -5083,6 +5170,11 @@ a file name for --log-bin-index option", opt_binlog_index_name);
 
   init_max_user_conn();
   init_update_queries();
+#ifndef EMBEDDED_LIBRARY
+  init_global_user_stats();
+  init_global_client_stats();
+  init_global_thread_stats();
+#endif
   DBUG_RETURN(0);
 }
 
@@ -6174,6 +6266,11 @@ static void create_new_thread(THD *thd)
       A client expecting a SQLSTATE will not find any, and assume 'HY000'.
     */
     close_connection(thd, ER_CON_COUNT_ERROR);
+    if (log_warnings)
+    {
+      sql_print_warning("%s", ER_DEFAULT(ER_CON_COUNT_ERROR));
+    }
+    statistic_increment(denied_connections, &LOCK_status);
     delete thd;
     statistic_increment(connection_errors_max_connection, &LOCK_status);
     DBUG_VOID_RETURN;
@@ -6587,6 +6684,10 @@ pthread_handler_t handle_connections_namedpipes(void *arg)
     if (!(thd->net.vio= vio_new_win32pipe(hConnectedPipe)) ||
   my_net_init(&thd->net, thd->net.vio))
     {
+      if (global_system_variables.log_warnings)
+      {
+        sql_print_warning("%s", ER_DEFAULT(ER_OUT_OF_RESOURCES));
+      }
       close_connection(thd, ER_OUT_OF_RESOURCES);
       delete thd;
       continue;
@@ -6782,6 +6883,10 @@ pthread_handler_t handle_connections_shared_memory(void *arg)
                                                    event_conn_closed)) ||
                         my_net_init(&thd->net, thd->net.vio))
     {
+      if (global_system_variables.log_warnings)
+      {
+        sql_print_warning("%s", ER_DEFAULT(ER_OUT_OF_RESOURCES));
+      }
       close_connection(thd, ER_OUT_OF_RESOURCES);
       errmsg= 0;
       goto errorconn;
@@ -7413,6 +7518,20 @@ struct my_option my_long_options[]=
    "Defines what password- and authentication algorithm to use per default",
    0, 0, 0,
    GET_STR, REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
+  {"utility_user", 0, "Specifies a MySQL user that will be added to the "
+    "internal list of users and recognized as the utility user.",
+    &utility_user, 0, 0, GET_STR, REQUIRED_ARG,
+    0, 0, 0, 0, 0, 0},
+  {"utility_user_password", 0, "Specifies the password required for the "
+   "utility user.",
+   &utility_user_password, 0, 0, GET_STR, REQUIRED_ARG,
+   0, 0, 0, 0, 0, 0},
+  {"utility_user_schema_access", 0, "Specifies the schemas that the utility "
+   "user has access to in a comma delimited list.",
+   &utility_user_schema_access, 0, 0, GET_STR, REQUIRED_ARG,
+   0, 0, 0, 0, 0, 0},
+  {"version", 'V', "Output version information and exit.", 0, 0, 0, GET_NO_ARG,
+   NO_ARG, 0, 0, 0, 0, 0, 0},
   {0, 0, 0, 0, 0, 0, GET_NO_ARG, NO_ARG, 0, 0, 0, 0, 0, 0}
 };
 
@@ -8888,6 +9007,10 @@ static void option_error_reporter(enum loglevel level, const char *format, ...)
 
 C_MODE_END
 
+/* defined in sys_vars.cc */
+extern void init_log_slow_verbosity();
+extern void init_slow_query_log_use_global_control();
+
 /**
   Get server options from the command line,
   and perform related server initializations.
@@ -9051,6 +9174,8 @@ static int get_options(int *argc_ptr, char ***argv_ptr)
   global_system_variables.long_query_time= (ulonglong)
     (global_system_variables.long_query_time_double * 1e6);
 
+  init_log_slow_verbosity();
+  init_slow_query_log_use_global_control();
   if (opt_short_log_format)
     opt_specialflag|= SPECIAL_SHORT_LOG_FORMAT;
 
@@ -9081,7 +9206,7 @@ static int get_options(int *argc_ptr, char ***argv_ptr)
     one_thread_scheduler(thread_scheduler);
   else
     pool_of_threads_scheduler(thread_scheduler,  &max_connections,
-                                        &connection_count); 
+                                        &connection_count);
 
   one_thread_per_connection_scheduler(extra_thread_scheduler,
                                       &extra_max_connections,
@@ -9173,6 +9298,14 @@ bool is_secure_file_path(char *path)
 {
   char buff1[FN_REFLEN], buff2[FN_REFLEN];
   size_t opt_secure_file_priv_len;
+
+  /*
+    --secure-file-priv without argument means
+    disable SELECT INTO OUTFILE/LOAD DATA INFILE
+  */
+  if (opt_secure_file_priv_noarg)
+    return FALSE;
+
   /*
     All paths are secure if opt_secure_file_path is 0
   */
@@ -9276,7 +9409,7 @@ static int fix_paths(void)
     Convert the secure-file-priv option to system format, allowing
     a quick strcmp to check if read or write is in an allowed dir
    */
-  if (opt_secure_file_priv)
+  if (opt_secure_file_priv && !opt_secure_file_priv_noarg)
   {
     if (*opt_secure_file_priv == 0)
       opt_secure_file_priv= NULL;
@@ -9458,6 +9591,8 @@ PSI_mutex_key
   key_delayed_insert_mutex, key_hash_filo_lock, key_LOCK_active_mi,
   key_LOCK_connection_count, key_LOCK_crypt, key_LOCK_delayed_create,
   key_LOCK_delayed_insert, key_LOCK_delayed_status, key_LOCK_error_log,
+  key_LOCK_stats, key_LOCK_global_user_client_stats,
+  key_LOCK_global_table_stats, key_LOCK_global_index_stats,
   key_LOCK_gdl, key_LOCK_global_system_variables,
   key_LOCK_manager,
   key_LOCK_prepared_stmt_count,
@@ -9530,6 +9665,13 @@ static PSI_mutex_info all_server_mutexes[]=
   { &key_LOCK_delayed_insert, "LOCK_delayed_insert", PSI_FLAG_GLOBAL},
   { &key_LOCK_delayed_status, "LOCK_delayed_status", PSI_FLAG_GLOBAL},
   { &key_LOCK_error_log, "LOCK_error_log", PSI_FLAG_GLOBAL},
+  { &key_LOCK_stats, "LOCK_stats", PSI_FLAG_GLOBAL},
+  { &key_LOCK_global_user_client_stats,
+    "LOCK_global_user_client_stats", PSI_FLAG_GLOBAL},
+  { &key_LOCK_global_table_stats,
+     "LOCK_global_table_stats", PSI_FLAG_GLOBAL},
+  { &key_LOCK_global_index_stats,
+    "LOCK_global_index_stats", PSI_FLAG_GLOBAL},
   { &key_LOCK_gdl, "LOCK_gdl", PSI_FLAG_GLOBAL},
   { &key_LOCK_global_system_variables, "LOCK_global_system_variables", PSI_FLAG_GLOBAL},
   { &key_LOCK_manager, "LOCK_manager", PSI_FLAG_GLOBAL},
