@@ -4928,7 +4928,7 @@ fil_write_zeros(
 		err = os_aio(
 			request, OS_AIO_SYNC, node->name,
 			node->handle, buf, offset, n_bytes, read_only_mode,
-			NULL, NULL);
+			NULL, NULL, node->space->id, NULL);
 #endif /* UNIV_HOTBACKUP */
 
 		if (err != DB_SUCCESS) {
@@ -5463,7 +5463,7 @@ fil_io_set_encryption(
 @return DB_SUCCESS, DB_TABLESPACE_DELETED or DB_TABLESPACE_TRUNCATED
 	if we are trying to do i/o on a tablespace which does not exist */
 dberr_t
-fil_io(
+_fil_io(
 	const IORequest&	type,
 	bool			sync,
 	const page_id_t&	page_id,
@@ -5471,7 +5471,8 @@ fil_io(
 	ulint			byte_offset,
 	ulint			len,
 	void*			buf,
-	void*			message)
+	void*			message,
+	trx_t*			trx)
 {
 	os_offset_t		offset;
 	IORequest		req_type(type);
@@ -5786,7 +5787,7 @@ fil_io(
 		mode, node->name, node->handle, buf, offset, len,
 		fsp_is_system_temporary(page_id.space())
 		? false : srv_read_only_mode,
-		node, message);
+		node, message, page_id.space(), trx);
 
 #endif /* UNIV_HOTBACKUP */
 
