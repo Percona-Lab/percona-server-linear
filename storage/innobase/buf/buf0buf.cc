@@ -606,6 +606,11 @@ buf_block_t *buf_block_alloc(
 BUF_PAGE_PRINT_NO_FULL */
 void buf_page_print(const byte *read_buf, const page_size_t &page_size,
                     ulint flags) {
+  if (!read_buf) {
+    ib::info() << "Not dumping page as (in memory) pointer is NULL";
+    return;
+  }
+
   if (!(flags & BUF_PAGE_PRINT_NO_FULL)) {
     ib::info(ER_IB_MSG_51) << "Page dump in ascii and hex ("
                            << page_size.physical() << " bytes):";
@@ -5981,6 +5986,7 @@ bool buf_page_io_complete(buf_page_t *bpage, bool evict, IORequest *type,
     }
   }
   mutex_enter(block_mutex);
+
 
 #ifdef UNIV_IBUF_COUNT_DEBUG
   if (io_type == BUF_IO_WRITE || uncompressed) {
