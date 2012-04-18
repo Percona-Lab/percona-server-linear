@@ -43,6 +43,7 @@ Created 10/21/1995 Heikki Tuuri
 #include "srv0start.h"
 #include "fil0fil.h"
 #include "buf0buf.h"
+#include "trx0trx.h"
 #include "srv0mon.h"
 #ifndef UNIV_HOTBACKUP
 # include "os0sync.h"
@@ -149,6 +150,7 @@ UNIV_INTERN ibool	os_aio_print_debug	= FALSE;
 UNIV_INTERN mysql_pfs_key_t  innodb_file_data_key;
 UNIV_INTERN mysql_pfs_key_t  innodb_file_log_key;
 UNIV_INTERN mysql_pfs_key_t  innodb_file_temp_key;
+UNIV_INTERN mysql_pfs_key_t  innodb_file_bmp_key;
 #endif /* UNIV_PFS_IO */
 
 /** The asynchronous i/o array slot structure */
@@ -170,6 +172,7 @@ struct os_aio_slot_t{
 					made and only the slot message
 					needs to be passed to the caller
 					of os_aio_simulated_handle */
+	ulint		space_id;
 	fil_node_t*	message1;	/*!< message which is given by the */
 	void*		message2;	/*!< the requester of an aio operation
 					and which can be used to identify
@@ -1623,7 +1626,7 @@ os_file_create_func(
 #ifdef UNIV_NON_BUFFERED_IO
 	// TODO: Create a bug, this looks wrong. The flush log
 	// parameter is dynamic.
-	if (type == OS_LOG_FILE && srv_flush_log_at_trx_commit == 2) {
+	if (type == OS_LOG_FILE && thd_flush_log_at_trx_commit(NULL) == 2) {
 
 		/* Do not use unbuffered i/o for the log files because
 		value 2 denotes that we do not flush the log at every
@@ -2184,6 +2187,27 @@ os_file_set_eof(
 #endif /* __WIN__ */
 }
 
+/***********************************************************************//**
+Truncates a file at the specified position.
+@return TRUE if success */
+UNIV_INTERN
+ibool
+os_file_set_eof_at(
+	os_file_t	file, /*!< in: handle to a file */
+	ib_uint64_t	new_len)/*!< in: new file length */
+{
+#ifdef __WIN__
+	LARGE_INTEGER li, li2;
+	li.QuadPart = new_len;
+	return(SetFilePointerEx(file, li, &li2,FILE_BEGIN)
+	       && SetEndOfFile(file));
+#else
+	/* TODO: works only with -D_FILE_OFFSET_BITS=64 ? */
+	return(!ftruncate(file, new_len));
+#endif
+}
+
+
 #ifndef __WIN__
 /***********************************************************************//**
 Wrapper to fsync(2) that retries the call on some errors.
@@ -2222,6 +2246,9 @@ os_file_fsync(
 
 			failures++;
 
+			retry = TRUE;
+		} else if (ret == -1 && errno == EINTR) {
+			/* Handle signal interruptions correctly */
 			retry = TRUE;
 		} else {
 
@@ -2333,19 +2360,25 @@ os_file_flush_func(
 /*******************************************************************//**
 Does a synchronous read operation in Posix.
 @return	number of bytes read, -1 if error */
-static __attribute__((nonnull, warn_unused_result))
+static __attribute__((nonnull(2), warn_unused_result))
 ssize_t
 os_file_pread(
 /*==========*/
 	os_file_t	file,	/*!< in: handle to a file */
 	void*		buf,	/*!< in: buffer where to read */
 	ulint		n,	/*!< in: number of bytes to read */
-	os_offset_t	offset)	/*!< in: file offset from where to read */
+	os_offset_t	offset,	/*!< in: file offset from where to read */
+	trx_t*		trx)
 {
 	off_t	offs;
 #if defined(HAVE_PREAD) && !defined(HAVE_BROKEN_PREAD)
 	ssize_t	n_bytes;
+	ssize_t n_read;
 #endif /* HAVE_PREAD && !HAVE_BROKEN_PREAD */
+	ulint		sec;
+	ulint		ms;
+	ib_uint64_t	start_time;
+	ib_uint64_t	finish_time;
 
 	ut_ad(n);
 
@@ -2362,6 +2395,15 @@ os_file_pread(
 
 	os_n_file_reads++;
 
+	if (innobase_get_slow_log() && trx && trx->take_stats)
+	{
+	        trx->io_reads++;
+		trx->io_read += n;
+		ut_usectime(&sec, &ms);
+		start_time = (ib_uint64_t)sec * 1000000 + ms;
+	} else {
+		start_time = 0;
+	}
 #if defined(HAVE_PREAD) && !defined(HAVE_BROKEN_PREAD)
 #if defined(HAVE_ATOMIC_BUILTINS) && UNIV_WORD_SIZE == 8
 	(void) os_atomic_increment_ulint(&os_n_pending_reads, 1);
@@ -2375,7 +2417,18 @@ os_file_pread(
 	os_mutex_exit(os_file_count_mutex);
 #endif /* HAVE_ATOMIC_BUILTINS && UNIV_WORD == 8 */
 
-	n_bytes = pread(file, buf, n, offs);
+	/* Handle signal interruptions correctly */
+	for (n_bytes = 0; n_bytes < (ssize_t) n; ) {
+		n_read = pread(file, buf, (ssize_t)n, offs);
+		if (n_read > 0) {
+			n_bytes += n_read;
+			offs += n_read;
+		} else if (n_read == -1 && errno == EINTR) {
+			continue;
+		} else {
+			break;
+		}
+	}
 
 #if defined(HAVE_ATOMIC_BUILTINS) && UNIV_WORD_SIZE == 8
 	(void) os_atomic_decrement_ulint(&os_n_pending_reads, 1);
@@ -2389,11 +2442,19 @@ os_file_pread(
 	os_mutex_exit(os_file_count_mutex);
 #endif /* !HAVE_ATOMIC_BUILTINS || UNIV_WORD == 8 */
 
+	if (innobase_get_slow_log() && trx && trx->take_stats && start_time)
+	{
+		ut_usectime(&sec, &ms);
+		finish_time = (ib_uint64_t)sec * 1000000 + ms;
+		trx->io_reads_wait_timer += (ulint)(finish_time - start_time);
+	}
+
 	return(n_bytes);
 #else
 	{
 		off_t	ret_offset;
 		ssize_t	ret;
+		ssize_t n_read;
 #ifndef UNIV_HOTBACKUP
 		ulint	i;
 #endif /* !UNIV_HOTBACKUP */
@@ -2419,7 +2480,17 @@ os_file_pread(
 		if (ret_offset < 0) {
 			ret = -1;
 		} else {
-			ret = read(file, buf, (ssize_t) n);
+			/* Handle signal interruptions correctly */
+			for (ret = 0; ret < (ssize_t) n; ) {
+				n_read = read(file, buf, (ssize_t)n);
+				if (n_read > 0) {
+					ret += n_read;
+				} else if (n_read == -1 && errno == EINTR) {
+					continue;
+				} else {
+					break;
+				}
+			}
 		}
 
 #ifndef UNIV_HOTBACKUP
@@ -2435,6 +2506,13 @@ os_file_pread(
 		MONITOR_DEC(MONITOR_OS_PENDING_READS);
 		os_mutex_exit(os_file_count_mutex);
 #endif /* HAVE_ATOMIC_BUILTINS && UNIV_WORD_SIZE == 8 */
+
+		if (innobase_get_slow_log() && trx && trx->take_stats && start_time)
+		{
+			ut_usectime(&sec, &ms);
+			finish_time = (ib_uint64_t)sec * 1000000 + ms;
+			trx->io_reads_wait_timer += (ulint)(finish_time - start_time);
+		}
 
 		return(ret);
 	}
@@ -2454,6 +2532,7 @@ os_file_pwrite(
 	os_offset_t	offset)	/*!< in: file offset where to write */
 {
 	ssize_t	ret;
+	ssize_t n_written;
 	off_t	offs;
 
 	ut_ad(n);
@@ -2485,7 +2564,18 @@ os_file_pwrite(
 	MONITOR_ATOMIC_INC(MONITOR_OS_PENDING_WRITES);
 #endif /* !HAVE_ATOMIC_BUILTINS || UNIV_WORD < 8 */
 
-	ret = pwrite(file, buf, (ssize_t) n, offs);
+	/* Handle signal interruptions correctly */
+	for (ret = 0; ret < (ssize_t) n; ) {
+		n_written = pwrite(file, buf, (ssize_t)n, offs);
+		if (n_written > 0) {
+			ret += n_written;
+			offs += n_written;
+		} else if (n_written == -1 && errno == EINTR) {
+			continue;
+		} else {
+			break;
+		}
+	}
 
 #if !defined(HAVE_ATOMIC_BUILTINS) || UNIV_WORD_SIZE < 8
 	os_mutex_enter(os_file_count_mutex);
@@ -2527,7 +2617,17 @@ os_file_pwrite(
 			goto func_exit;
 		}
 
-		ret = write(file, buf, (ssize_t) n);
+		/* Handle signal interruptions correctly */
+		for (ret = 0; ret < (ssize_t) n; ) {
+			n_written = write(file, buf, (ssize_t)n);
+			if (n_written > 0) {
+				ret += n_written;
+			} else if (n_written == -1 && errno == EINTR) {
+				continue;
+			} else {
+				break;
+			}
+		}
 
 func_exit:
 # ifndef UNIV_HOTBACKUP
@@ -2557,7 +2657,8 @@ os_file_read_func(
 	os_file_t	file,	/*!< in: handle to a file */
 	void*		buf,	/*!< in: buffer where to read */
 	os_offset_t	offset,	/*!< in: file offset where to read */
-	ulint		n)	/*!< in: number of bytes to read */
+	ulint		n,	/*!< in: number of bytes to read */
+	trx_t*		trx)
 {
 #ifdef __WIN__
 	BOOL		ret;
@@ -2635,7 +2736,7 @@ try_again:
 	os_bytes_read_since_printout += n;
 
 try_again:
-	ret = os_file_pread(file, buf, n, offset);
+	ret = os_file_pread(file, buf, n, offset, trx);
 
 	if ((ulint) ret == n) {
 
@@ -2762,7 +2863,7 @@ try_again:
 	os_bytes_read_since_printout += n;
 
 try_again:
-	ret = os_file_pread(file, buf, n, offset);
+	ret = os_file_pread(file, buf, n, offset, NULL);
 
 	if ((ulint) ret == n) {
 
@@ -4150,7 +4251,8 @@ os_aio_array_reserve_slot(
 	void*		buf,	/*!< in: buffer where to read or from which
 				to write */
 	os_offset_t	offset,	/*!< in: file offset */
-	ulint		len)	/*!< in: length of the block to read or write */
+	ulint		len,	/*!< in: length of the block to read or write */
+	ulint		space_id)
 {
 	os_aio_slot_t*	slot = NULL;
 #ifdef WIN_ASYNC_IO
@@ -4240,6 +4342,7 @@ found:
 	slot->buf      = static_cast<byte*>(buf);
 	slot->offset   = offset;
 	slot->io_already_done = FALSE;
+	slot->space_id = space_id;
 
 #ifdef WIN_ASYNC_IO
 	control = &slot->control;
@@ -4514,10 +4617,12 @@ os_aio_func(
 				(can be used to identify a completed
 				aio operation); ignored if mode is
 				OS_AIO_SYNC */
-	void*		message2)/*!< in: message for the aio handler
+	void*		message2,/*!< in: message for the aio handler
 				(can be used to identify a completed
 				aio operation); ignored if mode is
 				OS_AIO_SYNC */
+	ulint		space_id,
+	trx_t*		trx)
 {
 	os_aio_array_t*	array;
 	os_aio_slot_t*	slot;
@@ -4534,8 +4639,8 @@ os_aio_func(
 	ut_ad(file);
 	ut_ad(buf);
 	ut_ad(n > 0);
-	ut_ad(n % OS_FILE_LOG_BLOCK_SIZE == 0);
-	ut_ad(offset % OS_FILE_LOG_BLOCK_SIZE == 0);
+	ut_ad(n % OS_MIN_LOG_BLOCK_SIZE == 0);
+	ut_ad(offset % OS_MIN_LOG_BLOCK_SIZE == 0);
 	ut_ad(os_aio_validate_skip());
 #ifdef WIN_ASYNC_IO
 	ut_ad((n & 0xFFFFFFFFUL) == n);
@@ -4563,7 +4668,7 @@ os_aio_func(
 		and os_file_write_func() */
 
 		if (type == OS_FILE_READ) {
-			return(os_file_read_func(file, buf, offset, n));
+			return(os_file_read_func(file, buf, offset, n, trx));
 		}
 
 		ut_ad(!srv_read_only_mode);
@@ -4614,8 +4719,13 @@ try_again:
 		array = NULL; /* Eliminate compiler warning */
 	}
 
+	if (trx && type == OS_FILE_READ)
+	{
+		trx->io_reads++;
+		trx->io_read += n;
+	}
 	slot = os_aio_array_reserve_slot(type, array, message1, message2, file,
-					 name, buf, offset, n);
+					 name, buf, offset, n, space_id);
 	if (type == OS_FILE_READ) {
 		if (srv_use_native_aio) {
 			os_n_file_reads++;
@@ -4732,7 +4842,8 @@ os_aio_windows_handle(
 				parameters are valid and can be used to
 				restart the operation, for example */
 	void**	message2,
-	ulint*	type)		/*!< out: OS_FILE_WRITE or ..._READ */
+	ulint*	type,		/*!< out: OS_FILE_WRITE or ..._READ */
+	ulint*	space_id)
 {
 	ulint		orig_seg	= segment;
 	os_aio_array_t*	array;
@@ -4804,6 +4915,7 @@ os_aio_windows_handle(
 	*message2 = slot->message2;
 
 	*type = slot->type;
+	*space_id = slot->space_id;
 
 	if (ret && len == slot->len) {
 
@@ -5024,7 +5136,8 @@ os_aio_linux_handle(
 				aio operation failed, these output
 				parameters are valid and can be used to
 				restart the operation. */
-	ulint*	type)		/*!< out: OS_FILE_WRITE or ..._READ */
+	ulint*	type,		/*!< out: OS_FILE_WRITE or ..._READ */
+	ulint*	space_id)
 {
 	ulint		segment;
 	os_aio_array_t*	array;
@@ -5097,6 +5210,7 @@ found:
 	*message2 = slot->message2;
 
 	*type = slot->type;
+	*space_id = slot->space_id;
 
 	if (slot->ret == 0 && slot->n_bytes == (long) slot->len) {
 
@@ -5143,7 +5257,8 @@ os_aio_simulated_handle(
 				parameters are valid and can be used to
 				restart the operation, for example */
 	void**	message2,
-	ulint*	type)		/*!< out: OS_FILE_WRITE or ..._READ */
+	ulint*	type,		/*!< out: OS_FILE_WRITE or ..._READ */
+	ulint*	space_id)
 {
 	os_aio_array_t*	array;
 	ulint		segment;
@@ -5433,6 +5548,7 @@ slot_io_done:
 	*message2 = aio_slot->message2;
 
 	*type = aio_slot->type;
+	*space_id = aio_slot->space_id;
 
 	os_mutex_exit(array->mutex);
 
