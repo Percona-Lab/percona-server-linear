@@ -805,4 +805,12 @@ NULL	information_schema	XTRADB_INTERNAL_HASH_TABLES	VARIABLE_MEMORY	bigint	NULL	
 3.0000	information_schema	XTRADB_READ_VIEW	READ_VIEW_LOW_LIMIT_TRX_NUMBER	varchar	18	54	utf8	utf8_general_ci	varchar(18)
 3.0000	information_schema	XTRADB_READ_VIEW	READ_VIEW_UPPER_LIMIT_TRX_ID	varchar	18	54	utf8	utf8_general_ci	varchar(18)
 3.0000	information_schema	XTRADB_READ_VIEW	READ_VIEW_LOW_LIMIT_TRX_ID	varchar	18	54	utf8	utf8_general_ci	varchar(18)
+NULL	information_schema	XTRADB_RSEG	rseg_id	bigint	NULL	NULL	NULL	NULL	bigint(21) unsigned
+NULL	information_schema	XTRADB_RSEG	space_id	bigint	NULL	NULL	NULL	NULL	bigint(21) unsigned
+NULL	information_schema	XTRADB_RSEG	physical_page_size	bigint	NULL	NULL	NULL	NULL	bigint(21) unsigned
+NULL	information_schema	XTRADB_RSEG	logical_page_size	bigint	NULL	NULL	NULL	NULL	bigint(21) unsigned
+NULL	information_schema	XTRADB_RSEG	is_compressed	tinyint	NULL	NULL	NULL	NULL	tinyint(1) unsigned
+NULL	information_schema	XTRADB_RSEG	page_no	bigint	NULL	NULL	NULL	NULL	bigint(21) unsigned
+NULL	information_schema	XTRADB_RSEG	max_size	bigint	NULL	NULL	NULL	NULL	bigint(21) unsigned
+NULL	information_schema	XTRADB_RSEG	curr_size	bigint	NULL	NULL	NULL	NULL	bigint(21) unsigned
 SET sql_mode = default;
