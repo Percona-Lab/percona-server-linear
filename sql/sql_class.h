@@ -760,6 +760,11 @@ class Global_read_lock {
 
 extern "C" void my_message_sql(uint error, const char *str, myf MyFlags);
 
+struct QUERY_START_TIME_INFO {
+  struct timeval start_time;
+  ulonglong start_utime;
+};
+
 /**
   @class THD
   For each client connection we create a separate thread with THD serving as
@@ -2694,6 +2699,14 @@ class THD : public MDL_context_owner,
   void set_time(const struct timeval *t) {
     user_time = *t;
     set_time();
+  }
+  void get_time(QUERY_START_TIME_INFO *time_info) const noexcept {
+    time_info->start_time = start_time;
+    time_info->start_utime = start_utime;
+  }
+  void set_time(const QUERY_START_TIME_INFO &time_info) noexcept {
+    start_time = time_info.start_time;
+    start_utime = time_info.start_utime;
   }
   void set_time_after_lock();
   inline bool is_fsp_truncate_mode() const {
