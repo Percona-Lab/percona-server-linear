@@ -36,6 +36,9 @@ if ($dir_bin =~ m|/usr/|) {
   if(-d "$dir_docs/packages") {
     # SuSE: "packages/" in the documentation path
     $dir_docs = glob "$dir_docs/packages/*-server*";
+  } elsif (glob "$dir_docs/percona-server-server*") {
+    # Debian
+    $dir_docs = glob "$dir_docs/percona-server-server*";
   } else {
     # RedHat: version number in directory name
     $dir_docs = glob "$dir_docs/MySQL-server*";
