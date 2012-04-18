@@ -70,6 +70,8 @@ string so that it never conflicts with MySQL schema directory. */
 /** File node of a tablespace or the log data space */
 class fil_node_t;
 
+struct trx_t;
+
 extern bool os_was_file_write_error_reported;
 
 /** Number of retries for partial I/O's */
@@ -429,6 +431,13 @@ class IORequest {
 
   void set_ibuf() { m_type |= Type::IBUF; }
 
+  /** Transaction that requested this IO, for slow query log stats.
+  nullptr if the IO is not on behalf of a user transaction. */
+  [[nodiscard]] trx_t *trx() const { return m_trx; }
+
+  /** Set the transaction that requested this IO. */
+  void set_trx(trx_t *trx) { m_trx = trx; }
+
   /** Clear the do not wake flag */
   void clear_do_not_wake() { m_type &= ~Type::DO_NOT_WAKE; }
 
@@ -611,6 +620,9 @@ class IORequest {
   For writes it is a length up to which the write is to be extended with a punch
   hole, if supported. */
   uint32_t m_original_size{};
+
+  /** Transaction that requested this IO, or nullptr. */
+  trx_t *m_trx{};
 
   friend constexpr IORequest::Type operator~(const IORequest::Type type);
   friend constexpr IORequest::Type operator&(const IORequest::Type a,
