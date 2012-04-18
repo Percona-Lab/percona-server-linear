@@ -2099,6 +2099,14 @@ dict_free_vc_templ(
 	dict_vcol_templ_t*	vc_templ);
 
 #endif /* !UNIV_HOTBACKUP */
+/*************************************************************************
+set is_corrupt flag by space_id*/
+
+void
+dict_table_set_corrupt_by_space(
+/*============================*/
+	ulint	space_id,
+	bool	need_mutex);
 
 #ifndef UNIV_NONINL
 #include "dict0dict.ic"
