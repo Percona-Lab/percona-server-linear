@@ -660,6 +660,8 @@ void btr_search_info_update_slow(btr_search_t *info, btr_cur_t *cursor) {
 
   block = btr_cur_get_block(cursor);
 
+  SRV_CORRUPT_TABLE_CHECK(block, return;);
+
   /* NOTE that the following two function calls do NOT protect
   info or block->n_fields etc. with any semaphore, to save CPU time!
   We cannot assume the fields are consistent when we return from
