@@ -1738,6 +1738,10 @@ void dict_table_change_id_sys_tables();
 std::string dict_table_get_datadir(const dict_table_t *table)
     MY_ATTRIBUTE((warn_unused_result));
 
+/** Set is_corrupt flag by space_id */
+void dict_table_set_corrupt_by_space(space_id_t space_id,
+                                     bool need_mutex) noexcept;
+
 #include "dict0dict.ic"
 
 #endif

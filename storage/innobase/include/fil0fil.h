@@ -259,6 +259,8 @@ struct fil_space_t {
   /** true if this space is currently in unflushed_spaces */
   bool is_in_unflushed_spaces;
 
+  bool is_corrupt;
+
   /** Compression algorithm */
   Compression::Type compression_type;
 
@@ -1790,5 +1792,9 @@ fil_system_hash_cells(void);
 ulint
 fil_system_hash_nodes(void);
 /*========================*/
+
+/** Mark space as corrupt
+@param space_id	space id */
+void fil_space_set_corrupt(space_id_t space_id);
 
 #endif /* fil0fil_h */
