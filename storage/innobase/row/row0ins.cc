@@ -473,7 +473,7 @@ a cascaded update.
 can also be 0 if no foreign key fields changed; the returned value is
 ULINT_UNDEFINED if the column type in the child table is too short to
 fit the new value in the parent table: that means the update fails */
-static MY_ATTRIBUTE((nonnull, warn_unused_result))
+static MY_ATTRIBUTE((warn_unused_result))
 ulint
 row_ins_cascade_calc_update_vec(
 /*============================*/
@@ -1043,7 +1043,7 @@ Perform referential actions or checks when a parent row is deleted or updated
 and the constraint had an ON DELETE or ON UPDATE condition which was not
 RESTRICT.
 @return DB_SUCCESS, DB_LOCK_WAIT, or error code */
-static MY_ATTRIBUTE((nonnull, warn_unused_result))
+static MY_ATTRIBUTE((warn_unused_result))
 dberr_t
 row_ins_foreign_check_on_constraint(
 /*================================*/
@@ -1692,6 +1692,12 @@ row_ins_check_foreign_constraint(
 		const rec_t*		rec = btr_pcur_get_rec(&pcur);
 		const buf_block_t*	block = btr_pcur_get_block(&pcur);
 
+		SRV_CORRUPT_TABLE_CHECK(block,
+		{
+			err = DB_CORRUPTION;
+			goto exit_loop;
+		});
+
 		if (page_rec_is_infimum(rec)) {
 
 			continue;
@@ -1816,6 +1822,7 @@ row_ins_check_foreign_constraint(
 		}
 	} while (btr_pcur_move_to_next(&pcur, &mtr));
 
+exit_loop:
 	if (check_ref) {
 		row_ins_foreign_report_add_err(
 			trx, foreign, btr_pcur_get_rec(&pcur), entry);
