@@ -153,8 +153,6 @@
    Memcheck:Leak
    fun:calloc
    fun:_dlerror_run
-   fun:dlsym
-   fun:__errno_location
 }
 
 
@@ -800,6 +798,15 @@
    fun:buf_buddy_free_low
    fun:buf_buddy_free
 }
+{
+   zlib longest_match false positive
+   Memcheck:Cond
+   fun:longest_match
+   fun:deflate_slow
+   fun:deflate
+   fun:compress
+   fun:my_compress_alloc
+}
 
 #
 # NDB packfrm vs deflate
@@ -884,7 +891,7 @@
    fun:malloc
    fun:CRYPTO_malloc
    fun:sk_new
-   fun:load_builtin_compressions
+   ...
    fun:SSL_COMP_get_compression_methods
    fun:SSL_library_init
 }
@@ -959,6 +966,20 @@
    fun:malloc_info
 }
 
+# TokuDB suppressions
+{
+   tls_variables_1
+   Memcheck:Leak
+   fun:memalign
+   fun:__tls_get_addr
+}
+
+{
+   tls_variables_2
+   Memcheck:Leak
+   fun:memalign
+   fun:tls_get_addr_tail
+}
 
 #supress warnings from openssl random generator
 
@@ -1055,7 +1076,7 @@
    Memcheck:Leak
    match-leak-kinds: reachable
    fun:malloc
-   obj:/usr/lib/x86_64-linux-gnu/libstdc++.so.6.0.21
+   ...
    fun:call_init.part.0
    fun:call_init
    fun:_dl_init
@@ -1179,6 +1200,13 @@
    obj:*
    obj:*
    obj:*
+}
+
+{
+   Spurious dlerror_run errors on main.udf
+   Memcheck:Leak
+   ...
+   fun:dlerror_run
 }
 
 {
