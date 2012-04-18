@@ -287,7 +287,8 @@ ulint
 buf_read_ahead_random(
 	const page_id_t&	page_id,
 	const page_size_t&	page_size,
-	ibool			inside_ibuf)
+	ibool			inside_ibuf,
+	trx_t*			trx)
 {
 	buf_pool_t*	buf_pool = buf_pool_get(page_id);
 	ulint		recent_blocks	= 0;
@@ -438,7 +439,8 @@ released by the i/o-handler thread.
 ibool
 buf_read_page(
 	const page_id_t&	page_id,
-	const page_size_t&	page_size)
+	const page_size_t&	page_size,
+	trx_t*			trx)
 {
 	ulint		count;
 	dberr_t		err;
@@ -531,7 +533,8 @@ ulint
 buf_read_ahead_linear(
 	const page_id_t&	page_id,
 	const page_size_t&	page_size,
-	ibool			inside_ibuf)
+	ibool			inside_ibuf,
+	trx_t*			trx)
 {
 	buf_pool_t*	buf_pool = buf_pool_get(page_id);
 	buf_page_t*	bpage;

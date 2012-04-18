@@ -36,6 +36,7 @@ Created 10/21/1995 Heikki Tuuri
 #define os0file_h
 
 #include "univ.i"
+#include "trx0types.h"
 
 #ifndef _WIN32
 #include <dirent.h>
@@ -940,6 +941,10 @@ The wrapper functions have the prefix of "innodb_". */
 # define os_file_read(type, file, buf, offset, n)			\
 	pfs_os_file_read_func(type, file, buf, offset, n, __FILE__, __LINE__)
 
+# define os_file_read_trx(file, buf, offset, n, trx)			\
+	pfs_os_file_read_func(file, buf, offset, n, trx,		\
+			      __FILE__, __LINE__)
+
 # define os_file_read_no_error_handling(type, file, buf, offset, n, o)	\
 	pfs_os_file_read_no_error_handling_func(			\
 		type, file, buf, offset, n, o, __FILE__, __LINE__)
@@ -1284,6 +1289,9 @@ to original un-instrumented file I/O APIs */
 
 # define os_file_read_no_error_handling(type, file, buf, offset, n, o)	\
 	os_file_read_no_error_handling_func(type, file, buf, offset, n, o)
+
+# define os_file_read_trx(file, buf, offset, n, trx)	\
+	os_file_read_func(file, buf, offset, n, trx)
 
 # define os_file_write(type, name, file, buf, offset, n)		\
 	os_file_write_func(type, name, file, buf, offset, n)

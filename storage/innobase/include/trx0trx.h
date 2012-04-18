@@ -1269,6 +1269,15 @@ struct trx_t {
 					doing Non-locking Read-only Read
 					Committed on DD tables */
 #endif /* UNIV_DEBUG */
+	/*------------------------------*/
+	ulint		io_reads;
+	ib_uint64_t	io_read;
+	ulint		io_reads_wait_timer;
+	ib_uint64_t	lock_que_wait_ustarted;
+	ulint		lock_que_wait_timer;
+	ulint		innodb_que_wait_timer;
+	ulint		distinct_page_access;
+	bool		take_stats;
 	ulint		magic_n;
 };
 
