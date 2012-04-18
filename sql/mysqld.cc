@@ -627,6 +627,8 @@ SHOW_COMP_OPTION have_crypt, have_compress;
 SHOW_COMP_OPTION have_profiling;
 SHOW_COMP_OPTION have_statement_timeout= SHOW_OPTION_DISABLED;
 
+ulonglong opt_log_warnings_suppress= 0;
+
 /* Thread specific variables */
 
 thread_local_key_t THR_MALLOC;
