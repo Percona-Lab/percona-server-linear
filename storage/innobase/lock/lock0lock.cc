@@ -1408,6 +1408,10 @@ void RecLock::set_wait_state(lock_t *lock) {
 
   m_trx->lock.was_chosen_as_deadlock_victim = false;
 
+  if (UNIV_UNLIKELY(m_trx->take_stats)) {
+    m_trx->lock_que_wait_ustarted = ut_time_monotonic_us();
+  }
+
   bool stopped = que_thr_stop(m_thr);
   ut_a(stopped);
 }
@@ -3741,6 +3745,10 @@ static dberr_t lock_table_enqueue_waiting(
 
   trx->lock.wait_started = ut_time();
   trx->lock.was_chosen_as_deadlock_victim = false;
+
+  if (UNIV_UNLIKELY(trx->take_stats)) {
+    trx->lock_que_wait_ustarted = ut_time_monotonic_us();
+  }
 
   auto stopped = que_thr_stop(thr);
   ut_a(stopped);
