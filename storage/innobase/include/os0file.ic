@@ -236,7 +236,8 @@ UNIV_INLINE
 dberr_t pfs_os_aio_func(IORequest &type, AIO_mode aio_mode, const char *name,
                         pfs_os_file_t file, void *buf, os_offset_t offset,
                         ulint n, bool read_only, fil_node_t *m1, void *m2,
-                        const char *src_file, uint src_line) {
+                        space_id_t space_id, trx_t *trx, const char *src_file,
+                        uint src_line) {
   PSI_file_locker_state state;
   struct PSI_file_locker *locker = nullptr;
 
@@ -248,7 +249,7 @@ dberr_t pfs_os_aio_func(IORequest &type, AIO_mode aio_mode, const char *name,
                              src_file, src_line);
 
   dberr_t result = os_aio_func(type, aio_mode, name, file, buf, offset, n,
-                               read_only, m1, m2);
+                               read_only, m1, m2, space_id, trx);
 
   register_pfs_file_io_end(locker, n);
 
@@ -270,9 +271,9 @@ os_file_read() which requests a synchronous read operation.
 @param[in]	src_line	line where the func invoked
 @return DB_SUCCESS if request was successful */
 UNIV_INLINE
-dberr_t pfs_os_file_read_func(IORequest &type, const char *file_name,
-                              pfs_os_file_t file, void *buf, os_offset_t offset,
-                              ulint n, const char *src_file, uint src_line) {
+dberr_t pfs_os_file_read_func(IORequest &type, const char *file_name, pfs_os_file_t file, void *buf,
+                              os_offset_t offset, ulint n, trx_t *trx,
+                              const char *src_file, uint src_line) {
   PSI_file_locker_state state;
   struct PSI_file_locker *locker = nullptr;
 
@@ -283,7 +284,7 @@ dberr_t pfs_os_file_read_func(IORequest &type, const char *file_name,
 
   dberr_t result;
 
-  result = os_file_read_func(type, file_name, file.m_file, buf, offset, n);
+  result = os_file_read_func(type, file_name, file.m_file, buf, offset, n, trx);
 
   register_pfs_file_io_end(locker, n);
 
