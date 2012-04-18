@@ -2862,7 +2862,7 @@ buf_page_t *buf_page_get_zip(const page_id_t &page_id,
     /* Page not in buf_pool: needs to be read from file */
 
     ut_ad(!hash_lock);
-    buf_read_page(page_id, page_size);
+    buf_read_page(page_id, page_size, NULL);
 
 #if defined UNIV_DEBUG || defined UNIV_BUF_DEBUG
     ut_a(++buf_dbg_counter % 5771 || buf_validate());
@@ -3310,8 +3310,8 @@ loop:
       return (NULL);
     }
 
-    if (buf_read_page(page_id, page_size)) {
-      buf_read_ahead_random(page_id, page_size, ibuf_inside(mtr));
+    if (buf_read_page(page_id, page_size, NULL)) {
+      buf_read_ahead_random(page_id, page_size, ibuf_inside(mtr), NULL);
 
       retries = 0;
     } else if (retries < BUF_PAGE_READ_MAX_RETRIES) {
@@ -3741,7 +3741,7 @@ got_block:
     /* In the case of a first access, try to apply linear
     read-ahead */
 
-    buf_read_ahead_linear(page_id, page_size, ibuf_inside(mtr));
+    buf_read_ahead_linear(page_id, page_size, ibuf_inside(mtr), NULL);
   }
 
 #ifdef UNIV_IBUF_COUNT_DEBUG
@@ -3851,7 +3851,8 @@ ibool buf_page_optimistic_get(
   if (!access_time) {
     /* In the case of a first access, try to apply linear
     read-ahead */
-    buf_read_ahead_linear(block->page.id, block->page.size, ibuf_inside(mtr));
+    buf_read_ahead_linear(block->page.id, block->page.size, ibuf_inside(mtr),
+                          NULL);
   }
 
 #ifdef UNIV_IBUF_COUNT_DEBUG

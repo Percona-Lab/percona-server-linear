@@ -79,8 +79,11 @@ is never read into the pool, or if the tablespace does not exist or is being
 dropped */
 static ulint buf_read_page_low(dberr_t *err, bool sync, ulint type, ulint mode,
                                const page_id_t &page_id,
-                               const page_size_t &page_size, bool unzip) {
+                               const page_size_t &page_size, bool unzip,
+                               trx_t *trx) {
   buf_page_t *bpage;
+
+  ut_ad(!trx || trx->take_stats);
 
   *err = DB_SUCCESS;
 
@@ -135,8 +138,8 @@ static ulint buf_read_page_low(dberr_t *err, bool sync, ulint type, ulint mode,
 
   IORequest request(type | IORequest::READ);
 
-  *err = fil_io(request, sync, page_id, page_size, 0, page_size.physical(), dst,
-                bpage);
+  *err = _fil_io(request, sync, page_id, page_size, 0, page_size.physical(),
+                 dst, bpage, trx);
 
   if (sync) {
     thd_wait_end(NULL);
@@ -179,7 +182,8 @@ wants to access
 pages, it may happen that the page at the given page number does not
 get read even if we return a positive value! */
 ulint buf_read_ahead_random(const page_id_t &page_id,
-                            const page_size_t &page_size, ibool inside_ibuf) {
+                            const page_size_t &page_size, ibool inside_ibuf,
+                            trx_t *trx) {
   buf_pool_t *buf_pool = buf_pool_get(page_id);
   ulint recent_blocks = 0;
   ulint ibuf_mode;
@@ -188,6 +192,8 @@ ulint buf_read_ahead_random(const page_id_t &page_id,
   dberr_t err;
   page_no_t i;
   const page_no_t buf_read_ahead_random_area = BUF_READ_AHEAD_AREA(buf_pool);
+
+  ut_ad(!trx || trx->take_stats);
 
   if (!srv_random_read_ahead) {
     /* Disabled by user */
@@ -278,7 +284,7 @@ read_ahead:
 
     if (!ibuf_bitmap_page(cur_page_id, page_size)) {
       count += buf_read_page_low(&err, false, IORequest::DO_NOT_WAKE, ibuf_mode,
-                                 cur_page_id, page_size, false);
+                                 cur_page_id, page_size, false, trx);
 
       if (err == DB_TABLESPACE_DELETED) {
         ib::warn(ER_IB_MSG_140) << "Random readahead trying to"
@@ -319,12 +325,15 @@ released by the i/o-handler thread.
 @param[in]	page_id		page id
 @param[in]	page_size	page size
 @return true if page has been read in, false in case of failure */
-ibool buf_read_page(const page_id_t &page_id, const page_size_t &page_size) {
+ibool buf_read_page(const page_id_t &page_id, const page_size_t &page_size,
+                    trx_t *trx) {
   ulint count;
   dberr_t err;
 
+  ut_ad(!trx || trx->take_stats);
+
   count = buf_read_page_low(&err, true, 0, BUF_READ_ANY_PAGE, page_id,
-                            page_size, false);
+                            page_size, false, trx);
 
   srv_stats.buf_pool_reads.add(count);
 
@@ -354,7 +363,8 @@ ibool buf_read_page_background(const page_id_t &page_id,
 
   count = buf_read_page_low(&err, sync,
                             IORequest::DO_NOT_WAKE | IORequest::IGNORE_MISSING,
-                            BUF_READ_ANY_PAGE, page_id, page_size, false);
+                            BUF_READ_ANY_PAGE, page_id, page_size, false,
+                            NULL);
 
   srv_stats.buf_pool_reads.add(count);
 
@@ -395,7 +405,8 @@ which could result in a deadlock if the OS does not support asynchronous io.
 @param[in]	inside_ibuf	TRUE if we are inside ibuf routine
 @return number of page read requests issued */
 ulint buf_read_ahead_linear(const page_id_t &page_id,
-                            const page_size_t &page_size, ibool inside_ibuf) {
+                            const page_size_t &page_size, ibool inside_ibuf,
+                            trx_t *trx) {
   buf_pool_t *buf_pool = buf_pool_get(page_id);
   buf_page_t *bpage;
   buf_frame_t *frame;
@@ -614,7 +625,7 @@ ulint buf_read_ahead_linear(const page_id_t &page_id,
 
     if (!ibuf_bitmap_page(cur_page_id, page_size)) {
       count += buf_read_page_low(&err, false, IORequest::DO_NOT_WAKE, ibuf_mode,
-                                 cur_page_id, page_size, false);
+                                 cur_page_id, page_size, false, trx);
 
       if (err == DB_TABLESPACE_DELETED) {
         ib::warn(ER_IB_MSG_142) << "linear readahead trying to"
@@ -691,7 +702,7 @@ void buf_read_ibuf_merge_pages(
 
     buf_read_page_low(&err, sync && (i + 1 == n_stored),
                       IORequest::IGNORE_MISSING, BUF_READ_ANY_PAGE, page_id,
-                      page_size, true);
+                      page_size, true, NULL);
 
     if (err == DB_TABLESPACE_DELETED) {
       /* We have deleted or are deleting the single-table
@@ -781,10 +792,10 @@ void buf_read_recv_pages(bool sync, space_id_t space_id,
 
     if ((i + 1 == n_stored) && sync) {
       buf_read_page_low(&err, true, 0, BUF_READ_ANY_PAGE, cur_page_id,
-                        page_size, true);
+                        page_size, true, NULL);
     } else {
       buf_read_page_low(&err, false, IORequest::DO_NOT_WAKE, BUF_READ_ANY_PAGE,
-                        cur_page_id, page_size, true);
+                        cur_page_id, page_size, true, NULL);
     }
   }
 
