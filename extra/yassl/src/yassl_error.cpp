@@ -31,6 +31,11 @@
     #pragma warning(disable: 4996)
 #endif
 
+#ifdef _MSC_VER
+    // 4996 warning to use MS extensions e.g., strcpy_s instead of strncpy
+    #pragma warning(disable: 4996)
+#endif
+
 namespace yaSSL {
 
 
