@@ -145,6 +145,7 @@ public:
     my_bool fixed= FALSE;
     longlong v;
     ulonglong uv;
+    const T *vmin, *vmax;
 
     v= var->value->val_int();
     if (SIGNED) /* target variable has signed type */
@@ -196,6 +197,9 @@ public:
       if (SIGNED)
       {
         longlong max_val= *max_var_ptr();
+        fprintf(stderr, "v = %lld, max_val = %lld\n", v, max_val);
+        fprintf(stderr, "save_result = %lld\n",
+                (longlong)(var->save_result.ulonglong_value));
         if (((longlong)(var->save_result.ulonglong_value)) > max_val)
           var->save_result.ulonglong_value= max_val;
         /*
@@ -212,6 +216,38 @@ public:
         if (var->save_result.ulonglong_value > max_val)
           var->save_result.ulonglong_value= max_val;
       }
+    }
+
+    vmin= static_cast<const T *>
+      (getopt_constraint_get_min_value(option.name, 0, FALSE));
+    vmax= static_cast<const T *>
+      (getopt_constraint_get_max_value(option.name, 0, FALSE));
+    if (vmin)
+      fprintf(stderr, "vmin = signed %lld, unsigned %llu\n",
+              (long long)*vmin, (unsigned long long)*vmin);
+    if (vmax)
+      fprintf(stderr, "vmax = signed %lld, unsigned %llu\n",
+              (long long)*vmax, (unsigned long long)*vmax);
+
+    if (SIGNED)
+    {
+      if (vmin && (longlong)var->save_result.ulonglong_value < (longlong)*vmin)
+        var->save_result.ulonglong_value= *vmin;
+      if (vmax && (longlong)var->save_result.ulonglong_value > (longlong)*vmax)
+        var->save_result.ulonglong_value= *vmax;
+      if (vmin && (longlong)var->save_result.ulonglong_value
+          > (longlong)-*vmin)
+        var->save_result.ulonglong_value= -*vmin;
+      if (vmax && (longlong)var->save_result.ulonglong_value
+          < (longlong)-*vmax)
+        var->save_result.ulonglong_value= -*vmax;
+    }
+    else
+    {
+      if (vmin && var->save_result.ulonglong_value < (ulonglong)*vmin)
+        var->save_result.ulonglong_value= *vmin;
+      if (vmax && var->save_result.ulonglong_value > (ulonglong)*vmax)
+        var->save_result.ulonglong_value= *vmax;
     }
 
     return throw_bounds_warning(thd, name.str,
@@ -820,10 +856,20 @@ public:
   bool do_check(THD *thd, set_var *var)
   {
     my_bool fixed;
+    double *vmin, *vmax;
     double v= var->value->val_real();
-    var->save_result.double_value= getopt_double_limit_value(v, &option, &fixed);
+    var->save_result.double_value= getopt_double_limit_value(v, &option,
+                                                             &fixed);
 
-    return throw_bounds_warning(thd, name.str, fixed, v);
+    vmin= (double *) getopt_constraint_get_min_value(option.name, 0, FALSE);
+    vmax= (double *) getopt_constraint_get_max_value(option.name, 0, FALSE);
+    if (vmin && var->save_result.double_value < *vmin)
+      var->save_result.double_value= *vmin;
+    if (vmax && var->save_result.double_value > *vmax)
+      var->save_result.double_value= *vmax;
+
+    return throw_bounds_warning(thd, name.str,
+                                var->save_result.double_value != v, v);
   }
   bool session_update(THD *thd, set_var *var)
   {
