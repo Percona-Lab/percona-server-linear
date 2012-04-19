@@ -266,7 +266,8 @@ int CertManager::Validate()
         TaoCrypt::Source source((*last)->get_buffer(), (*last)->get_length());
         TaoCrypt::CertDecoder cert(source, true, &signers_, verifyNone_);
 
-        if (int err = cert.GetError().What())
+        int err = cert.GetError().What();
+        if ( err )
             return err;
 
         const TaoCrypt::PublicKey& key = cert.GetPublicKey();
