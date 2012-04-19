@@ -1016,7 +1016,6 @@ buf_block_init(
 
 	block->check_index_page_at_flush = FALSE;
 	block->index = NULL;
-	block->btr_search_latch = NULL;
 
 #ifdef UNIV_DEBUG
 	block->page.in_page_hash = FALSE;
@@ -1486,11 +1485,7 @@ buf_pool_clear_hash_index(void)
 	ulint	p;
 
 #ifdef UNIV_SYNC_DEBUG
-	ulint	j;
-
-	for (j = 0; j < btr_search_index_num; j++) {
-		ut_ad(rw_lock_own(btr_search_latch_part[j], RW_LOCK_EX));
-	}
+	ut_ad(rw_lock_own(&btr_search_latch, RW_LOCK_EX));
 #endif /* UNIV_SYNC_DEBUG */
 	ut_ad(!btr_search_enabled);
 
@@ -2214,7 +2209,6 @@ buf_block_init_low(
 {
 	block->check_index_page_at_flush = FALSE;
 	block->index		= NULL;
-	block->btr_search_latch	= NULL;
 
 	block->n_hash_helps	= 0;
 	block->n_fields		= 1;
@@ -4310,36 +4304,6 @@ corrupt:
 	buf_pool_mutex_exit(buf_pool);
 
 	return(true);
-}
-
-/********************************************************************//**
-*/
-UNIV_INTERN
-buf_block_t*
-buf_page_from_array(
-/*================*/
-	buf_pool_t*	buf_pool,
-	ulint		n_block)
-{
-	ulint		n_chunks, offset;
-	buf_chunk_t*	chunk;
-
-	ut_a(n_block < buf_pool->curr_size);
-
-	chunk = buf_pool->chunks;
-	offset = n_block;
-
-	for (n_chunks = buf_pool->n_chunks; n_chunks--; chunk++) {
-		if (offset < chunk->size) {
-			return(&chunk->blocks[offset]);
-		}
-
-		offset -= chunk->size;
-	}
-
-	ut_error;
-
-	return(NULL);
 }
 
 /*********************************************************************//**

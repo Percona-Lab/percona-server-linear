@@ -1197,14 +1197,6 @@ buf_pool_index(
 /*===========*/
 	const buf_pool_t*	buf_pool)	/*!< in: buffer pool */
 	__attribute__((nonnull, const));
-/********************************************************************//**
-*/
-UNIV_INTERN
-buf_block_t*
-buf_page_from_array(
-/*================*/
-	buf_pool_t*	buf_pool,
-	ulint		n_block);
 /******************************************************************//**
 Returns the buffer pool instance given a page instance
 @return buf_pool */
@@ -1711,7 +1703,6 @@ struct buf_block_t{
 					complete, though: there may
 					have been hash collisions,
 					record deletions, etc. */
-	volatile rw_lock_t*     btr_search_latch;
 	/* @} */
 # ifdef UNIV_SYNC_DEBUG
 	/** @name Debug fields */
