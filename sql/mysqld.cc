@@ -5153,25 +5153,11 @@ static void setup_error_log() {
   help information. Since the implementation of plugin server
   variables the help output is now written much later.
 
-  randominit(&sql_rand, (ulong)server_start_time, (ulong)server_start_time / 2);
-  setup_fpu();
-  init_slave_list();
-
-  init_global_table_stats();
-  init_global_index_stats();
-
-  /* Setup logs */
-
-  /*
-    Enable old-fashioned error log, except when the user has requested
-    help information. Since the implementation of plugin server
-    variables the help output is now written much later.
-
-    log_error_dest can be:
-    disabled_my_option     --log-error was not used or --log-error=
-    ""                     --log-error without arguments (no '=')
-    filename               --log-error=filename
-  */
+  log_error_dest can be:
+  disabled_my_option     --log-error was not used or --log-error=
+  ""                     --log-error without arguments (no '=')
+  filename               --log-error=filename
+*/
 #ifdef _WIN32
   /*
     Enable the error log file only if console option is not specified
@@ -5256,6 +5242,9 @@ static int init_server_components() {
   randominit(&sql_rand, (ulong)server_start_time, (ulong)server_start_time / 2);
   setup_fpu();
   init_slave_list();
+
+  init_global_table_stats();
+  init_global_index_stats();
 
   setup_error_log();
 
@@ -5768,16 +5757,41 @@ static int init_server_components() {
              "default_tmp_storage_engine", default_tmp_storage_engine);
   }
 
-  if (total_ha_2pc > 1 || (1 == total_ha_2pc && opt_bin_log)) {
-    if (opt_bin_log)
-      tc_log = &mysql_bin_log;
-    else
-      tc_log = &tc_log_mmap;
-  }
-
-  if (Recovered_xa_transactions::init()) {
-    LogErr(ERROR_LEVEL, ER_OOM);
-    unireg_abort(MYSQLD_ABORT_EXIT);
+  /*
+    Validate any enforced storage engine
+  */
+  if (enforce_storage_engine && !opt_initialize && !opt_noacl) {
+    LEX_STRING name = {enforce_storage_engine, strlen(enforce_storage_engine)};
+    plugin_ref plugin;
+    if ((plugin = ha_resolve_by_name(nullptr, &name, false))) {
+      handlerton *hton = plugin_data<handlerton *>(plugin);
+      LEX_STRING defname = {default_storage_engine,
+                            strlen(default_storage_engine)};
+      plugin_ref defplugin;
+      handlerton *defhton;
+      if ((defplugin = ha_resolve_by_name(nullptr, &defname, false))) {
+        defhton = plugin_data<handlerton *>(defplugin);
+        if (defhton != hton) {
+          sql_print_warning(
+              "Default storage engine (%s)"
+              " is not the same as enforced storage engine (%s)",
+              default_storage_engine, enforce_storage_engine);
+        }
+      }
+      if (ha_is_storage_engine_disabled(hton)) {
+        sql_print_error(
+            "enforced storage engine %s is among disabled storage "
+            "engines",
+            enforce_storage_engine);
+        unireg_abort(MYSQLD_ABORT_EXIT);
+      }
+      plugin_unlock(nullptr, defplugin);
+      plugin_unlock(nullptr, plugin);
+    } else {
+      sql_print_error("Unknown/unsupported storage engine: %s",
+                      enforce_storage_engine);
+      unireg_abort(MYSQLD_ABORT_EXIT);
+    }
   }
 
   if (encrypt_binlog) {
@@ -5794,6 +5808,18 @@ static int init_server_components() {
           "binlog and relay log encryption enabled without binary logging "
           "being enabled. "
           "If relay logs are in use, they will be encrypted.");
+  }
+
+  if (total_ha_2pc > 1 || (1 == total_ha_2pc && opt_bin_log)) {
+    if (opt_bin_log)
+      tc_log = &mysql_bin_log;
+    else
+      tc_log = &tc_log_mmap;
+  }
+
+  if (Recovered_xa_transactions::init()) {
+    LogErr(ERROR_LEVEL, ER_OOM);
+    unireg_abort(MYSQLD_ABORT_EXIT);
   }
 
   if (tc_log->open(opt_bin_log ? opt_bin_logname : opt_tc_log_file)) {
@@ -9382,7 +9408,7 @@ bool mysqld_get_one_option(int optid,
       break;
     case 'L':
       push_deprecated_warn(NULL, "--language/-l", "'--lc-messages-dir'");
-      /* Note:  fall-through */
+    // fallthrough
     case OPT_LC_MESSAGES_DIRECTORY:
       strmake(lc_messages_dir, argument, sizeof(lc_messages_dir) - 1);
       lc_messages_dir_ptr = lc_messages_dir;
