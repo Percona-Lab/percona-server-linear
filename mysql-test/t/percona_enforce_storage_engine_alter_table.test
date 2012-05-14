@@ -2,9 +2,6 @@
 # Bug lp:1488055 "ALTER TABLE w/o ENGINE= clause changes table engine if enforce_storage_engine active"
 #
 
---source include/have_innodb.inc
---source include/not_embedded.inc
-
 --disable_query_log
 call mtr.add_suppression('Default storage engine \\(InnoDB\\) is not the same as enforced storage engine \\(MyISAM\\)');
 --enable_query_log
