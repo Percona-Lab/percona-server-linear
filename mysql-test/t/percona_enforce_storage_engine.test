@@ -2,10 +2,6 @@
 
 call mtr.add_suppression("is not the same as enforced storage engine");
 
---disable_warnings
-drop table if exists t1;
---enable_warnings
-
 SET @old_sql_mode= @@session.sql_mode;
 
 CREATE TABLE t1 (c1 INT PRIMARY KEY AUTO_INCREMENT, c2 VARCHAR(10)) ENGINE=MyISAM;
