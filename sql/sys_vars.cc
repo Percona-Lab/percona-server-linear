@@ -3353,14 +3353,6 @@ static Sys_var_charptr Sys_enforce_storage_engine(
        DEFAULT(0));
 
 
-static Sys_var_charptr Sys_enforce_storage_engine(
-       "enforce_storage_engine", "Force the use of a storage engine for new "
-       "tables",
-       READ_ONLY GLOBAL_VAR(enforce_storage_engine),
-       CMD_LINE(REQUIRED_ARG), IN_SYSTEM_CHARSET,
-       DEFAULT(0));
-
-
 #if defined(ENABLED_DEBUG_SYNC)
 /*
   Variable can be set for the session only.
