@@ -175,6 +175,11 @@ Currently we support native aio on windows and linux */
 my_bool	srv_use_native_aio = TRUE;
 my_bool	srv_numa_interleave = FALSE;
 
+my_bool	srv_track_changed_pages = FALSE;
+
+ulonglong	srv_max_bitmap_file_size = 100 * 1024 * 1024;
+
+ulonglong	srv_max_changed_pages = 0;
 #ifdef UNIV_DEBUG
 /** Force all user tables to use page compression. */
 ulong	srv_debug_compress;
