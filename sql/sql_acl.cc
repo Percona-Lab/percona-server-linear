@@ -63,6 +63,10 @@
 using std::min;
 using std::max;
 
+#include "my_user.h"
+#include "password.h"
+#include "sha1.h"
+
 bool mysql_user_table_is_in_short_password_format= false;
 my_bool disconnect_on_expired_password= TRUE;
 bool auth_plugin_is_built_in(const char *plugin_name);
@@ -887,6 +891,10 @@ enum enum_acl_lists
   PROXY_USERS_ACL
 };
 
+static ACL_USER acl_utility_user;
+static DYNAMIC_ARRAY acl_utility_user_schema_access;
+static my_bool acl_init_utility_user(my_bool check_no_resolve);
+
 /**
   Convert scrambled password to binary form, according to scramble type, 
   Binary form is stored in user.salt.
@@ -1296,6 +1304,9 @@ static my_bool acl_load(THD *thd, TABLE_LIST *tables)
         allow_all_hosts=1;			// Anyone can connect
     }
   } // END while reading records from the mysql.user table
+
+  if(!acl_init_utility_user(check_no_resolve))
+    goto end;
   
   my_qsort((uchar*) dynamic_element(&acl_users,0,ACL_USER*),acl_users.elements,
 	   sizeof(ACL_USER),(qsort_cmp) acl_compare);
@@ -1669,6 +1680,174 @@ my_bool acl_reload(THD *thd)
 end:
   close_acl_tables(thd);
   DBUG_RETURN(return_val);
+}
+
+/*
+  Set up the acl_utility_user and add it to the acl_user list.
+*/
+static
+my_bool
+acl_init_utility_user(my_bool check_no_resolve)
+{
+  LEX_STRING acl_user_name, acl_host_name;
+  char password[CRYPT_MAX_PASSWORD_SIZE + 1];
+  uint i, passlen;
+  my_bool ret= TRUE;
+
+  if (!utility_user)
+    goto end;
+
+  /* parse out the option to its component user and host name parts */
+  acl_user_name.str= (char *) my_malloc(USERNAME_LENGTH+1, MY_ZEROFILL);
+  acl_host_name.str= (char *) my_malloc(HOSTNAME_LENGTH+1, MY_ZEROFILL);
+  parse_user(utility_user, strlen(utility_user),
+             acl_user_name.str, &acl_user_name.length,
+             acl_host_name.str, &acl_host_name.length);
+
+  /* Check to see if the username is anonymous */
+  if (!acl_user_name.str || acl_user_name.str[0] == '\0')
+  {
+    sql_print_error("'utility user' specified as '%s' is anonymous"
+                    " and not allowed.",
+                    utility_user);
+    ret= FALSE;
+    goto cleanup;
+  }
+
+  /* Check to see that a password was supplied */
+  if (!utility_user_password || utility_user_password[0] == '\0')
+  {
+    sql_print_error("'utility user' specified as '%s' but has no "
+                    "password. Please see --utility_user_password.",
+                    utility_user);
+    ret= FALSE;
+    goto cleanup;
+  }
+
+  /* set up some of the static utility user struct fields */
+  acl_utility_user.user= acl_user_name.str;
+
+  acl_utility_user.host.update_hostname(acl_host_name.str);
+
+  acl_utility_user.sort= get_sort(2, acl_utility_user.host.get_host(),
+                                   acl_utility_user.user);
+
+  /* Check to see if the utility user matches any existing user */ 
+  for (i=0 ; i < acl_users.elements ; i++)
+  {
+    ACL_USER *user= dynamic_element(&acl_users, i, ACL_USER*);
+    if (user->user
+        && strcmp(acl_user_name.str, user->user) == 0)
+    {
+      if (user->sort == acl_utility_user.sort)
+      {
+        sql_print_error("'utility user' specification '%s' exactly"
+                        " matches existing user in mysql.user table.",
+                        utility_user);
+        ret= FALSE;
+        goto cleanup;
+      }
+      else if (user->sort < acl_utility_user.sort)
+      {
+        sql_print_warning("'utility user' specification '%s' closely"
+                          " matches more specific existing user '%s@%s' in"
+                          " mysql.user table which may render the utility_user"
+                          " inaccessable from certain hosts.", utility_user,
+                          user->user ? user->user : "",
+                          user->host.get_host());
+      }
+    }
+  }
+
+  if (check_no_resolve
+      && hostname_requires_resolving(acl_utility_user.host.get_host()))
+  {
+    sql_print_warning("'utility user' entry '%s@%s' "
+                      "ignored in --skip-name-resolve mode.",
+                      acl_utility_user.user ? acl_utility_user.user : "",
+                      acl_utility_user.host.get_host() ?
+                      acl_utility_user.host.get_host() : "");
+    ret= FALSE;
+    goto cleanup;
+  }
+
+  /* Assume that the utility user is using the mysql_native_password-style
+  authentication, fill out the rest of the static utility user struct, and add
+  it into the acl_users list, then resort */
+  my_make_scrambled_password_sha1(password, utility_user_password,
+                                  strlen(utility_user_password));
+
+  passlen= strlen(password);
+
+  acl_utility_user.plugin= native_password_plugin_name;
+
+  if (set_user_salt(&acl_utility_user, password, passlen))
+  {
+    goto cleanup;
+  }
+
+  acl_utility_user.access= 0;
+
+  acl_utility_user.ssl_type= SSL_TYPE_NONE;
+
+  (void) push_dynamic(&acl_users,(uchar*) &acl_utility_user);
+        
+  /* initialize the schema access list if specified */
+  (void) my_init_dynamic_array(&acl_utility_user_schema_access, sizeof(char *),
+                               5, 10);
+
+  if (utility_user_schema_access)
+  {
+    char *cur_pos= utility_user_schema_access;
+    char *cur_db= cur_pos;
+    do
+    {
+      if (*cur_pos == ',' || *cur_pos == '\0')
+      {
+        char *dbname= my_strndup(cur_db, cur_pos-cur_db, MYF(MY_FAE));
+        (void) push_dynamic(&acl_utility_user_schema_access, (uchar*) &dbname);
+        cur_db= cur_pos+1;
+        if(*cur_pos == '\0')
+          break;
+      }
+      cur_pos++;
+    } while(1);
+
+    sql_print_information("Utility user '%s'@'%s' in use with full access to"
+                          " schemas '%s'.",
+                          acl_utility_user.user,
+                          acl_utility_user.host.get_host(),
+                          utility_user_schema_access);
+  }
+  else
+  {
+    sql_print_information("Utility user '%s'@'%s' in use with"   
+                          " no schema access",
+                          acl_utility_user.user,
+                          acl_utility_user.host.get_host());
+  }
+  goto end;
+
+cleanup:
+  my_free(acl_user_name.str);
+  my_free(acl_host_name.str);
+  memset(&acl_utility_user, 0, sizeof(acl_utility_user));
+
+end:
+  return ret;
+}
+
+/*
+  Determines if the user specified by user, host, ip matches the utility user
+*/
+my_bool
+acl_is_utility_user(const char *user, const char *host, const char *ip)
+{
+  if (user && acl_utility_user.user
+      && strcmp(user, acl_utility_user.user) == 0
+      && acl_utility_user.host.compare_hostname(host, ip))
+    return TRUE;
+  return FALSE;
 }
 
 
@@ -2129,6 +2308,7 @@ ulong acl_get(const char *host, const char *ip,
     db=tmp_db;
   }
   key_length= (size_t) (end-key);
+
   if (!db_is_pattern && (entry=(acl_entry*) acl_cache->search((uchar*) key,
                                                               key_length)))
   {
@@ -2136,6 +2316,23 @@ ulong acl_get(const char *host, const char *ip,
     mysql_mutex_unlock(&acl_cache->lock);
     DBUG_PRINT("exit", ("access: 0x%lx", db_access));
     DBUG_RETURN(db_access);
+  }
+
+  /* Check to see if the inquiry is for the utility_user */
+  if (acl_is_utility_user(user, host, ip))
+  {
+    /* Check to see if database is within the schema access list */
+    for (i=0; i < acl_utility_user_schema_access.elements; i++)
+    {
+      char **dbname= dynamic_element(&acl_utility_user_schema_access,
+                                     i, char**);
+      if(strcmp(*dbname, db) == 0)
+      {
+        db_access= host_access= GLOBAL_ACLS;
+        break;
+      }
+    }
+    goto exit; 
   }
 
   /*
@@ -2476,6 +2673,15 @@ bool change_password(THD *thd, const char *host, const char *user,
   }
 
   plugin_empty= plugin_temp ? false: true;
+
+  /* trying to change the password of the utility user? */
+  if (acl_is_utility_user(acl_user->user, acl_user->host.get_host(), NULL))
+  {
+    mysql_mutex_unlock(&acl_cache->lock);
+    my_message(ER_PASSWORD_NO_MATCH, ER(ER_PASSWORD_NO_MATCH), MYF(0));
+    goto end;
+  }
+
 
   if (acl_user->plugin.length == 0)
   {
@@ -6198,7 +6404,7 @@ static bool check_grant_db_routine(THD *thd, const char *db, HASH *hash)
 bool check_grant_db(THD *thd,const char *db)
 {
   Security_context *sctx= thd->security_ctx;
-  char helping [NAME_LEN+USERNAME_LENGTH+2];
+  char helping [NAME_LEN+USERNAME_LENGTH+2], *end;
   uint len;
   bool error= TRUE;
   size_t copy_length;
@@ -6213,7 +6419,13 @@ bool check_grant_db(THD *thd,const char *db)
   if (copy_length >= (NAME_LEN+USERNAME_LENGTH+2))
     return 1;
 
-  len= (uint) (strmov(strmov(helping, sctx->priv_user) + 1, db) - helping) + 1;
+  end= strmov(helping, sctx->priv_user) + 1;
+  end= strnmov(end, db, helping + sizeof(helping) - end);
+
+  if (end >= helping + sizeof(helping)) // db name was truncated
+    return 1;                           // no privileges for an invalid db name
+
+  len= (uint) (end - helping) + 1;
 
   mysql_rwlock_rdlock(&LOCK_grant);
 
@@ -6438,6 +6650,17 @@ static void add_user_option(String *grant, ulong value, const char *name)
   }
 }
 
+#else
+
+/*
+  Determines if the user specified by user, host, ip matches the utility user
+*/
+my_bool
+acl_is_utility_user(const char *user, const char *host, const char *ip)
+{
+  return FALSE;
+}
+
 #endif /*NO_EMBEDDED_ACCESS_CHECKS */
 
 const char *command_array[]=
@@ -6492,7 +6715,8 @@ bool mysql_show_grants(THD *thd,LEX_USER *lex_user)
   mysql_mutex_lock(&acl_cache->lock);
 
   acl_user= find_acl_user(lex_user->host.str, lex_user->user.str, TRUE);
-  if (!acl_user)
+  if (!acl_user ||
+      (acl_is_utility_user(acl_user->user, acl_user->host.get_host(), NULL)))
   {
     mysql_mutex_unlock(&acl_cache->lock);
     mysql_rwlock_unlock(&LOCK_grant);
@@ -7576,6 +7800,22 @@ static int handle_grant_data(TABLE_LIST *tables, bool drop,
   int ret;
   DBUG_ENTER("handle_grant_data");
 
+  /* Handle special utility user */
+  if (acl_utility_user.user)
+  {
+    if (user_from
+        && acl_is_utility_user(user_from->user.str, user_from->host.str, NULL))
+    {
+      result= -1;
+      goto end;
+    }
+    else if (user_to
+        && acl_is_utility_user(user_to->user.str, user_to->host.str, NULL))
+    {
+      result= -1;
+      goto end;
+    }
+  }
   /* Handle user table. */
   if ((found= handle_grant_table(tables, 0, drop, user_from, user_to)) < 0)
   {
@@ -8980,6 +9220,9 @@ int fill_schema_user_privileges(THD *thd, TABLE_LIST *tables, Item *cond)
     if (no_global_access &&
         (strcmp(thd->security_ctx->priv_user, user) ||
          my_strcasecmp(system_charset_info, curr_host, host)))
+      continue;
+
+    if (acl_is_utility_user(user, host, NULL))
       continue;
       
     want_access= acl_user->access;
@@ -11407,6 +11650,16 @@ acl_authenticate(THD *thd, uint com_change_user_pkt_len)
         mysql_mutex_unlock(&acl_cache->lock);
         DBUG_RETURN(1);
       }
+
+      if (acl_is_utility_user(acl_proxy_user->user,
+                              acl_proxy_user->host.get_host(), NULL))
+      {
+        if (!thd->is_error())
+          login_failed_error(&mpvio, mpvio.auth_info.password_used);
+        mysql_mutex_unlock(&acl_cache->lock);
+        DBUG_RETURN(1);
+      }
+
       acl_user= acl_proxy_user->copy(thd->mem_root);
       DBUG_PRINT("info", ("User %s is a PROXY and will assume a PROXIED"
                           " identity %s", auth_user, acl_user->user));
