@@ -1978,14 +1978,17 @@ loop:
 }
 
 /******************************************************//**
-Reads a specified log segment to a buffer. */
+Reads a specified log segment to a buffer. Optionally releases the log mutex
+before the I/O.*/
 void
 log_group_read_log_seg(
 /*===================*/
 	byte*		buf,		/*!< in: buffer where to read */
 	log_group_t*	group,		/*!< in: log group */
 	lsn_t		start_lsn,	/*!< in: read area start */
-	lsn_t		end_lsn)	/*!< in: read area end */
+	lsn_t		end_lsn,	/*!< in: read area end */
+	bool		release_mutex)	/*!< in: whether the log_sys->mutex
+					should be released before the read */
 {
 	ulint	len;
 	lsn_t	source_offset;
@@ -2014,6 +2017,10 @@ loop:
 
 	ut_a(source_offset / UNIV_PAGE_SIZE <= ULINT_MAX);
 
+	if (release_mutex) {
+		log_mutex_exit();
+	}
+
 	const ulint	page_no
 		= (ulint) (source_offset / univ_page_size.physical());
 
@@ -2028,6 +2035,9 @@ loop:
 
 	if (start_lsn != end_lsn) {
 
+		if (release_mutex) {
+			log_mutex_enter();
+		}
 		goto loop;
 	}
 }
