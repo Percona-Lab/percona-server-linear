@@ -200,6 +200,9 @@ possible for the log tracker thread to be running and the tracking to be
 disabled */
 bool srv_track_changed_pages = false;
 
+ulonglong srv_max_bitmap_file_size = 100 * 1024 * 1024;
+
+ulonglong srv_max_changed_pages = 0;
 #ifdef UNIV_DEBUG
 /** Force all user tables to use page compression. */
 ulong srv_debug_compress;
@@ -533,6 +536,8 @@ ulong srv_doublewrite_batch_size = 120;
 ulong srv_replication_delay = 0;
 
 ulint srv_pass_corrupt_table = 0; /* 0:disable 1:enable */
+
+bool srv_redo_log_thread_started = false;
 
 /*-------------------------------------------*/
 ulong srv_n_spin_wait_rounds = 30;
