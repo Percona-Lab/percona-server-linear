@@ -554,6 +554,8 @@ ulong srv_replication_delay = 0;
 
 ulint srv_pass_corrupt_table = 0; /* 0:disable 1:enable */
 
+bool srv_redo_log_thread_started = false;
+
 /*-------------------------------------------*/
 ulong srv_n_spin_wait_rounds = 30;
 ulong srv_spin_wait_delay = 6;

@@ -423,6 +423,7 @@ LatchDebug::LatchDebug() {
   LEVEL_MAP_INSERT(SYNC_FTS_CACHE_INIT);
   LEVEL_MAP_INSERT(SYNC_RECV);
   LEVEL_MAP_INSERT(SYNC_RECV_WRITER);
+  LEVEL_MAP_INSERT(SYNC_LOG_ONLINE);
   LEVEL_MAP_INSERT(SYNC_LOG_SN);
   LEVEL_MAP_INSERT(SYNC_LOG_SN_MUTEX);
   LEVEL_MAP_INSERT(SYNC_LOG_LIMITS);
@@ -684,6 +685,7 @@ Latches *LatchDebug::check_order(const latch_t *latch,
     case SYNC_FTS_CACHE:
     case SYNC_FTS_CACHE_INIT:
     case SYNC_PAGE_CLEANER:
+    case SYNC_LOG_ONLINE:
     case SYNC_LOG_CHECKPOINTER:
     case SYNC_LOG_CLOSER:
     case SYNC_LOG_WRITER:
@@ -1272,6 +1274,8 @@ static void sync_latch_meta_init() UNIV_NOTHROW {
 
   LATCH_ADD_MUTEX(IBUF_PESSIMISTIC_INSERT, SYNC_IBUF_PESS_INSERT_MUTEX,
                   ibuf_pessimistic_insert_mutex_key);
+
+  LATCH_ADD_MUTEX(LOG_ONLINE, SYNC_LOG_ONLINE, log_bmp_sys_mutex_key);
 
   LATCH_ADD_MUTEX(LOG_CHECKPOINTER, SYNC_LOG_CHECKPOINTER,
                   log_checkpointer_mutex_key);

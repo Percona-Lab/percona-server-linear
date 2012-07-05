@@ -191,6 +191,13 @@ extern PSI_memory_key mem_key_undo_spaces;
 extern PSI_memory_key mem_key_ut_lock_free_hash_t;
 /* Please obey alphabetical order in the definitions above. */
 
+extern PSI_memory_key	mem_key_log_online_modified_pages;
+extern PSI_memory_key	mem_key_log_online_sys;
+extern PSI_memory_key	mem_key_log_online_read_buf;
+extern PSI_memory_key	mem_key_log_online_iterator_files;
+extern PSI_memory_key	mem_key_log_online_iterator_page;
+extern PSI_memory_key	mem_key_trx_distinct_page_access_hash;
+
 /** Setup the internal objects needed for UT_NEW() to operate.
 This must be called before the first call to UT_NEW(). */
 void ut_new_boot();
