@@ -75,8 +75,12 @@ the OS actually supports it: Win 95 does not, NT does. */
 /** Use unbuffered I/O */
 # define UNIV_NON_BUFFERED_IO
 
+# define SRV_PATH_SEPARATOR	'\\'
+
 /** File handle */
 # define os_file_t	HANDLE
+
+# define os_file_invalid	INVALID_HANDLE_VALUE
 
 /** Convert a C file descriptor to a native file handle
 @param fd file descriptor
@@ -85,10 +89,14 @@ the OS actually supports it: Win 95 does not, NT does. */
 
 #else /* _WIN32 */
 
+#define SRV_PATH_SEPARATOR	'/'
+
 typedef DIR*	os_file_dir_t;	/*!< directory stream */
 
 /** File handle */
 typedef int	os_file_t;
+
+# define os_file_invalid	(-1)
 
 /** Convert a C file descriptor to a native file handle
 @param fd file descriptor
@@ -1049,6 +1057,7 @@ os_file_close_func(os_file_t file);
 extern mysql_pfs_key_t	innodb_data_file_key;
 extern mysql_pfs_key_t	innodb_log_file_key;
 extern mysql_pfs_key_t	innodb_temp_file_key;
+extern mysql_pfs_key_t	innodb_bmp_file_key;
 
 /* Following four macros are instumentations to register
 various file I/O operations with performance schema.
@@ -1518,13 +1527,11 @@ to original un-instrumented file I/O APIs */
 
 #endif	/* UNIV_PFS_IO */
 
-#ifdef UNIV_HOTBACKUP
 /** Closes a file handle.
 @param[in] file		handle to a file
 @return true if success */
 bool
 os_file_close_no_error_handling(os_file_t file);
-#endif /* UNIV_HOTBACKUP */
 
 /** Gets a file size.
 @param[in]	file		handle to a file
@@ -1576,6 +1583,15 @@ os_file_truncate(
 	const char*	pathname,
 	os_file_t	file,
 	os_offset_t	size);
+
+/***********************************************************************//**
+Truncates a file at the specified position.
+@return true if success */
+
+bool
+os_file_set_eof_at(
+	os_file_t	file,	/*!< in: handle to a file */
+	ib_uint64_t	new_len);/*!< in: new file length */
 
 /** NOTE! Use the corresponding macro os_file_flush(), not directly this
 function!
