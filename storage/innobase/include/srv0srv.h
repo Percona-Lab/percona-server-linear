@@ -291,6 +291,11 @@ extern bool srv_undo_log_truncate;
 /** Enable or disable Encrypt of UNDO tablespace. */
 extern bool srv_undo_log_encrypt;
 
+/** Whether the redo log tracker thread has been started. Does not take into
+account whether the tracking is currently enabled (see srv_track_changed_pages
+for that) */
+extern bool srv_redo_log_thread_started;
+
 extern bool srv_track_changed_pages;
 extern ulonglong	srv_max_bitmap_file_size;
 
