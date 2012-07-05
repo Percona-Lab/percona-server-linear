@@ -182,6 +182,30 @@ bool pfs_os_file_close_func(pfs_os_file_t file, const char *src_file,
   return (result);
 }
 
+/** NOTE! Use the corresponding macro os_file_close_no_error_handling(), not
+directly this function!
+Closes a file handle.
+@param[in] file		handle to a file
+@param[in]	src_file	file name where func invoked
+@param[in]	src_line	line where the func invoked
+@return true if success */
+bool pfs_os_file_close_no_error_handling_func(pfs_os_file_t file,
+                                              const char *src_file,
+                                              ulint src_line) {
+  struct PSI_file_locker *locker = nullptr;
+  PSI_file_locker_state state;
+
+  /* register the file close */
+  register_pfs_file_io_begin(&state, locker, file, 0, PSI_FILE_CLOSE, src_file,
+                             src_line);
+
+  const bool result = os_file_close_no_error_handling_func(file.m_file);
+
+  register_pfs_file_io_end(locker, 0);
+
+  return (result);
+}
+
 #ifndef UNIV_HOTBACKUP
 /** NOTE! Please use the corresponding macro os_aio(), not directly this
 function!
@@ -580,4 +604,28 @@ bool pfs_os_file_delete_if_exists_func(mysql_pfs_key_t key, const char *name,
 
   return (result);
 }
+
+/** NOTE! Use the corresponding macro os_file_flush(), not directly this
+function!
+Truncates a file at the specified position.
+@param[in]	file	file to truncate
+@param[in]	new_len	new file length
+@param[in]	src_file	file name where func invoked
+@param[in]	src_line	line where the func invoked
+@return true if success */
+UNIV_INLINE
+bool pfs_os_file_set_eof_at_func(pfs_os_file_t file, ib_uint64_t new_len,
+                                 const char *src_file, ulint src_line) {
+  struct PSI_file_locker *locker = NULL;
+  PSI_file_locker_state state;
+
+  register_pfs_file_io_begin(&state, locker, file, 0, PSI_FILE_CHSIZE, src_file,
+                             src_line);
+  const bool result = os_file_set_eof_at_func(file.m_file, new_len);
+
+  register_pfs_file_io_end(locker, 0);
+
+  return (result);
+}
+
 #endif /* UNIV_PFS_IO */
