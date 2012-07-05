@@ -497,6 +497,7 @@ extern mysql_pfs_key_t	srv_lock_timeout_thread_key;
 extern mysql_pfs_key_t	srv_master_thread_key;
 extern mysql_pfs_key_t	srv_monitor_thread_key;
 extern mysql_pfs_key_t	srv_purge_thread_key;
+extern mysql_pfs_key_t	srv_log_tracking_thread_key;
 extern mysql_pfs_key_t	trx_rollback_clean_thread_key;
 
 /* This macro register the current thread and its key with performance
@@ -759,6 +760,15 @@ srv_get_active_thread_type(void);
 /*============================*/
 
 extern "C" {
+
+/******************************************************************//**
+Thread that follows redo log changes for changed page tracking.
+@return a dummy value */
+os_thread_ret_t
+DECLARE_THREAD(srv_redo_log_follow_thread)(
+/*=======================*/
+	void*	arg);	/*!< in: a dummy parameter required by
+			os_thread_create */
 
 /*********************************************************************//**
 A thread which prints the info output by various InnoDB monitors.

@@ -61,6 +61,7 @@ Created 2/16/1996 Heikki Tuuri
 #include "rem0rec.h"
 #include "mtr0mtr.h"
 #include "log0log.h"
+#include "log0online.h"
 #include "log0recv.h"
 #include "page0page.h"
 #include "page0cur.h"
@@ -186,6 +187,7 @@ mysql_pfs_key_t	srv_lock_timeout_thread_key;
 mysql_pfs_key_t	srv_master_thread_key;
 mysql_pfs_key_t	srv_monitor_thread_key;
 mysql_pfs_key_t	srv_purge_thread_key;
+mysql_pfs_key_t	srv_log_tracking_thread_key;
 #endif /* UNIV_PFS_THREAD */
 
 #ifdef HAVE_PSI_STAGE_INTERFACE
@@ -1086,6 +1088,29 @@ srv_start_wait_for_purge_to_start()
 		case PURGE_STATE_DISABLED:
 			ut_error;
 		}
+	}
+}
+
+/*********************************************************************//**
+Initializes the log tracking subsystem and starts its thread.  */
+static
+void
+init_log_online(void)
+/*=================*/
+{
+	if (UNIV_UNLIKELY(srv_force_recovery > 0 || srv_read_only_mode)) {
+		srv_track_changed_pages = FALSE;
+		return;
+	}
+
+	if (srv_track_changed_pages) {
+
+		log_online_read_init();
+
+		/* Create the thread that follows the redo log to output the
+		   changed page bitmap */
+		os_thread_create(&srv_redo_log_follow_thread, NULL,
+				 thread_ids + 5 + SRV_MAX_N_IO_THREADS);
 	}
 }
 
@@ -2097,6 +2122,7 @@ files_checked:
 	if (create_new_db) {
 
 		ut_a(!srv_read_only_mode);
+		init_log_online();
 
 		mtr_start(&mtr);
 
@@ -2199,6 +2225,8 @@ files_checked:
 
 			return(srv_init_abort(DB_ERROR));
 		}
+
+		init_log_online();
 
 		purge_queue = trx_sys_init_at_db_start();
 

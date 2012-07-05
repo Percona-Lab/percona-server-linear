@@ -146,6 +146,8 @@ struct log_online_bitmap_file_range_struct {
 /** Struct for an iterator through all bits of changed pages bitmap blocks */
 struct log_bitmap_iterator_struct
 {
+	bool				failed;		/*!< Has the iteration
+							stopped prematurely */
 	log_online_bitmap_file_range_t	in_files;	/*!< The bitmap files
 							for this iterator */
 	size_t				in_i;		/*!< Currently read
@@ -165,10 +167,10 @@ struct log_bitmap_iterator_struct
 	ib_uint32_t			first_page_id;	/*!< Id of the first
 							page in the current
 							block */
-	ibool				last_page_in_run;/*!< "Last page in
+	bool				last_page_in_run;/*!< "Last page in
 							run" flag value for the
 							current block */
-	ibool				changed;	/*!< true if current
+	bool				changed;	/*!< true if current
 							page was changed */
 	byte*				page;		/*!< Bitmap block */
 };

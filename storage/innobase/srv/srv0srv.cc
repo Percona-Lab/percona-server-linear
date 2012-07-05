@@ -2195,10 +2195,34 @@ srv_master_do_idle_tasks(void)
 	}
 
 	/* Make a new checkpoint */
+
+	if (srv_shutdown_state > 0) {
+		return;
+	}
+
+	if (srv_log_arch_expire_sec) {
+		srv_main_thread_op_info = "purging archived logs";
+		purge_archived_logs(ut_time() - srv_log_arch_expire_sec,
+				0);
+	}
 	srv_main_thread_op_info = "making checkpoint";
 	log_checkpoint(TRUE, FALSE);
 	MONITOR_INC_TIME_IN_MICRO_SECS(MONITOR_SRV_CHECKPOINT_MICROSECOND,
 				       counter_time);
+}
+
+/******************************************************************//**
+Temporary buildable stub for the changed page redo-log follower.
+@return a dummy value */
+extern "C"
+os_thread_ret_t
+DECLARE_THREAD(srv_redo_log_follow_thread)(
+/*=======================================*/
+	void*	arg __attribute__((unused)))	/*!< in: a dummy parameter
+						     required by
+						     os_thread_create */
+{
+	OS_THREAD_DUMMY_RETURN;
 }
 
 /*********************************************************************//**

@@ -172,6 +172,7 @@ the completed IO request and calls completion routine on it.
 mysql_pfs_key_t  innodb_data_file_key;
 mysql_pfs_key_t  innodb_log_file_key;
 mysql_pfs_key_t  innodb_temp_file_key;
+mysql_pfs_key_t	 innodb_bmp_file_key;
 #endif /* UNIV_PFS_IO */
 
 /** The asynchronous I/O context */
@@ -3118,6 +3119,25 @@ os_file_create_simple_func(
 #endif /* USE_FILE_LOCK */
 
 	return(file);
+}
+
+/***********************************************************************//**
+Truncates a file at the specified position.
+@return true if success */
+bool
+os_file_set_eof_at(
+	os_file_t	file, /*!< in: handle to a file */
+	ib_uint64_t	new_len)/*!< in: new file length */
+{
+#ifdef __WIN__
+	LARGE_INTEGER li, li2;
+	li.QuadPart = new_len;
+	return(SetFilePointerEx(file, li, &li2,FILE_BEGIN)
+	       && SetEndOfFile(file));
+#else
+	/* TODO: works only with -D_FILE_OFFSET_BITS=64 ? */
+	return(!ftruncate(file, new_len));
+#endif
 }
 
 /** This function attempts to create a directory named pathname. The new

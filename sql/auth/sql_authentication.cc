@@ -2064,6 +2064,7 @@ acl_log_connect(const char *user,
   @param command                 the command to be executed, it can be either a
                                  COM_CHANGE_USER or COM_CONNECT (if
                                  it's a new connection)
+  @param extra_port_connection   true if the client is connecting on extra_port
 
   @retval 0  success, thd is updated.
   @retval 1  error
@@ -2277,6 +2278,16 @@ acl_authenticate(THD *thd, enum_server_command command)
         mysql_mutex_unlock(&acl_cache->lock);
         DBUG_RETURN(1);
       }
+
+      if (acl_is_utility_user(acl_proxy_user->user,
+                              acl_proxy_user->host.get_host(), NULL))
+      {
+        if (!thd->is_error())
+          login_failed_error(&mpvio, mpvio.auth_info.password_used);
+        mysql_mutex_unlock(&acl_cache->lock);
+        DBUG_RETURN(1);
+      }
+
       acl_user= acl_proxy_user->copy(thd->mem_root);
       DBUG_PRINT("info", ("User %s is a PROXY and will assume a PROXIED"
                           " identity %s", auth_user, acl_user->user));
@@ -4030,4 +4041,3 @@ mysql_declare_plugin(mysql_password)
 }
 #endif /* HAVE_OPENSSL */
 mysql_declare_plugin_end;
-

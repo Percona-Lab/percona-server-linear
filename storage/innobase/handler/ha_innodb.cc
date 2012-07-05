@@ -483,6 +483,7 @@ static PSI_thread_info	all_innodb_threads[] = {
 	PSI_KEY(srv_master_thread),
 	PSI_KEY(srv_monitor_thread),
 	PSI_KEY(srv_purge_thread),
+	PSI_KEY(srv_log_tracking_thread),
 	PSI_KEY(trx_rollback_clean_thread),
 };
 # endif /* UNIV_PFS_THREAD */
@@ -491,6 +492,7 @@ static PSI_thread_info	all_innodb_threads[] = {
 /* all_innodb_files array contains the type of files that are
 performance schema instrumented if "UNIV_PFS_IO" is defined */
 static PSI_file_info	all_innodb_files[] = {
+	PSI_KEY(innodb_bmp_file),
 	PSI_KEY(innodb_data_file),
 	PSI_KEY(innodb_log_file),
 	PSI_KEY(innodb_temp_file)
