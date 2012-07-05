@@ -230,6 +230,9 @@ struct Srv_threads {
   same shared state as m_page_cleaner_coordinator. */
   IB_thread *m_page_cleaner_workers;
 
+  /** Changed page tracking thread. */
+  IB_thread m_changed_page_tracker;
+
   /** Archiver's log archiver (used by Clone). */
   IB_thread m_log_archiver;
 
@@ -426,6 +429,11 @@ page size | FSP_EXTENT_SIZE  | Initial Size | Pages
 #define INITIAL_UNDO_SPACE_SIZE (16 * 1024 * 1024)
 #define INITIAL_UNDO_SPACE_SIZE_IN_PAGES \
   static_cast<os_offset_t>(INITIAL_UNDO_SPACE_SIZE / UNIV_PAGE_SIZE)
+
+/** Whether the redo log tracker thread has been started. Does not take into
+account whether the tracking is currently enabled (see srv_track_changed_pages
+for that) */
+extern bool srv_redo_log_thread_started;
 
 extern bool srv_track_changed_pages;
 extern ulonglong	srv_max_bitmap_file_size;
