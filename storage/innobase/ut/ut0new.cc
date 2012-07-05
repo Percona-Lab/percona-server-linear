@@ -59,6 +59,13 @@ PSI_memory_key mem_key_undo_spaces;
 PSI_memory_key mem_key_ut_lock_free_hash_t;
 /* Please obey alphabetical order in the definitions above. */
 
+PSI_memory_key	mem_key_log_online_modified_pages;
+PSI_memory_key	mem_key_log_online_sys;
+PSI_memory_key	mem_key_log_online_read_buf;
+PSI_memory_key	mem_key_log_online_iterator_files;
+PSI_memory_key	mem_key_log_online_iterator_page;
+PSI_memory_key	mem_key_trx_distinct_page_access_hash;
+
 #ifdef UNIV_PFS_MEMORY
 
 /** Auxiliary array of performance schema 'PSI_memory_info'.
