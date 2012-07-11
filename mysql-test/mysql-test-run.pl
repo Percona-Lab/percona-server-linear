@@ -166,7 +166,15 @@ our $opt_vs_config = $ENV{'MTR_VS_CONFIG'};
 
 # If you add a new suite, please check TEST_DIRS in Makefile.am.
 #
-my $DEFAULT_SUITES= "main,sys_vars,binlog,federated,gis,rpl,innodb,innodb_gis,innodb_fts,innodb_zip,innodb_undo,perfschema,funcs_1,opt_trace,parts,auth_sec,query_rewrite_plugins,gcol,sysschema,test_service_sql_api,json,connection_control";
+my $DEFAULT_SUITES= "main,sys_vars,binlog,federated,gis,rpl,innodb,innodb_gis,"
+  ."innodb_fts,innodb_zip,innodb_undo,innodb_stress,perfschema,funcs_1,"
+  ."funcs_2,opt_trace,parts,auth_sec,query_rewrite_plugins,gcol,sysschema,"
+  ."test_service_sql_api,jp,stress,engines/iuds,engines/funcs,"
+  ."group_replication,x,"
+  ."json,connection_control,"
+  ."tokudb.add_index,tokudb.alter_table,tokudb,tokudb.bugs,tokudb.parts,"
+  ."tokudb.rpl,"
+  ."rocksdb,rocksdb.rpl,rocksdb.sys_vars";
 my $opt_suites;
 
 our $opt_verbose= 0;  # Verbose output, enable with --verbose
@@ -316,6 +324,7 @@ my @valgrind_args;
 my $opt_valgrind_path;
 my $valgrind_reports= 0;
 my $opt_callgrind;
+my $opt_helgrind;
 my %mysqld_logs;
 my $opt_debug_sync_timeout= 600; # Default timeout for WAIT_FOR actions.
 my $daemonize_mysqld= 0;
@@ -671,10 +680,10 @@ sub run_test_server ($$$) {
 
 	  # Report test status
 	  mtr_report_test($result);
+	  mtr_report_test_subunit($result);
 
 	  if ( $result->is_failed() ) {
 
-	    # Save the workers "savedir" in var/log
 	    my $worker_savedir= $result->{savedir};
 	    my $worker_savename= basename($worker_savedir);
 	    my $savedir= "$opt_vardir/log/$worker_savename";
@@ -1211,6 +1220,7 @@ sub command_line_setup {
              'valgrind-option=s'        => \@valgrind_args,
              'valgrind-path=s'          => \$opt_valgrind_path,
 	     'callgrind'                => \$opt_callgrind,
+             'helgrind'                 => \$opt_helgrind,
 	     'debug-sync-timeout=i'     => \$opt_debug_sync_timeout,
 
 	     # Directories
@@ -1823,11 +1833,20 @@ sub command_line_setup {
     $opt_debug_sync_timeout*= 10;
   }
 
+  if ( $opt_helgrind )
+  {
+    mtr_report("Turning on valgrind with helgrind for mysqld(s)");
+    $opt_valgrind= 1;
+    $opt_valgrind_mysqld= 1;
+
+    push(@valgrind_args, "--tool=helgrind");
+  }
+
   if ($opt_valgrind)
   {
     # Default to --tool=memcheck if no other tool has been explicitly
     # specified. From >= 2.1.2, this option is needed
-    if (!@valgrind_args or !grep(/^--tool=/, @valgrind_args))
+    if ((!@valgrind_args and !$opt_helgrind) or !grep(/^--tool=/, @valgrind_args))
     {
       # Set default valgrind options for memcheck, can be overriden by user
       unshift(@valgrind_args, ("--tool=memcheck", "--num-callers=16",
@@ -2017,6 +2036,12 @@ sub collect_mysqld_features {
   if (!IS_WINDOWS and $> == 0)
   {
     mtr_add_arg($args, "--user=root");
+  }
+
+  foreach my $extra_opt (@opt_extra_mysqld_opt) {
+    if ($extra_opt =~ /--plugin-load/) {
+      mtr_add_arg($args, $extra_opt);
+    }
   }
 
   my $exe_mysqld= find_mysqld($basedir);
@@ -4466,6 +4491,14 @@ sub resfile_report_test ($) {
   resfile_test_info("start_time", isotime time);
 }
 
+sub error_logs_to_comment {
+  my $tinfo= shift;
+  foreach my $mysqld (mysqlds())
+  {
+    $tinfo->{comment}.= "\nServer " . $mysqld->{proc} . " log: ".
+      get_log_from_proc($mysqld->{proc}, $tinfo->{name});
+  }
+}
 
 #
 # Run a single test case
@@ -4785,6 +4818,8 @@ sub run_testcase ($) {
 	  goto SRVDIED;
 	}
 
+        error_logs_to_comment($tinfo);
+
 	# Test case failure reported by mysqltest
 	report_failure_and_restart($tinfo);
       }
@@ -4885,8 +4920,9 @@ sub run_testcase ($) {
       {
         $tinfo->{comment}.=
 	   "== $log_file_name == \n".
-	     mtr_lastlinesfromfile($log_file_name, 20)."\n";
+	     mtr_lastlinesfromfile($log_file_name, 500)."\n";
       }
+      error_logs_to_comment($tinfo);
       $tinfo->{'timeout'}= testcase_timeout($tinfo); # Mark as timeout
       run_on_all($tinfo, 'analyze-timeout');
 
@@ -5626,7 +5662,7 @@ sub report_failure_and_restart ($) {
 	    $tinfo->{comment}.=
 	      "The result from queries just before the failure was:".
 	      "\n< snip >\n".
-	      mtr_lastlinesfromfile($log_file_name, 20)."\n";
+	      mtr_lastlinesfromfile($log_file_name, 500)."\n";
 	  }
 	}
       }
@@ -6644,7 +6680,7 @@ sub start_mysqltest ($) {
   mtr_add_arg($args, "--test-file=%s", $tinfo->{'path'});
 
   # Number of lines of resut to include in failure report
-  mtr_add_arg($args, "--tail-lines=20");
+  mtr_add_arg($args, "--tail-lines=500");
 
   if ( defined $tinfo->{'result_file'} ) {
     mtr_add_arg($args, "--result-file=%s", $tinfo->{'result_file'});
@@ -6979,10 +7015,10 @@ sub valgrind_arguments {
   my $exe=  shift;
   my $report_prefix= shift;
 
-  if (my @tool_list= grep(/^--tool=(memcheck|callgrind|massif)/, @valgrind_args))
+  if (my @tool_list= grep(/^--tool=(memcheck|callgrind|massif|helgrind)/, @valgrind_args))
   {
     # Get the value of the last specified --tool=<> argument to valgrind
-    my ($tool_name)= $tool_list[-1] =~ /(memcheck|callgrind|massif)$/;
+    my ($tool_name)= $tool_list[-1] =~ /(memcheck|callgrind|massif|helgrind)$/;
     if ($tool_name=~ /memcheck/)
     {
       $daemonize_mysqld ? mtr_add_arg($args, "--leak-check=no") :
@@ -6995,6 +7031,9 @@ sub valgrind_arguments {
       mtr_add_arg($args, "--$tool_name-out-file=$opt_vardir/log/".
                          "$report_prefix"."_$tool_name.out.%%p");
     }
+    # Support statically-linked malloc libraries and
+    # dynamically-linked jemalloc
+    mtr_add_arg($args, "--soname-synonyms=somalloc=NONE,somalloc=*jemalloc*");
   }
 
   # Add valgrind options, can be overriden by user
@@ -7448,4 +7487,3 @@ sub list_options ($) {
 
   exit(1);
 }
-
