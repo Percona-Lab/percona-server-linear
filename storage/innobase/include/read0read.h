@@ -69,6 +69,7 @@ class MVCC : public MVCC_interface {
   [[nodiscard]] size_t get_open_views_count() const override;
   void undo_purge_is_starting() override;
   void undo_purge_has_shutdown() override;
+  const Read_view_interface *get_oldest_view_stats() const override;
 
  private:
   /** A helper for the interface method with the same name, which makes it
@@ -137,6 +138,7 @@ class MVCC : public MVCC_interface {
   @return a view to use */
   inline ReadView *get_view();
 
+ public:
   MVCC(const MVCC &) = delete;
   MVCC &operator=(const MVCC &) = delete;
 
