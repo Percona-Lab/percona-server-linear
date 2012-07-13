@@ -100,6 +100,7 @@ private:
 	@return a view to use */
 	inline ReadView* get_view();
 
+public:
 	/**
 	Get the oldest view in the system. It will also move the delete
 	marked read views from the views list to the freed list.
