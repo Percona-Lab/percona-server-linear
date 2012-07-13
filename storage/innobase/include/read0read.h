@@ -98,6 +98,8 @@ class MVCC {
   Validates a read view list. */
   bool validate() const;
 
+  friend class ReadView;
+
   /**
   Find a free view from the active list, if none found then allocate
   a new view. This function will also attempt to move delete marked
@@ -105,11 +107,12 @@ class MVCC {
   @return a view to use */
   inline ReadView *get_view();
 
+ public:
   /**
   Get the oldest view in the system. It will also move the delete
   marked read views from the views list to the freed list.
   @return oldest view if found or NULL */
-  inline ReadView *get_oldest_view() const;
+  ReadView *get_oldest_view() const;
   ReadView *get_view_created_by_trx_id(trx_id_t trx_id) const;
 
  private:
