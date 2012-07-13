@@ -798,4 +798,11 @@ NULL	information_schema	TRIGGERS	CREATED	timestamp	NULL	NULL	NULL	NULL	timestamp
 3.0000	information_schema	VIEWS	SECURITY_TYPE	varchar	7	21	utf8	utf8_bin	varchar(7)
 3.0000	information_schema	VIEWS	CHARACTER_SET_CLIENT	varchar	64	192	utf8	utf8_general_ci	varchar(64)
 3.0000	information_schema	VIEWS	COLLATION_CONNECTION	varchar	64	192	utf8	utf8_general_ci	varchar(64)
+3.0000	information_schema	XTRADB_INTERNAL_HASH_TABLES	INTERNAL_HASH_TABLE_NAME	varchar	100	300	utf8	utf8_general_ci	varchar(100)
+NULL	information_schema	XTRADB_INTERNAL_HASH_TABLES	TOTAL_MEMORY	bigint	NULL	NULL	NULL	NULL	bigint(21) unsigned
+NULL	information_schema	XTRADB_INTERNAL_HASH_TABLES	CONSTANT_MEMORY	bigint	NULL	NULL	NULL	NULL	bigint(21) unsigned
+NULL	information_schema	XTRADB_INTERNAL_HASH_TABLES	VARIABLE_MEMORY	bigint	NULL	NULL	NULL	NULL	bigint(21) unsigned
+3.0000	information_schema	XTRADB_READ_VIEW	READ_VIEW_LOW_LIMIT_TRX_NUMBER	varchar	18	54	utf8	utf8_general_ci	varchar(18)
+3.0000	information_schema	XTRADB_READ_VIEW	READ_VIEW_UPPER_LIMIT_TRX_ID	varchar	18	54	utf8	utf8_general_ci	varchar(18)
+3.0000	information_schema	XTRADB_READ_VIEW	READ_VIEW_LOW_LIMIT_TRX_ID	varchar	18	54	utf8	utf8_general_ci	varchar(18)
 SET sql_mode = default;

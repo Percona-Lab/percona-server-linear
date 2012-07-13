@@ -89,9 +89,12 @@ TABLES
 TABLESPACES
 TABLE_CONSTRAINTS
 TABLE_PRIVILEGES
+TEMPORARY_TABLES
 TRIGGERS
 USER_PRIVILEGES
 VIEWS
+XTRADB_READ_VIEW
+XTRADB_INTERNAL_HASH_TABLES
 columns_priv
 component
 db
@@ -626,6 +629,7 @@ TABLES
 TABLESPACES
 TABLE_CONSTRAINTS
 TABLE_PRIVILEGES
+TEMPORARY_TABLES
 TRIGGERS
 create database information_schema;
 ERROR 42000: Access denied for user 'root'@'localhost' to database 'information_schema'
@@ -636,6 +640,7 @@ TABLES	SYSTEM VIEW
 TABLESPACES	SYSTEM VIEW
 TABLE_CONSTRAINTS	SYSTEM VIEW
 TABLE_PRIVILEGES	SYSTEM VIEW
+TEMPORARY_TABLES	SYSTEM VIEW
 TRIGGERS	SYSTEM VIEW
 create table t1(a int);
 ERROR 42000: Access denied for user 'root'@'localhost' to database 'information_schema'
@@ -649,6 +654,7 @@ TABLES
 TABLESPACES
 TABLE_CONSTRAINTS
 TABLE_PRIVILEGES
+TEMPORARY_TABLES
 TRIGGERS
 select table_name from tables where table_name='user';
 TABLE_NAME
@@ -833,6 +839,7 @@ COLUMNS	TABLE_NAME	select
 COLUMN_PRIVILEGES	TABLE_NAME	select
 COLUMN_STATISTICS	TABLE_NAME	select
 FILES	TABLE_NAME	select
+GLOBAL_TEMPORARY_TABLES	TABLE_NAME	select
 INNODB_BUFFER_PAGE	TABLE_NAME	select
 INNODB_BUFFER_PAGE_LRU	TABLE_NAME	select
 INNODB_CMP_PER_INDEX	table_name	select
@@ -845,6 +852,7 @@ ST_GEOMETRY_COLUMNS	TABLE_NAME	select
 TABLES	TABLE_NAME	select
 TABLE_CONSTRAINTS	TABLE_NAME	select
 TABLE_PRIVILEGES	TABLE_NAME	select
+TEMPORARY_TABLES	TABLE_NAME	select
 VIEWS	TABLE_NAME	select
 delete from mysql.user where user='mysqltest_4';
 delete from mysql.db where user='mysqltest_4';
@@ -1324,9 +1332,12 @@ TABLES	information_schema.TABLES	1
 TABLESPACES	information_schema.TABLESPACES	1
 TABLE_CONSTRAINTS	information_schema.TABLE_CONSTRAINTS	1
 TABLE_PRIVILEGES	information_schema.TABLE_PRIVILEGES	1
+TEMPORARY_TABLES	information_schema.TEMPORARY_TABLES	1
 TRIGGERS	information_schema.TRIGGERS	1
 USER_PRIVILEGES	information_schema.USER_PRIVILEGES	1
 VIEWS	information_schema.VIEWS	1
+XTRADB_INTERNAL_HASH_TABLES	information_schema.XTRADB_INTERNAL_HASH_TABLES	1
+XTRADB_READ_VIEW	information_schema.XTRADB_READ_VIEW	1
 create table t1(f1 int);
 create view v1 as select f1+1 as a from t1;
 create table t2 (f1 int, f2 int);
