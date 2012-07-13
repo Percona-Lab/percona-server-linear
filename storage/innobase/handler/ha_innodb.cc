@@ -217,6 +217,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include <string>
 #include <vector>
 
+
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif /* HAVE_UNISTD_H */
@@ -17489,6 +17490,7 @@ int ha_innobase::info_low(uint flag, bool is_analyze) {
 
   DBUG_TRACE;
 
+
   DEBUG_SYNC_C("ha_innobase_info_low");
 
   /* If we are forcing recovery at a high level, we will suppress
@@ -17515,6 +17517,13 @@ int ha_innobase::info_low(uint flag, bool is_analyze) {
 
       if (dict_stats_is_persistent_enabled(ib_table)) {
         if (is_analyze) {
+          /* If this table is already queued for background analyze, remove it
+          from the queue as we are about to do the same */
+          if (!srv_read_only_mode) {
+            dict_mutex_enter_for_mysql();
+            dict_stats_recalc_pool_del(ib_table);
+            dict_mutex_exit_for_mysql();
+          }
           opt = DICT_STATS_RECALC_PERSISTENT;
         } else {
           /* This is e.g. 'SHOW INDEXES', fetch
@@ -17687,6 +17696,7 @@ int ha_innobase::info_low(uint flag, bool is_analyze) {
     }
     stats.auto_increment_value = auto_inc_val;
   }
+
 
 func_exit:
   m_prebuilt->trx->op_info = (char *)"";
