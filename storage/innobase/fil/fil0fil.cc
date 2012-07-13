@@ -2233,6 +2233,7 @@ fil_space_t *fil_space_get(space_id_t space_id) {
 
   fil_space_t *space = shard->get_space_by_id(space_id);
 
+
   shard->mutex_release();
 
   return space;
@@ -8676,7 +8677,9 @@ bool fil_delete_file(const char *path) {
     ut::free(cfg_filepath);
   }
 
+
   char *cfp_filepath = Fil_path::make_cfp(path);
+
 
   if (cfp_filepath != nullptr) {
     os_file_delete_if_exists(innodb_data_file_key, cfp_filepath, nullptr);
