@@ -1780,4 +1780,15 @@ and old name are same, no update done.
 @param[in]	name		new name for tablespace */
 void fil_space_update_name(fil_space_t *space, const char *name);
 
+/*************************************************************************
+Return local hash table informations. */
+
+ulint
+fil_system_hash_cells(void);
+/*========================*/
+
+ulint
+fil_system_hash_nodes(void);
+/*========================*/
+
 #endif /* fil0fil_h */
