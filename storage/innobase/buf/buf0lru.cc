@@ -651,11 +651,11 @@ buf_flush_dirty_pages(
 	dberr_t		err;
 
 	do {
-		buf_pool_mutex_enter(buf_pool);
+		mutex_enter(&buf_pool->LRU_list_mutex);
 
 		err = buf_flush_or_remove_pages(buf_pool, id, flush, trx);
 
-		buf_pool_mutex_exit(buf_pool);
+		mutex_exit(&buf_pool->LRU_list_mutex);
 
 		ut_ad(buf_flush_validate(buf_pool));
 
