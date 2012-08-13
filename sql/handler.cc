@@ -7623,6 +7623,7 @@ int handler::ha_write_row(uchar *buf) {
   DBUG_ASSERT(table_share->tmp_table != NO_TMP_TABLE || m_lock_type == F_WRLCK);
 
   DBUG_ENTER("handler::ha_write_row");
+  DEBUG_SYNC(ha_thd(), "start_ha_write_row");
   DBUG_EXECUTE_IF("inject_error_ha_write_row",
                   DBUG_RETURN(HA_ERR_INTERNAL_ERROR););
   DBUG_EXECUTE_IF("simulate_storage_engine_out_of_memory",
