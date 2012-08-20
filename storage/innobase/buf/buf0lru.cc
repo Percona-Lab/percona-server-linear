@@ -651,11 +651,11 @@ buf_flush_dirty_pages(
 	dberr_t		err;
 
 	do {
-		mutex_enter(&buf_pool->LRU_list_mutex);
+		buf_pool_mutex_enter(buf_pool);
 
 		err = buf_flush_or_remove_pages(buf_pool, id, flush, trx);
 
-		mutex_exit(&buf_pool->LRU_list_mutex);
+		buf_pool_mutex_exit(buf_pool);
 
 		ut_ad(buf_flush_validate(buf_pool));
 
@@ -728,16 +728,8 @@ scan_again:
 
 			rw_lock_x_lock(hash_lock);
 
-			block_mutex = buf_page_get_mutex_enter(bpage);
-
-			if (!block_mutex) {
-				/* It may be impossible case...
-				   Something wrong, so will be scan_again */
-
-				all_freed = FALSE;
-				goto next_page;
-			}
-
+			block_mutex = buf_page_get_mutex(bpage);
+			mutex_enter(block_mutex);
 
 			if (bpage->buf_fix_count > 0) {
 
@@ -773,8 +765,7 @@ scan_again:
 			ulint	page_no;
 			ulint	zip_size;
 
-			mutex_exit(&buf_pool->LRU_list_mutex);
-			rw_lock_x_unlock(&buf_pool->page_hash_latch);
+			buf_pool_mutex_exit(buf_pool);
 
 			zip_size = buf_page_get_zip_size(bpage);
 			page_no = buf_page_get_page_no(bpage);
