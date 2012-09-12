@@ -568,7 +568,6 @@ buf_read_ahead_linear(
 
 		return(0);
 	}
-	buf_pool_mutex_exit(buf_pool);
 
 	/* Check that almost all pages in the area have been accessed; if
 	offset == low, the accesses must be in a descending order, otherwise,
@@ -587,7 +586,6 @@ buf_read_ahead_linear(
 
 	fail_count = 0;
 
-	rw_lock_s_lock(&buf_pool->page_hash_latch);
 	for (i = low; i < high; i++) {
 		bpage = buf_page_hash_get(buf_pool, space, i);
 
@@ -615,8 +613,7 @@ buf_read_ahead_linear(
 
 		if (fail_count > threshold) {
 			/* Too many failures: return */
-			//buf_pool_mutex_exit(buf_pool);
-			rw_lock_s_unlock(&buf_pool->page_hash_latch);
+			buf_pool_mutex_exit(buf_pool);
 			return(0);
 		}
 
@@ -631,8 +628,7 @@ buf_read_ahead_linear(
 	bpage = buf_page_hash_get(buf_pool, space, offset);
 
 	if (bpage == NULL) {
-		//buf_pool_mutex_exit(buf_pool);
-		rw_lock_s_unlock(&buf_pool->page_hash_latch);
+		buf_pool_mutex_exit(buf_pool);
 
 		return(0);
 	}
@@ -658,8 +654,7 @@ buf_read_ahead_linear(
 	pred_offset = fil_page_get_prev(frame);
 	succ_offset = fil_page_get_next(frame);
 
-	//buf_pool_mutex_exit(buf_pool);
-	rw_lock_s_unlock(&buf_pool->page_hash_latch);
+	buf_pool_mutex_exit(buf_pool);
 
 	if ((offset == low) && (succ_offset == offset + 1)) {
 
