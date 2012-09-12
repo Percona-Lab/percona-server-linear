@@ -899,4 +899,3 @@ buf_read_recv_pages(
 	DBUG_PRINT("ib_buf", ("recovery read-ahead (%u pages)",
 			      unsigned(n_stored)));
 }
-
