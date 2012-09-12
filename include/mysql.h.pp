@@ -84,6 +84,7 @@ enum enum_server_command {
   COM_RESET_CONNECTION,
   COM_END
 };
+static const int PURGE_BITMAPS_TO_LSN = 1;
 enum SERVER_STATUS_flags_enum {
   SERVER_STATUS_IN_TRANS = 1,
   SERVER_STATUS_AUTOCOMMIT = 2,
