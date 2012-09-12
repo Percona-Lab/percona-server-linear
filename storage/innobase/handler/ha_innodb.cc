@@ -22065,6 +22065,31 @@ static MYSQL_SYSVAR_ENUM(
     " NULLS_UNEQUAL and NULLS_IGNORED",
     NULL, NULL, SRV_STATS_NULLS_EQUAL, &innodb_stats_method_typelib);
 
+static MYSQL_SYSVAR_BOOL(
+    track_changed_pages, srv_track_changed_pages,
+    PLUGIN_VAR_NOCMDARG
+#ifndef UNIV_DEBUG
+        /* Make this variable dynamic for debug builds to
+        provide a testcase sync facility */
+        | PLUGIN_VAR_READONLY
+#endif
+    ,
+    "Track the redo log for changed pages and output a changed page bitmap",
+    nullptr, nullptr, FALSE);
+
+static MYSQL_SYSVAR_ULONGLONG(max_bitmap_file_size, srv_max_bitmap_file_size,
+                              PLUGIN_VAR_RQCMDARG,
+                              "The maximum size of changed page bitmap files",
+                              nullptr, nullptr, 100 * 1024 * 1024ULL, 4096ULL,
+                              ~0ULL, 0);
+
+static MYSQL_SYSVAR_ULONGLONG(max_changed_pages, srv_max_changed_pages,
+                              PLUGIN_VAR_RQCMDARG,
+                              "The maximum number of rows for "
+                              "INFORMATION_SCHEMA.INNODB_CHANGED_PAGES table, "
+                              "0 - unlimited",
+                              nullptr, nullptr, 1000000, 0, ~0ULL, 0);
+
 #if defined UNIV_DEBUG || defined UNIV_IBUF_DEBUG
 static MYSQL_SYSVAR_UINT(
     change_buffering_debug, ibuf_debug, PLUGIN_VAR_RQCMDARG,
@@ -22391,6 +22416,9 @@ static SYS_VAR *innobase_system_variables[] = {
 #endif /* HAVE_LIBNUMA */
     MYSQL_SYSVAR(change_buffering),
     MYSQL_SYSVAR(change_buffer_max_size),
+    MYSQL_SYSVAR(track_changed_pages),
+    MYSQL_SYSVAR(max_bitmap_file_size),
+    MYSQL_SYSVAR(max_changed_pages),
 #if defined UNIV_DEBUG || defined UNIV_IBUF_DEBUG
     MYSQL_SYSVAR(change_buffering_debug),
     MYSQL_SYSVAR(disable_background_merge),
