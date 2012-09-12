@@ -205,6 +205,14 @@ bool srv_use_native_aio = false;
 
 bool srv_numa_interleave = false;
 
+/** Whether the redo log tracking is currently enabled. Note that it is
+possible for the log tracker thread to be running and the tracking to be
+disabled */
+bool srv_track_changed_pages = false;
+
+ulonglong srv_max_bitmap_file_size = 100 * 1024 * 1024;
+
+ulonglong srv_max_changed_pages = 0;
 #ifdef UNIV_DEBUG
 /** Force all user tables to use page compression. */
 ulong srv_debug_compress;

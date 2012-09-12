@@ -414,6 +414,11 @@ extern bool srv_undo_log_truncate;
 /** Enable or disable Encrypt of UNDO tablespace. */
 extern bool srv_undo_log_encrypt;
 
+extern bool srv_track_changed_pages;
+extern ulonglong srv_max_bitmap_file_size;
+
+extern ulonglong srv_max_changed_pages;
+
 /** Maximum number of recently truncated undo tablespace IDs for
 the same undo number. */
 extern const size_t CONCURRENT_UNDO_TRUNCATE_LIMIT;
