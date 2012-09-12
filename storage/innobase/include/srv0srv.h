@@ -394,6 +394,11 @@ extern bool srv_undo_log_truncate;
 /** Enable or disable Encrypt of UNDO tablespace. */
 extern bool srv_undo_log_encrypt;
 
+extern bool srv_track_changed_pages;
+extern ulonglong	srv_max_bitmap_file_size;
+
+extern ulonglong	srv_max_changed_pages;
+
 /** Default size of UNDO tablespace while it is created new. */
 extern const page_no_t SRV_UNDO_TABLESPACE_SIZE_IN_PAGES;
 
