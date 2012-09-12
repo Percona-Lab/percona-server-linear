@@ -196,6 +196,11 @@ bool srv_use_native_aio;
 #endif
 bool srv_numa_interleave = FALSE;
 
+/** Whether the redo log tracking is currently enabled. Note that it is
+possible for the log tracker thread to be running and the tracking to be
+disabled */
+bool srv_track_changed_pages = false;
+
 #ifdef UNIV_DEBUG
 /** Force all user tables to use page compression. */
 ulong srv_debug_compress;

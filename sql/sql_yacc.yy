@@ -1244,6 +1244,7 @@ void warn_about_deprecated_binary(THD *thd)
 /*
    Tokens from Percona Server 5.7 and older
 */
+%token<keyword> CHANGED_PAGE_BITMAPS_SYM
 %token CLUSTERING_SYM
 
 /*
@@ -13234,6 +13235,8 @@ flush_option:
           { Lex->type|= REFRESH_USER_RESOURCES; }
         | OPTIMIZER_COSTS_SYM
           { Lex->type|= REFRESH_OPTIMIZER_COSTS; }
+        | CHANGED_PAGE_BITMAPS_SYM
+          { Lex->type|= REFRESH_FLUSH_PAGE_BITMAPS; }
         ;
 
 opt_table_list:
@@ -13298,6 +13301,8 @@ reset_option:
               Lex->type|= REFRESH_TABLES | REFRESH_READ_LOCK;
           }
           master_reset_options
+        | CHANGED_PAGE_BITMAPS_SYM
+          { Lex->type |= REFRESH_RESET_PAGE_BITMAPS; }
         ;
 
 slave_reset_options:
@@ -13333,6 +13338,13 @@ purge:
 
 purge_options:
           master_or_binary LOGS_SYM purge_option
+        | CHANGED_PAGE_BITMAPS_SYM BEFORE_SYM real_ulonglong_num
+          {
+            LEX *lex= Lex;
+            lex->purge_value_list.empty();
+            lex->purge_value_list.push_front(new Item_uint($3));
+            lex->type= PURGE_BITMAPS_TO_LSN;
+          }
         ;
 
 purge_option:
