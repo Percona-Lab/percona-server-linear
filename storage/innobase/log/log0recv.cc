@@ -2722,11 +2722,12 @@ void recv_recover_page_func(
 @param[in]      end_ptr         end of the buffer
 @param[out]     space_id        tablespace identifier
 @param[out]     page_no         page number
+@param[in]      apply           whether to apply the record
 @param[out]     body            start of log record body
 @return length of the record, or 0 if the record was not complete */
-static ulint recv_parse_log_rec(mlog_id_t *type, const byte *ptr,
-                                const byte *end_ptr, space_id_t *space_id,
-                                page_no_t *page_no, const byte **body) {
+ulint recv_parse_log_rec(mlog_id_t *type, const byte *ptr,
+                         const byte *end_ptr, space_id_t *space_id,
+                         page_no_t *page_no, const byte **body) {
   const byte *new_ptr;
 
   *body = nullptr;
@@ -2810,6 +2811,7 @@ static ulint recv_parse_log_rec(mlog_id_t *type, const byte *ptr,
   return new_ptr - ptr;
 }
 
+
 /** Subtracts next number of bytes to ignore before we reach the checkpoint
 or returns information that there was nothing more to skip.
 @param[in]      next_parsed_bytes       number of next bytes that were parsed,
@@ -2819,6 +2821,7 @@ which are supposed to be subtracted from bytes to ignore before checkpoint
 static bool recv_update_bytes_to_ignore_before_checkpoint(
     size_t next_parsed_bytes) {
   auto &to_ignore = recv_sys->bytes_to_ignore_before_checkpoint;
+
 
   if (to_ignore != 0) {
     if (to_ignore >= next_parsed_bytes) {
