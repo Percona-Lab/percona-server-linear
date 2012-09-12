@@ -30,6 +30,7 @@ Created 9/20/1997 Heikki Tuuri
 #include "ut0byte.h"
 #include "buf0types.h"
 #include "hash0hash.h"
+#include "log0types.h"
 #include "log0log.h"
 #include "mtr0types.h"
 #include "ut0new.h"
@@ -197,6 +198,18 @@ recv_apply_hashed_log_recs(
 				disk and invalidated in buffer pool: this
 				alternative means that no new log records
 				can be generated during the application */
+
+/*********************************************************************//**
+Gets the hashed file address struct for a page.
+@return file address struct, NULL if not found from the hash table */
+
+recv_addr_t*
+recv_get_fil_addr_struct(
+/*=====================*/
+	ulint	space,	/*!< in: space id */
+	ulint	page_no)/*!< in: page number */
+	__attribute__((warn_unused_result));
+
 #ifdef UNIV_HOTBACKUP
 /*******************************************************************//**
 Applies log records in the hash table to a backup. */
