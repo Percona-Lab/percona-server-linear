@@ -1581,7 +1581,7 @@ recv_parse_or_apply_log_rec_body(
 		break;
 	case MLOG_WRITE_STRING:
 		ut_ad(!page || page_type != FIL_PAGE_TYPE_ALLOCATED);
-		ptr = mlog_parse_string(ptr, end_ptr, page, page_zip);
+
 		break;
 	case MLOG_ZIP_WRITE_NODE_PTR:
 		ut_ad(!page || fil_page_type_is_index(page_type));
@@ -1659,7 +1659,6 @@ recv_hash(
 /*********************************************************************//**
 Gets the hashed file address struct for a page.
 @return file address struct, NULL if not found from the hash table */
-static
 recv_addr_t*
 recv_get_fil_addr_struct(
 /*=====================*/
@@ -1853,6 +1852,8 @@ recv_recover_page_func(
 					     block->page.id.page_no());
 
 	if ((recv_addr == NULL)
+		/* bugfix: http://bugs.mysql.com/bug.php?id=44140 */
+	    || (recv_addr->state == RECV_BEING_READ && !just_read_in)
 	    || (recv_addr->state == RECV_BEING_PROCESSED)
 	    || (recv_addr->state == RECV_PROCESSED)) {
 		ut_ad(recv_addr == NULL || recv_needed_recovery);

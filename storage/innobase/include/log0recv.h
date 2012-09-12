@@ -257,6 +257,15 @@ struct recv_addr_t{
 	hash_node_t	addr_hash;/*!< hash node in the hash bucket chain */
 };
 
+/** Gets the hashed file address struct for a page.
+@param[in]	space	space id
+@param[in]	page_no	page number
+@return file address struct, NULL if not found from the hash table */
+recv_addr_t*
+recv_get_fil_addr_struct(
+	ulint	space,
+	ulint	page_no);
+
 struct recv_dblwr_t {
 	/** Add a page frame to the doublewrite recovery buffer. */
 	void add(const byte* page) {
