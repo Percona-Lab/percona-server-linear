@@ -41,6 +41,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "os0file.h" /* OS_FILE_LOG_BLOCK_SIZE */
 #include "univ.i"
 #include "ut0byte.h"
+#include "log0types.h"
 #include "ut0new.h"
 
 #include <list>
@@ -49,6 +50,38 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 class MetadataRecover;
 class PersistentTableMetadata;
+
+/** Check the 4-byte checksum to the trailer checksum field of a log
+block.
+@param[in]	log block
+@return whether the checksum matches */
+bool
+log_block_checksum_is_ok(
+	const byte*	block)	/*!< in: pointer to a log block */
+	MY_ATTRIBUTE((warn_unused_result));
+
+/*******************************************************//**
+Calculates the new value for lsn when more data is added to the log. */
+
+lsn_t
+recv_calc_lsn_on_data_add(
+/*======================*/
+	lsn_t		lsn,	/*!< in: old lsn */
+	ib_uint64_t	len);	/*!< in: this many bytes of data is
+				added, log block headers not included */
+
+/** Tries to parse a single log record.
+@param[out]	type		log record type
+@param[in]	ptr		pointer to a buffer
+@param[in]	end_ptr		end of the buffer
+@param[out]	space_id	tablespace identifier
+@param[out]	page_no		page number
+@param[in]	apply		whether to apply the record
+@param[out]	body		start of log record body
+@return length of the record, or 0 if the record was not complete */
+ulint recv_parse_log_rec(mlog_id_t *type, byte *ptr, byte *end_ptr,
+                         space_id_t *space_id, page_no_t *page_no, bool apply,
+                         byte **body);
 
 #ifdef UNIV_HOTBACKUP
 
