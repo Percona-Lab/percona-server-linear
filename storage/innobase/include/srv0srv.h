@@ -427,6 +427,11 @@ page size | FSP_EXTENT_SIZE  | Initial Size | Pages
 #define INITIAL_UNDO_SPACE_SIZE_IN_PAGES \
   static_cast<os_offset_t>(INITIAL_UNDO_SPACE_SIZE / UNIV_PAGE_SIZE)
 
+extern bool srv_track_changed_pages;
+extern ulonglong	srv_max_bitmap_file_size;
+
+extern ulonglong	srv_max_changed_pages;
+
 /** Maximum number of recently truncated undo tablespace IDs for
 the same undo number. */
 extern const size_t CONCURRENT_UNDO_TRUNCATE_LIMIT;
