@@ -2951,7 +2951,7 @@ public:
      and which case the applier adjusts execution path.
   */
   bool is_deferred() { return deferred; }
-  void set_deferred() { deferred= true; }
+  void set_deferred() { deferred= val; }
 #endif
   bool is_valid() const { return name != 0; }
 
