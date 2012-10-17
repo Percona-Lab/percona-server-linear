@@ -54,7 +54,7 @@ Created 1/20/1994 Heikki Tuuri
 #define UNIV_LOG_ARCHIVE 1
 
 #ifndef PERCONA_INNODB_VERSION
-#define PERCONA_INNODB_VERSION 29.0
+#define PERCONA_INNODB_VERSION 27.0
 #endif
 
 
