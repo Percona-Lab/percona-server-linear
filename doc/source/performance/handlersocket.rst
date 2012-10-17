@@ -72,13 +72,13 @@ Create a new table: ::
     PRIMARY KEY (id)
   ) ENGINE=InnoDB;
 
-Insert a row with *HandlerSocket* (fields are separated by comma): ::
+Insert a row with *HandlerSocket* (fields are separated by tabs): ::
 
   $ telnet 127.0.0.1 9999
   Trying 127.0.0.1...
   Connected to 127.0.0.1.
   Escape character is '^]'.
-  P     1	test	t	PRIMARY	id,col
+  P     1	test	t	PRIMARY	id	col
   0	1
   1	+	2	1       test value
   0	1
