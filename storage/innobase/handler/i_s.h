@@ -57,5 +57,8 @@ extern struct st_mysql_plugin	i_s_innodb_sys_foreign_cols;
 extern struct st_mysql_plugin	i_s_innodb_sys_tablespaces;
 extern struct st_mysql_plugin	i_s_innodb_sys_datafiles;
 extern struct st_mysql_plugin	i_s_innodb_changed_pages;
+extern struct st_mysql_plugin	i_s_innodb_buffer_page;
+extern struct st_mysql_plugin	i_s_innodb_buffer_page_lru;
+extern struct st_mysql_plugin	i_s_innodb_buffer_stats;;
 
 #endif /* i_s_h */
