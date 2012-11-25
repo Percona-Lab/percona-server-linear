@@ -261,9 +261,6 @@ extern ulonglong	srv_max_bitmap_file_size;
 extern
 ulonglong       srv_max_changed_pages;
 
-extern
-ulonglong       srv_changed_pages_limit;
-
 extern ibool	srv_auto_extend_last_data_file;
 extern ulint	srv_last_file_size_max;
 extern char*	srv_log_group_home_dir;
@@ -472,10 +469,6 @@ extern ulong srv_sync_array_size;
 extern my_bool srv_print_all_deadlocks;
 
 extern my_bool	srv_cmp_per_index_enabled;
-
-/** When TRUE, fake change transcations take S rather than X row locks.
-When FALSE, row locks are not taken at all. */
-extern my_bool srv_fake_changes_locks;
 
 /** Status variables to be passed to MySQL */
 extern struct export_var_t export_vars;
