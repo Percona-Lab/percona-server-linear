@@ -165,12 +165,6 @@ The following options may be given as the first argument:
  client that does INSERT DELAYED will wait until there is
  room in the queue again.This variable is deprecated along
  with INSERT DELAYED.
- --disable-gtid-unsafe-statements 
- Prevents execution of statements that would be impossible
- to log in a transactionally safe manner. Currently, the
- disallowed statements include CREATE TEMPORARY TABLE
- inside transactions, all updates to non-transactional
- tables, and CREATE TABLE ... SELECT.
  --disconnect-slave-event-count=# 
  Option used by mysql-test for debugging and testing of
  replication.
@@ -181,6 +175,12 @@ The following options may be given as the first argument:
  In JSON output ("EXPLAIN FORMAT=JSON" and optimizer
  trace), if variable is set to 1, repeats the structure's
  key (if it has one) near the closing bracket
+ --enforce-gtid-consistency 
+ Prevents execution of statements that would be impossible
+ to log in a transactionally safe manner. Currently, the
+ disallowed statements include CREATE TEMPORARY TABLE
+ inside transactions, all updates to non-transactional
+ tables, and CREATE TABLE ... SELECT.
  --eq-range-index-dive-limit=# 
  The optimizer will use existing index statistics instead
  of doing index dives for equality ranges if the number of
@@ -191,10 +191,6 @@ The following options may be given as the first argument:
  and DISABLED (keep the event scheduler completely
  deactivated, it cannot be activated run-time)
  -T, --exit-info[=#] Used for debugging. Use at your own risk.
- --expand-fast-index-creation 
- Enable/disable improvements to InnoDB fast index creation
- functionality. Has no effect when fast index creation is
- disabled with the fast-index-creation option
  --expire-logs-days=# 
  If non-zero, binary logs will be purged after
  expire_logs_days days; possible purges happen at startup
@@ -208,11 +204,6 @@ The following options may be given as the first argument:
  With this option enabled you can run myisamchk to test
  (not repair) tables while the MySQL server is running.
  Disable with --skip-external-locking.
- --extra-max-connections=# 
- The number of connections on extra-port
- --extra-port=#      Extra port number to use for tcp connections in a
- one-thread-per-connection manner. 0 means don't use
- another port
  --flush             Flush MyISAM tables to disk between SQL commands
  --flush-time=#      A dedicated thread is created to flush all tables at the
  given interval
@@ -502,8 +493,9 @@ The following options may be given as the first argument:
  engine_condition_pushdown, index_condition_pushdown, mrr,
  mrr_cost_based, materialization, semijoin, loosescan,
  firstmatch, subquery_materialization_cost_based,
- block_nested_loop, batched_key_access} and val is one of
- {on, off, default}
+ block_nested_loop, batched_key_access,
+ use_index_extensions} and val is one of {on, off,
+ default}
  --optimizer-trace=name 
  Controls tracing of the Optimizer:
  optimizer_trace=option=val[,option=val...], where option
@@ -947,7 +939,7 @@ The following options may be given as the first argument:
  How many threads we should keep in a cache for reuse
  --thread-handling=name 
  Define threads usage for handling queries, one of
- one-thread-per-connection, no-threads, pool-of-threads
+ one-thread-per-connection, no-threads, loaded-dynamically
  --thread-stack=#    The stack size for each thread
  --time-format=name  The TIME format (ignored)
  --timed-mutexes     Specify whether to time mutexes (only InnoDB mutexes are
@@ -1023,18 +1015,15 @@ delay-key-write ON
 delayed-insert-limit 100
 delayed-insert-timeout 300
 delayed-queue-size 1000
-disable-gtid-unsafe-statements FALSE
 disconnect-slave-event-count 0
 div-precision-increment 4
 end-markers-in-json FALSE
+enforce-gtid-consistency FALSE
 eq-range-index-dive-limit 10
 event-scheduler OFF
-expand-fast-index-creation FALSE
 expire-logs-days 0
 explicit-defaults-for-timestamp FALSE
 external-locking FALSE
-extra-max-connections 1
-extra-port 0
 flush FALSE
 flush-time 0
 ft-boolean-syntax + -><()~*:""&|
@@ -1135,7 +1124,7 @@ old-passwords 0
 old-style-user-limits FALSE
 optimizer-prune-level 1
 optimizer-search-depth 62
-optimizer-switch index_merge=on,index_merge_union=on,index_merge_sort_union=on,index_merge_intersection=on,engine_condition_pushdown=on,index_condition_pushdown=on,mrr=on,mrr_cost_based=on,block_nested_loop=on,batched_key_access=off,materialization=on,semijoin=on,loosescan=on,firstmatch=on,subquery_materialization_cost_based=on
+optimizer-switch index_merge=on,index_merge_union=on,index_merge_sort_union=on,index_merge_intersection=on,engine_condition_pushdown=on,index_condition_pushdown=on,mrr=on,mrr_cost_based=on,block_nested_loop=on,batched_key_access=off,materialization=on,semijoin=on,loosescan=on,firstmatch=on,subquery_materialization_cost_based=on,use_index_extensions=on
 optimizer-trace 
 optimizer-trace-features greedy_search=on,range_optimizer=on,dynamic_range=on,repeated_subselect=on
 optimizer-trace-limit 1

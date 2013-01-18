@@ -205,62 +205,6 @@ size_t vio_write(Vio *vio, const uchar* buf, size_t size)
   DBUG_RETURN(ret);
 }
 
-#ifdef _WIN32
-static void CALLBACK cancel_io_apc(ULONG_PTR data)
-{
-  CancelIo((HANDLE)data);
-}
-
-/*
-  Cancel IO on Windows.
-
-  On XP, issue CancelIo as asynchronous procedure call to the thread that started
-  IO. On Vista+, simpler cancelation is done with CancelIoEx. 
-*/
-
-int cancel_io(HANDLE handle, DWORD thread_id)
-{
-  static BOOL (WINAPI  *fp_CancelIoEx) (HANDLE, OVERLAPPED *);
-  static volatile int first_time= 1;
-  int rc;
-  HANDLE thread_handle;
-
-  if (first_time)
-  {
-    /* Try to load CancelIoEx using GetProcAddress */
-    InterlockedCompareExchangePointer((volatile void *)&fp_CancelIoEx,
-      GetProcAddress(GetModuleHandle("kernel32"), "CancelIoEx"), NULL);
-    first_time =0;
-  }
-
-  if (fp_CancelIoEx)
-  {
-    return fp_CancelIoEx(handle, NULL)? 0 :-1;
-  }
-
-  thread_handle= OpenThread(THREAD_SET_CONTEXT, FALSE, thread_id);
-  if (thread_handle)
-  {
-    rc= QueueUserAPC(cancel_io_apc, thread_handle, (ULONG_PTR)handle);
-    CloseHandle(thread_handle);
-  }
-  return rc;
-
-}
-#endif
-
-int vio_socket_shutdown(Vio *vio, int how)
-{
-  int ret= shutdown(mysql_socket_getfd(vio->mysql_socket), how);
-#ifdef  _WIN32
-  /* Cancel possible IO in progress (shutdown does not do that on Windows). */
-  (void) cancel_io((HANDLE)vio->mysql_socket, vio->thread_id);
-#endif
-  return ret;
-}
-
-
-
 //WL#4896: Not covered
 static int vio_set_blocking(Vio *vio, my_bool status)
 {
@@ -787,7 +731,7 @@ static my_bool socket_peek_read(Vio *vio, uint *bytes)
   @retval  1  The requested I/O event has occurred.
 */
 
-#ifndef _WIN32
+#if !defined(_WIN32) && !defined(__APPLE__)
 int vio_io_wait(Vio *vio, enum enum_vio_io_event event, int timeout)
 {
   int ret;
@@ -887,13 +831,20 @@ int vio_io_wait(Vio *vio, enum enum_vio_io_event event, int timeout)
   MYSQL_START_SOCKET_WAIT(locker, &state, vio->mysql_socket, PSI_SOCKET_SELECT, 0);
 
   /* The first argument is ignored on Windows. */
-  ret= select(0, &readfds, &writefds, &exceptfds, (timeout >= 0) ? &tm : NULL);
+  ret= select(fd + 1, &readfds, &writefds, &exceptfds, 
+              (timeout >= 0) ? &tm : NULL);
 
   MYSQL_END_SOCKET_WAIT(locker, 0);
 
   /* Set error code to indicate a timeout error. */
   if (ret == 0)
+#if defined(_WIN32)
     WSASetLastError(SOCKET_ETIMEDOUT);
+#elif defined(__APPLE__)
+    errno= SOCKET_ETIMEDOUT;
+#else
+#error Oops...Wrong OS
+#endif
 
   /* Error or timeout? */
   if (ret <= 0)

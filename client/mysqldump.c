@@ -47,7 +47,6 @@
 #include <m_ctype.h>
 #include <hash.h>
 #include <stdarg.h>
-#include <my_list.h>
 
 #include "client_priv.h"
 #include "my_default.h"
@@ -84,13 +83,6 @@
 #define IGNORE_NONE 0x00 /* no ignore */
 #define IGNORE_DATA 0x01 /* don't dump data for this table */
 #define IGNORE_INSERT_DELAYED 0x02 /* table doesn't support INSERT DELAYED */
-
-typedef enum {
-  KEY_TYPE_NONE,
-  KEY_TYPE_PRIMARY,
-  KEY_TYPE_UNIQUE,
-  KEY_TYPE_NON_UNIQUE
-} key_type_t;
 
 /* general_log or slow_log tables under mysql database */
 static inline my_bool general_log_or_slow_log_tables(const char *db, 
@@ -157,13 +149,22 @@ static DYNAMIC_STRING extended_row;
 FILE *md_result_file= 0;
 FILE *stderror_file=0;
 
+const char *set_gtid_purged_mode_names[]=
+{"OFF", "AUTO", "ON", NullS};
+static TYPELIB set_gtid_purged_mode_typelib=
+               {array_elements(set_gtid_purged_mode_names) -1, "",
+                set_gtid_purged_mode_names, NULL};
+static enum enum_set_gtid_purged_mode {
+  SET_GTID_PURGED_OFF= 0,
+  SET_GTID_PURGED_AUTO =1,
+  SET_GTID_PURGED_ON=2
+} opt_set_gtid_purged_mode= SET_GTID_PURGED_AUTO;
+
 #ifdef HAVE_SMEM
 static char *shared_memory_base_name=0;
 #endif
 static uint opt_protocol= 0;
 static char *opt_plugin_dir= 0, *opt_default_auth= 0;
-
-static my_bool opt_innodb_optimize_keys= FALSE;
 
 /*
 Dynamic_string wrapper functions. In this file use these
@@ -209,8 +210,6 @@ TYPELIB compatible_mode_typelib= {array_elements(compatible_mode_names) - 1,
                                   "", compatible_mode_names, NULL};
 
 HASH ignore_table;
-
-LIST *skipped_keys_list;
 
 static struct my_option my_long_options[] =
 {
@@ -381,11 +380,6 @@ static struct my_option my_long_options[] =
    "in dump produced with --dump-slave.", &opt_include_master_host_port,
    &opt_include_master_host_port, 0, GET_BOOL, NO_ARG,
    0, 0, 0, 0, 0, 0},
-   {"innodb-optimize-keys", OPT_INNODB_OPTIMIZE_KEYS,
-    "Use InnoDB fast index creation by creating secondary indexes after "
-    "dumping the data.",
-    &opt_innodb_optimize_keys, &opt_innodb_optimize_keys, 0, GET_BOOL, NO_ARG,
-    0, 0, 0, 0, 0, 0},
   {"insert-ignore", OPT_INSERT_IGNORE, "Insert rows with INSERT IGNORE.",
    &opt_ignore, &opt_ignore, 0, GET_BOOL, NO_ARG, 0, 0, 0, 0,
    0, 0},
@@ -484,6 +478,15 @@ static struct my_option my_long_options[] =
    "Add 'SET NAMES default_character_set' to the output.",
    &opt_set_charset, &opt_set_charset, 0, GET_BOOL, NO_ARG, 1,
    0, 0, 0, 0, 0},
+  {"set-gtid-purged", OPT_SET_GTID_PURGED,
+    "Add 'SET @@GLOBAL.GTID_PURGED' to the output. Possible values for "
+    "this option are ON, OFF and AUTO. If ON is used and GTIDs "
+    "are not enabled on the server, an error is generated. If OFF is "
+    "used, this option does nothing. If AUTO is used and GTIDs are enabled "
+    "on the server, 'SET @@GLOBAL.GTID_PURGED' is added to the output. "
+    "If GTIDs are disabled, AUTO does nothing. Default is AUTO.",
+    0, 0, 0, GET_STR, OPT_ARG,
+    0, 0, 0, 0, 0, 0},
 #ifdef HAVE_SMEM
   {"shared-memory-base-name", OPT_SHARED_MEMORY_BASE_NAME,
    "Base name of shared memory.", &shared_memory_base_name, &shared_memory_base_name,
@@ -923,6 +926,13 @@ get_one_option(int optid, const struct my_option *opt __attribute__((unused)),
     opt_protocol= find_type_or_exit(argument, &sql_protocol_typelib,
                                     opt->name);
     break;
+  case (int) OPT_SET_GTID_PURGED:
+    {
+      opt_set_gtid_purged_mode= find_type_or_exit(argument,
+                                                  &set_gtid_purged_mode_typelib,
+                                                  opt->name)-1;
+      break;
+    }
   }
   return 0;
 }
@@ -2464,256 +2474,6 @@ static uint dump_routines_for_db(char *db)
 }
 
 /*
-  Parse the specified key definition string and check if the key contains an
-  AUTO_INCREMENT column as the first key part. We only check for the first key
-  part, because unlike MyISAM, InnoDB does not allow the AUTO_INCREMENT column
-  as a secondary key column, i.e. the AUTO_INCREMENT column would not be
-  considered indexed for such key specification.
-*/
-static my_bool contains_autoinc_column(const char *autoinc_column,
-                                       const char *keydef,
-                                       key_type_t type)
-{
-  char *from, *to;
-  uint idnum;
-
-  DBUG_ASSERT(type != KEY_TYPE_NONE);
-
-  if (autoinc_column == NULL || !(from= strchr(keydef, '`')))
-    return FALSE;
-
-  to= from;
-  idnum= 0;
-
-  while ((to= strchr(to + 1, '`')))
-  {
-    /*
-      Double backticks represent a backtick in identifier, rather than a quote
-      character.
-    */
-    if (to[1] == '`')
-    {
-      to++;
-      continue;
-    }
-
-    if (to <= from + 1)
-      break;                                    /* Broken key definition */
-
-    idnum++;
-
-    /*
-      Skip the check if it's the first identifier and we are processing a
-      secondary key.
-    */
-    if ((type == KEY_TYPE_PRIMARY || idnum != 1) &&
-        !strncmp(autoinc_column, from + 1, to - from - 1))
-      return TRUE;
-
-    /*
-      Check only the first (for PRIMARY KEY) or the second (for secondary keys)
-      quoted identifier.
-    */
-    if ((idnum == 1 + test(type != KEY_TYPE_PRIMARY)) ||
-        !(from= strchr(to + 1, '`')))
-      break;
-
-    to= from;
-  }
-
-  return FALSE;
-}
-
-
-/*
-  Remove secondary/foreign key definitions from a given SHOW CREATE TABLE string
-  and store them into a temporary list to be used later.
-
-  SYNOPSIS
-    skip_secondary_keys()
-    create_str                SHOW CREATE TABLE output
-    has_pk                    TRUE, if the table has PRIMARY KEY
-                              (or UNIQUE key on non-nullable columns)
-
-
-  DESCRIPTION
-
-    Stores all lines starting with "KEY" or "UNIQUE KEY"
-    into skipped_keys_list and removes them from the input string.
-    Ignoring FOREIGN KEYS constraints when creating the table is ok, because
-    mysqldump sets foreign_key_checks to 0 anyway.
-*/
-
-static void skip_secondary_keys(char *create_str, my_bool has_pk)
-{
-  char *ptr, *strend;
-  char *last_comma= NULL;
-  my_bool pk_processed= FALSE;
-  char *autoinc_column= NULL;
-  my_bool has_autoinc= FALSE;
-  key_type_t type;
-
-  strend= create_str + strlen(create_str);
-
-  ptr= create_str;
-  while (*ptr)
-  {
-    char *tmp, *orig_ptr, c;
-
-    orig_ptr= ptr;
-    /* Skip leading whitespace */
-    while (*ptr && my_isspace(charset_info, *ptr))
-      ptr++;
-
-    /* Read the next line */
-    for (tmp= ptr; *tmp != '\n' && *tmp != '\0'; tmp++);
-
-    c= *tmp;
-    *tmp= '\0'; /* so strstr() only processes the current line */
-
-    if (!strncmp(ptr, "UNIQUE KEY ", sizeof("UNIQUE KEY ") - 1))
-      type= KEY_TYPE_UNIQUE;
-    else if (!strncmp(ptr, "KEY ", sizeof("KEY ") - 1))
-      type= KEY_TYPE_NON_UNIQUE;
-    else if (!strncmp(ptr, "PRIMARY KEY ", sizeof("PRIMARY KEY ") - 1))
-      type= KEY_TYPE_PRIMARY;
-    else
-      type= KEY_TYPE_NONE;
-
-    has_autoinc= (type != KEY_TYPE_NONE) ?
-      contains_autoinc_column(autoinc_column, ptr, type) : FALSE;
-
-    /* Is it a secondary index definition? */
-    if (c == '\n' &&
-        ((type == KEY_TYPE_UNIQUE && (pk_processed || !has_pk)) ||
-         type == KEY_TYPE_NON_UNIQUE) && !has_autoinc)
-    {
-      char *data, *end= tmp - 1;
-
-      /* Remove the trailing comma */
-      if (*end == ',')
-        end--;
-      data= my_strndup(ptr, end - ptr + 1, MYF(MY_FAE));
-      skipped_keys_list= list_cons(data, skipped_keys_list);
-
-      memmove(orig_ptr, tmp + 1, strend - tmp);
-      ptr= orig_ptr;
-      strend-= tmp + 1 - ptr;
-
-      /* Remove the comma on the previos line */
-      if (last_comma != NULL)
-      {
-        *last_comma= ' ';
-      }
-    }
-    else
-    {
-      char *end;
-
-      if (last_comma != NULL && *ptr != ')')
-      {
-        /*
-          It's not the last line of CREATE TABLE, so we have skipped a key
-          definition. We have to restore the last removed comma.
-        */
-        *last_comma= ',';
-      }
-
-      /*
-        If we are skipping a key which indexes an AUTO_INCREMENT column, it is
-        safe to optimize all subsequent keys, i.e. we should not be checking for
-        that column anymore.
-      */
-      if (type != KEY_TYPE_NONE && has_autoinc)
-      {
-          DBUG_ASSERT(autoinc_column != NULL);
-
-          my_free(autoinc_column);
-          autoinc_column= NULL;
-      }
-
-      if ((has_pk && type == KEY_TYPE_UNIQUE && !pk_processed) ||
-          type == KEY_TYPE_PRIMARY)
-        pk_processed= TRUE;
-
-      if (strstr(ptr, "AUTO_INCREMENT") && *ptr == '`')
-      {
-        /*
-          The first secondary key defined on this column later cannot be
-          skipped, as CREATE TABLE would fail on import. Unless there is a
-          PRIMARY KEY and it indexes that column.
-        */
-        for (end= ptr + 1;
-             /* Skip double backticks as they are a part of identifier */
-             *end != '\0' && (*end != '`' || end[1] == '`');
-             end++)
-          /* empty */;
-
-        if (*end == '`' && end > ptr + 1)
-        {
-          DBUG_ASSERT(autoinc_column == NULL);
-
-          autoinc_column= my_strndup(ptr + 1, end - ptr - 1, MYF(MY_FAE));
-        }
-      }
-
-      *tmp= c;
-
-      if (tmp[-1] == ',')
-        last_comma= tmp - 1;
-      ptr= (*tmp == '\0') ? tmp : tmp + 1;
-    }
-  }
-
-  my_free(autoinc_column);
-}
-
-/*
-  Check if the table has a primary key defined either explicitly or
-  implicitly (i.e. a unique key on non-nullable columns).
-
-  SYNOPSIS
-    my_bool has_primary_key(const char *table_name)
-
-    table_name  quoted table name
-
-  RETURNS     TRUE if the table has a primary key
-
-  DESCRIPTION
-*/
-
-static my_bool has_primary_key(const char *table_name)
-{
-  MYSQL_RES  *res= NULL;
-  MYSQL_ROW  row;
-  char query_buff[QUERY_LENGTH];
-  my_bool has_pk= TRUE;
-
-  my_snprintf(query_buff, sizeof(query_buff),
-              "SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE "
-              "TABLE_SCHEMA=DATABASE() AND TABLE_NAME='%s' AND "
-              "COLUMN_KEY='PRI'", table_name);
-  if (mysql_query(mysql, query_buff) || !(res= mysql_store_result(mysql)) ||
-      !(row= mysql_fetch_row(res)))
-  {
-    fprintf(stderr, "Warning: Couldn't determine if table %s has a "
-            "primary key (%s). "
-            "--innodb-optimize-keys may work inefficiently.\n",
-            table_name, mysql_error(mysql));
-    goto cleanup;
-  }
-
-  has_pk= atoi(row[0]) > 0;
-
-cleanup:
-  if (res)
-    mysql_free_result(res);
-
-  return has_pk;
-}
-
-
-/*
   get_table_structure -- retrievs database structure, prints out corresponding
   CREATE statement and fills out insert_pat if the table is the type we will
   be dumping.
@@ -2751,7 +2511,6 @@ static uint get_table_structure(char *table, char *db, char *table_type,
   my_bool    is_log_table;
   MYSQL_RES  *result;
   MYSQL_ROW  row;
-  my_bool    has_pk= FALSE;
   DBUG_ENTER("get_table_structure");
   DBUG_PRINT("enter", ("db: %s  table: %s", db, table));
 
@@ -2792,9 +2551,6 @@ static uint get_table_structure(char *table, char *db, char *table_type,
 
   result_table=     quote_name(table, table_buff, 1);
   opt_quoted_table= quote_name(table, table_buff2, 0);
-
-  if (opt_innodb_optimize_keys && !strcmp(table_type, "InnoDB"))
-    has_pk= has_primary_key(table);
 
   if (opt_order_by_primary)
     order_by= primary_key_fields(result_table);
@@ -2982,9 +2738,6 @@ static uint get_table_structure(char *table, char *db, char *table_type,
       }
 
       row= mysql_fetch_row(result);
-
-      if (opt_innodb_optimize_keys && !strcmp(table_type, "InnoDB"))
-        skip_secondary_keys(row[1], has_pk);
 
       is_log_table= general_log_or_slow_log_tables(db, table);
       if (is_log_table)
@@ -3637,36 +3390,6 @@ static char *alloc_query_str(ulong size)
 }
 
 
-
-/*
-  Perform delayed secondary index creation for --innodb-optimize-keys.
-*/
-
-static void restore_secondary_keys(char *table)
-{
-    if (skipped_keys_list)
-    {
-      uint keys;
-      skipped_keys_list= list_reverse(skipped_keys_list);
-      fprintf(md_result_file, "ALTER TABLE %s ", table);
-      for (keys= list_length(skipped_keys_list); keys > 0; keys--)
-      {
-        LIST *node= skipped_keys_list;
-        char *def= node->data;
-
-        fprintf(md_result_file, "ADD %s%s", def, (keys > 1) ? ", " : ";\n");
-
-        skipped_keys_list= list_delete(skipped_keys_list, node);
-        my_free(def);
-        my_free(node);
-      }
-
-      DBUG_ASSERT(skipped_keys_list == NULL);
-    }
-}
-
-
-
 /*
 
  SYNOPSIS
@@ -3710,15 +3433,11 @@ static void dump_table(char *table, char *db)
   if (strcmp(table_type, "VIEW") == 0)
     DBUG_VOID_RETURN;
 
-  result_table= quote_name(table,table_buff, 1);
-  opt_quoted_table= quote_name(table, table_buff2, 0);
-
   /* Check --no-data flag */
   if (opt_no_data)
   {
     verbose_msg("-- Skipping dump data for table '%s', --no-data was used\n",
                 table);
-    restore_secondary_keys(opt_quoted_table);
     DBUG_VOID_RETURN;
   }
 
@@ -3743,17 +3462,8 @@ static void dump_table(char *table, char *db)
     DBUG_VOID_RETURN;
   }
 
-  /*
-     Check --skip-events flag: it is not enough to skip creation of events
-     discarding SHOW CREATE EVENT statements generation. The myslq.event
-     table data should be skipped too.
-  */
-  if (!opt_events && !my_strcasecmp(&my_charset_latin1, db, "mysql") &&
-      !my_strcasecmp(&my_charset_latin1, table, "event"))
-  {
-    verbose_msg("-- Skipping data table mysql.event, --skip-events was used\n");
-    DBUG_VOID_RETURN;
-  }
+  result_table= quote_name(table,table_buff, 1);
+  opt_quoted_table= quote_name(table, table_buff2, 0);
 
   verbose_msg("-- Sending SELECT query...\n");
 
@@ -4142,8 +3852,6 @@ static void dump_table(char *table, char *db)
       error= EX_CONSCHECK;
       goto err;
     }
-
-    restore_secondary_keys(opt_quoted_table);
 
     /* Moved enable keys to before unlock per bug 15977 */
     if (opt_disable_keys)
@@ -5578,6 +5286,153 @@ static int replace(DYNAMIC_STRING *ds_str,
 }
 
 
+/**
+  This function sets the session binlog in the dump file.
+  When --set-gtid-purged is used, this function is called to
+  disable the session binlog and at the end of the dump, to restore
+  the session binlog.
+
+  @note: md_result_file should have been opened, before
+         this function is called.
+
+  @param[in]      flag          If FALSE, disable binlog.
+                                If TRUE and binlog disabled previously,
+                                restore the session binlog.
+*/
+
+static void set_session_binlog(my_bool flag)
+{
+  static my_bool is_binlog_disabled= FALSE;
+
+  if (!flag && !is_binlog_disabled)
+  {
+    fprintf(md_result_file,
+            "SET @MYSQLDUMP_TEMP_LOG_BIN = @@SESSION.SQL_LOG_BIN;\n");
+    fprintf(md_result_file, "SET @@SESSION.SQL_LOG_BIN= 0;\n");
+    is_binlog_disabled= 1;
+  }
+  else if (flag && is_binlog_disabled)
+  {
+    fprintf(md_result_file,
+            "SET @@SESSION.SQL_LOG_BIN = @MYSQLDUMP_TEMP_LOG_BIN;\n");
+    is_binlog_disabled= 0;
+  }
+}
+
+
+/**
+  This function gets the GTID_EXECUTED sets from the
+  server and assigns those sets to GTID_PURGED in the
+  dump file.
+
+  @param[in]  mysql_con     connection to the server
+
+  @retval     FALSE         succesfully printed GTID_PURGED sets
+                             in the dump file.
+  @retval     TRUE          failed.
+
+*/
+
+static my_bool add_set_gtid_purged(MYSQL *mysql_con)
+{
+  MYSQL_RES  *gtid_purged_res;
+  MYSQL_ROW  gtid_set;
+  ulong     num_sets, idx;
+
+  /* query to get the GTID_EXECUTED */
+  if (mysql_query_with_error_report(mysql_con, &gtid_purged_res,
+                  "SELECT @@GLOBAL.GTID_EXECUTED"))
+    return TRUE;
+
+  /* Proceed only if gtid_purged_res is non empty */
+  if ((num_sets= mysql_num_rows(gtid_purged_res)) > 0)
+  {
+    if (opt_comments)
+      fprintf(md_result_file,
+          "\n--\n--GTID state at the beginning of the backup \n--\n\n");
+
+    fprintf(md_result_file,"SET @@GLOBAL.GTID_PURGED='");
+
+    /* formatting is not required, even for multiple gtid sets */
+    for (idx= 0; idx< num_sets-1; idx++)
+    {
+      gtid_set= mysql_fetch_row(gtid_purged_res);
+      fprintf(md_result_file,"%s,", (char*)gtid_set[0]);
+    }
+    /* for the last set */
+    gtid_set= mysql_fetch_row(gtid_purged_res);
+    /* close the SET expression */
+    fprintf(md_result_file,"%s';\n", (char*)gtid_set[0]);
+  }
+
+  return FALSE;  /*success */
+}
+
+
+/**
+  This function processes the opt_set_gtid_purged option.
+  This function also calls set_session_binlog() function before
+  setting the SET @@GLOBAL.GTID_PURGED in the output.
+
+  @param[in]          mysql_con     the connection to the server
+
+  @retval             FALSE         successful according to the value
+                                    of opt_set_gtid_purged.
+  @retval             TRUE          fail.
+*/
+
+static my_bool process_set_gtid_purged(MYSQL* mysql_con)
+{
+  MYSQL_RES  *gtid_mode_res;
+  MYSQL_ROW  gtid_mode_row;
+  char       *gtid_mode_val= 0;
+
+  if (opt_set_gtid_purged_mode == SET_GTID_PURGED_OFF)
+    return FALSE;  /* nothing to be done */
+
+
+  /* check if gtid_mode is ON or OFF */
+  if (mysql_query_with_error_report(mysql_con, &gtid_mode_res,
+                                    "SELECT @@GTID_MODE"))
+    return TRUE;
+
+  gtid_mode_row = mysql_fetch_row(gtid_mode_res);
+  gtid_mode_val = (char*)gtid_mode_row[0];
+
+  if (gtid_mode_val && strcmp(gtid_mode_val, "OFF"))
+  {
+    /*
+       For any gtid_mode !=OFF and irrespective of --set-gtid-purged
+       being AUTO or ON,  add GTID_PURGED in the output.
+    */
+    if (opt_databases || !opt_alldbs || !opt_dump_triggers
+        || !opt_routines || !opt_events)
+    {
+      fprintf(stderr,"Warning: A partial dump from a server that has GTIDs will "
+                     "by default include the GTIDs of all transactions, even "
+                     "those that changed suppressed parts of the database. If "
+                     "you don't want to restore GTIDs, pass "
+                     "--set-gtid-purged=OFF. To make a complete dump, pass "
+                     "--all-databases --triggers --routines --events. \n");
+    }
+
+    set_session_binlog(FALSE);
+    if (add_set_gtid_purged(mysql_con))
+      return TRUE;
+  }
+  else /* gtid_mode is off */
+  {
+    if (opt_set_gtid_purged_mode == SET_GTID_PURGED_ON)
+    {
+      fprintf(stderr, "Error: Server has GTIDs disabled.\n");
+      return TRUE;
+    }
+  }
+
+  return FALSE;
+}
+
+
 /*
   Getting VIEW structure
 
@@ -5907,6 +5762,13 @@ int main(int argc, char **argv)
   /* Add 'STOP SLAVE to beginning of dump */
   if (opt_slave_apply && add_stop_slave())
     goto err;
+
+
+  /* Process opt_set_gtid_purged and add SET @@GLOBAL.GTID_PURGED if required. */
+  if (process_set_gtid_purged(mysql))
+    goto err;
+
+
   if (opt_master_data && do_show_master_status(mysql))
     goto err;
   if (opt_slave_data && do_show_slave_status(mysql))
@@ -5941,6 +5803,12 @@ int main(int argc, char **argv)
   /* if --dump-slave , start the slave sql thread */
   if (opt_slave_data && do_start_slave_sql(mysql))
     goto err;
+
+  /*
+    if --set-gtid-purged, restore binlog at the end of the session
+    if required.
+  */
+  set_session_binlog(TRUE);
 
   /* add 'START SLAVE' to end of dump */
   if (opt_slave_apply && add_slave_statements())

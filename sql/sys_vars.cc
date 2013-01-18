@@ -61,7 +61,6 @@
 #ifdef WITH_PERFSCHEMA_STORAGE_ENGINE
 #include "../storage/perfschema/pfs_server.h"
 #endif /* WITH_PERFSCHEMA_STORAGE_ENGINE */
-#include "threadpool.h"
 
 TYPELIB bool_typelib={ array_elements(bool_values)-1, "", bool_values, 0 };
 
@@ -614,7 +613,6 @@ static Sys_var_int32 Sys_binlog_max_flush_queue_time(
        VALID_RANGE(0, 100000), DEFAULT(0), BLOCK_SIZE(1),
        NO_MUTEX_GUARD, NOT_IN_BINLOG);
 
-
 static bool check_has_super(sys_var *self, THD *thd, set_var *var)
 {
   DBUG_ASSERT(self->scope() != sys_var::GLOBAL);// don't abuse check_has_super()
@@ -646,12 +644,21 @@ static bool check_top_level_stmt_and_super(sys_var *self, THD *thd, set_var *var
 }
 #endif
 
-#if defined(HAVE_NDB_BINLOG) || defined(NON_DISABLED_GTID)
+#if defined(HAVE_NDB_BINLOG) || defined(HAVE_REPLICATION)
 static bool check_outside_transaction(sys_var *self, THD *thd, set_var *var)
 {
   if (thd->in_active_multi_stmt_transaction())
   {
     my_error(ER_VARIABLE_NOT_SETTABLE_IN_TRANSACTION, MYF(0), var->var->name.str);
+    return true;
+  }
+  return false;
+}
+static bool check_outside_sp(sys_var *self, THD *thd, set_var *var)
+{
+  if (thd->lex->sphead)
+  {
+    my_error(ER_VARIABLE_NOT_SETTABLE_IN_SP, MYF(0), var->var->name.str);
     return true;
   }
   return false;
@@ -1272,14 +1279,6 @@ static Sys_var_enum Sys_event_scheduler(
        ON_CHECK(event_scheduler_check), ON_UPDATE(event_scheduler_update));
 #endif
 
-static Sys_var_mybool Sys_expand_fast_index_creation(
-       "expand_fast_index_creation",
-       "Enable/disable improvements to the InnoDB fast index creation "
-       "functionality. Has no effect when fast index creation is disabled with "
-       "the fast-index-creation option",
-       SESSION_VAR(expand_fast_index_creation), CMD_LINE(OPT_ARG),
-       DEFAULT(FALSE));
-
 static Sys_var_ulong Sys_expire_logs_days(
        "expire_logs_days",
        "If non-zero, binary logs will be purged after expire_logs_days "
@@ -1730,19 +1729,6 @@ static Sys_var_ulong Sys_max_connect_errors(
        VALID_RANGE(1, ULONG_MAX), DEFAULT(100),
        BLOCK_SIZE(1));
 
-static Sys_var_uint Sys_extra_port(
-       "extra_port",
-       "Extra port number to use for tcp connections in a "
-       "one-thread-per-connection manner. 0 means don't use another port",
-       READ_ONLY GLOBAL_VAR(mysqld_extra_port), CMD_LINE(REQUIRED_ARG),
-       VALID_RANGE(0, UINT_MAX32), DEFAULT(0), BLOCK_SIZE(1));
-
-static Sys_var_ulong Sys_extra_max_connections(
-       "extra_max_connections", "The number of connections on extra-port",
-       GLOBAL_VAR(extra_max_connections), CMD_LINE(REQUIRED_ARG),
-       VALID_RANGE(1, 100000), DEFAULT(1), BLOCK_SIZE(1), NO_MUTEX_GUARD,
-       NOT_IN_BINLOG, ON_CHECK(0), ON_UPDATE(fix_max_connections));
-
 static bool check_max_delayed_threads(sys_var *self, THD *thd, set_var *var)
 {
   return var->type != OPT_GLOBAL &&
@@ -2046,7 +2032,7 @@ static const char *optimizer_switch_names[]=
   "materialization", "semijoin", "loosescan", "firstmatch",
   "subquery_materialization_cost_based",
 #endif
-  "default", NullS
+  "use_index_extensions", "default", NullS
 };
 /** propagates changes to @@engine_condition_pushdown */
 static bool fix_optimizer_switch(sys_var *self, THD *thd,
@@ -2068,7 +2054,7 @@ static Sys_var_flagset Sys_optimizer_switch(
        ", materialization, semijoin, loosescan, firstmatch,"
        " subquery_materialization_cost_based"
 #endif
-       ", block_nested_loop, batched_key_access"
+       ", block_nested_loop, batched_key_access, use_index_extensions"
        "} and val is one of {on, off, default}",
        SESSION_VAR(optimizer_switch), CMD_LINE(REQUIRED_ARG),
        optimizer_switch_names, DEFAULT(OPTIMIZER_SWITCH_DEFAULT),
@@ -2446,31 +2432,15 @@ static Sys_var_ulong Sys_trans_prealloc_size(
 
 static const char *thread_handling_names[]=
 {
-  "one-thread-per-connection", "no-threads",
-#ifdef HAVE_POOL_OF_THREADS
-  "pool-of-threads",
-#endif
+  "one-thread-per-connection", "no-threads", "loaded-dynamically",
   0
 };
-
-#if defined (_WIN32) && defined (HAVE_POOL_OF_THREADS)
-/* Windows is using OS threadpool, so we're pretty sure it works well */
-#define DEFAULT_THREAD_HANDLING 2
-#else
-#define DEFAULT_THREAD_HANDLING 0
-#endif
-
 static Sys_var_enum Sys_thread_handling(
        "thread_handling",
        "Define threads usage for handling queries, one of "
-       "one-thread-per-connection, no-threads"
-#ifdef HAVE_POOL_OF_THREADS
-       ", pool-of-threads"
-#endif
+       "one-thread-per-connection, no-threads, loaded-dynamically"
        , READ_ONLY GLOBAL_VAR(thread_handling), CMD_LINE(REQUIRED_ARG),
-       thread_handling_names, 
-       DEFAULT(DEFAULT_THREAD_HANDLING)
- );
+       thread_handling_names, DEFAULT(0));
 
 #ifdef HAVE_QUERY_CACHE
 static bool fix_query_cache_size(sys_var *self, THD *thd, enum_var_type type)
@@ -2954,96 +2924,6 @@ static Sys_var_ulong Sys_thread_cache_size(
        GLOBAL_VAR(max_blocked_pthreads),
        CMD_LINE(REQUIRED_ARG, OPT_THREAD_CACHE_SIZE),
        VALID_RANGE(0, 16384), DEFAULT(0), BLOCK_SIZE(1));
-
-
-static bool fix_tp_max_threads(sys_var *, THD *, enum_var_type)
-{
-#ifdef _WIN32
-  tp_set_max_threads(threadpool_max_threads);
-#endif
-  return false;
-}
-
-
-#ifdef _WIN32
-static bool fix_tp_min_threads(sys_var *, THD *, enum_var_type)
-{
-  tp_set_min_threads(threadpool_min_threads);
-  return false;
-}
-#endif
-
-
-#ifndef  _WIN32
-static bool fix_threadpool_size(sys_var*, THD*, enum_var_type)
-{
-  tp_set_threadpool_size(threadpool_size);
-  return false;
-}
-
-
-static bool fix_threadpool_stall_limit(sys_var*, THD*, enum_var_type)
-{
-  tp_set_threadpool_stall_limit(threadpool_stall_limit);
-  return false;
-}
-#endif
-
-#ifdef HAVE_POOL_OF_THREADS
-#ifdef _WIN32
-static Sys_var_uint Sys_threadpool_min_threads(
-  "thread_pool_min_threads",
-  "Minimum number of threads in the thread pool.",
-  GLOBAL_VAR(threadpool_min_threads), CMD_LINE(REQUIRED_ARG),
-  VALID_RANGE(1, 256), DEFAULT(1), BLOCK_SIZE(1),
-  NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0),
-  ON_UPDATE(fix_tp_min_threads)
-  );
-#else
-static Sys_var_uint Sys_threadpool_idle_thread_timeout(
-  "thread_pool_idle_timeout",
-  "Timeout in seconds for an idle thread in the thread pool."
-  "Worker thread will be shut down after timeout",
-  GLOBAL_VAR(threadpool_idle_timeout), CMD_LINE(REQUIRED_ARG),
-  VALID_RANGE(1, UINT_MAX), DEFAULT(60), BLOCK_SIZE(1)
-);
-static Sys_var_uint Sys_threadpool_oversubscribe(
-  "thread_pool_oversubscribe",
-  "How many additional active worker threads in a group are allowed.",
-  GLOBAL_VAR(threadpool_oversubscribe), CMD_LINE(REQUIRED_ARG),
-  VALID_RANGE(1, 1000), DEFAULT(3), BLOCK_SIZE(1)
-);
-static Sys_var_uint Sys_threadpool_size(
- "thread_pool_size",
- "Number of thread groups in the pool. "
- "This parameter is roughly equivalent to maximum number of concurrently "
- "executing threads (threads in a waiting state do not count as executing).",
-  GLOBAL_VAR(threadpool_size), CMD_LINE(REQUIRED_ARG),
-  VALID_RANGE(1, MAX_THREAD_GROUPS), DEFAULT(my_getncpus()), BLOCK_SIZE(1),
-  NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0),
-  ON_UPDATE(fix_threadpool_size)
-);
-static Sys_var_uint Sys_threadpool_stall_limit(
- "thread_pool_stall_limit",
- "Maximum query execution time in milliseconds,"
- "before an executing non-yielding thread is considered stalled."
- "If a worker thread is stalled, additional worker thread "
- "may be created to handle remaining clients.",
-  GLOBAL_VAR(threadpool_stall_limit), CMD_LINE(REQUIRED_ARG),
-  VALID_RANGE(10, UINT_MAX), DEFAULT(500), BLOCK_SIZE(1),
-  NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), 
-  ON_UPDATE(fix_threadpool_stall_limit)
-);
-#endif /* !WIN32 */
-static Sys_var_uint Sys_threadpool_max_threads(
-  "thread_pool_max_threads",
-  "Maximum allowed number of worker threads in the thread pool",
-   GLOBAL_VAR(threadpool_max_threads), CMD_LINE(REQUIRED_ARG),
-   VALID_RANGE(1, 65536), DEFAULT(500), BLOCK_SIZE(1),
-   NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0), 
-   ON_UPDATE(fix_tp_max_threads)
-);
-#endif /* HAVE_POOL_OF_THREADS */
 
 /**
   Can't change the 'next' tx_isolation if we are already in a
@@ -4243,16 +4123,16 @@ static Sys_var_charptr Sys_ignore_db_dirs(
 
 /*
   This code is not being used but we will keep it as it may be
-  useful if we decide to keeep disable_gtid_unsafe_statements.
+  useful if we decide to keeep enforce_gtid_consistency.
 */
 #ifdef NON_DISABLED_GTID
-static bool check_disable_gtid_unsafe_statements(
+static bool check_enforce_gtid_consistency(
   sys_var *self, THD *thd, set_var *var)
 {
-  DBUG_ENTER("check_disable_gtid_unsafe_statements");
+  DBUG_ENTER("check_enforce_gtid_consistency");
 
   my_error(ER_NOT_SUPPORTED_YET, MYF(0),
-           "DISABLE_GTID_UNSAFE_STATEMENTS");
+           "ENFORCE_GTID_CONSISTENCY");
   DBUG_RETURN(true);
 
   if (check_top_level_stmt_and_super(self, thd, var) ||
@@ -4260,24 +4140,24 @@ static bool check_disable_gtid_unsafe_statements(
     DBUG_RETURN(true);
   if (gtid_mode >= 2 && var->value->val_int() == 0)
   {
-    my_error(ER_GTID_MODE_2_OR_3_REQUIRES_DISABLE_GTID_UNSAFE_STATEMENTS_ON, MYF(0));
+    my_error(ER_GTID_MODE_2_OR_3_REQUIRES_ENFORCE_GTID_CONSISTENCY_ON, MYF(0));
     DBUG_RETURN(true);
   }
   DBUG_RETURN(false);
 }
 #endif
 
-static Sys_var_mybool Sys_disable_gtid_unsafe_statements(
-       "disable_gtid_unsafe_statements",
+static Sys_var_mybool Sys_enforce_gtid_consistency(
+       "enforce_gtid_consistency",
        "Prevents execution of statements that would be impossible to log "
        "in a transactionally safe manner. Currently, the disallowed "
        "statements include CREATE TEMPORARY TABLE inside transactions, "
        "all updates to non-transactional tables, and CREATE TABLE ... SELECT.",
-       READ_ONLY GLOBAL_VAR(disable_gtid_unsafe_statements),
+       READ_ONLY GLOBAL_VAR(enforce_gtid_consistency),
        CMD_LINE(OPT_ARG), DEFAULT(FALSE),
        NO_MUTEX_GUARD, NOT_IN_BINLOG
 #ifdef NON_DISABLED_GTID
-       , ON_CHECK(check_disable_gtid_unsafe_statements));
+       , ON_CHECK(check_enforce_gtid_consistency));
 #else
        );
 #endif
@@ -4430,15 +4310,42 @@ static Sys_var_gtid_specification Sys_gtid_next(
        NOT_IN_BINLOG, ON_CHECK(check_gtid_next), ON_UPDATE(update_gtid_next));
 export sys_var *Sys_gtid_next_ptr= &Sys_gtid_next;
 
-static Sys_var_gtid_done Sys_gtid_done(
-       "gtid_done",
+static Sys_var_gtid_executed Sys_gtid_executed(
+       "gtid_executed",
        "The global variable contains the set of GTIDs in the "
        "binary log. The session variable contains the set of GTIDs "
        "in the current, ongoing transaction.");
 
-static Sys_var_gtid_lost Sys_gtid_lost(
-       "gtid_lost",
-       "The set of GTIDs that existed in previous, purged binary logs.");
+static bool check_gtid_purged(sys_var *self, THD *thd, set_var *var)
+{
+  DBUG_ENTER("check_gtid_purged");
+
+  if (check_top_level_stmt(self, thd, var) ||
+      check_outside_transaction(self, thd, var) ||
+      check_outside_sp(self, thd, var))
+    DBUG_RETURN(true);
+
+  if (0 == gtid_mode)
+  {
+    my_error(ER_CANT_SET_GTID_PURGED_WHEN_GTID_MODE_IS_OFF, MYF(0));
+    DBUG_RETURN(true);
+  }
+
+  if (var->value->result_type() != STRING_RESULT ||
+      !var->save_result.string_value.str)
+    DBUG_RETURN(true);
+
+  DBUG_RETURN(false);
+}
+
+Gtid_set *gtid_purged;
+static Sys_var_gtid_purged Sys_gtid_purged(
+       "gtid_purged",
+       "The set of GTIDs that existed in previous, purged binary logs.",
+       GLOBAL_VAR(gtid_purged), NO_CMD_LINE,
+       DEFAULT(NULL), NO_MUTEX_GUARD,
+       NOT_IN_BINLOG, ON_CHECK(check_gtid_purged));
+export sys_var *Sys_gtid_purged_ptr= &Sys_gtid_purged;
 
 static Sys_var_gtid_owned Sys_gtid_owned(
        "gtid_owned",
@@ -4486,9 +4393,9 @@ static bool check_gtid_mode(sys_var *self, THD *thd, set_var *var)
       DBUG_RETURN(true);
     }
     */
-    if (!disable_gtid_unsafe_statements)
+    if (!enforce_gtid_consistency)
     {
-      //my_error(ER_GTID_MODE_2_OR_3_REQUIRES_DISABLE_GTID_UNSAFE_STATEMENTS), MYF(0));
+      //my_error(ER_GTID_MODE_2_OR_3_REQUIRES_ENFORCE_GTID_CONSISTENCY), MYF(0));
       DBUG_RETURN(true);
     }
   }

@@ -5315,10 +5315,8 @@ loop:
 
 			mtr_start(&mtr);
 
-			buf_page_get_gen(space, zip_size, page_no,
-					 RW_NO_LATCH, NULL,
-					 BUF_GET_POSSIBLY_FREED,
-					 __FILE__, __LINE__, &mtr);
+			buf_page_get_with_no_latch(
+				space, zip_size, page_no, &mtr);
 
 			mtr_commit(&mtr);
 
@@ -6928,13 +6926,35 @@ lock_trx_has_sys_table_locks(
 /*=========================*/
 	const trx_t*	trx)	/*!< in: transaction to check */
 {
+	lint		i;
 	const lock_t*	strongest_lock = 0;
 	lock_mode	strongest = LOCK_NONE;
 
 	lock_mutex_enter();
 
-	/* Note: ib_vector_size() can be 0. */
-	for (lint i = ib_vector_size(trx->lock.table_locks) - 1; i >= 0; --i) {
+	/* Find a valid mode. Note: ib_vector_size() can be 0. */
+	for (i = ib_vector_size(trx->lock.table_locks) - 1; i >= 0; --i) {
+		const lock_t*	lock;
+
+		lock = *static_cast<const lock_t**>(
+			ib_vector_get(trx->lock.table_locks, i));
+
+		if (lock != NULL
+		    && dict_is_sys_table(lock->un_member.tab_lock.table->id)) {
+
+			strongest = lock_get_mode(lock);
+			ut_ad(strongest != LOCK_NONE);
+			strongest_lock = lock;
+			break;
+		}
+	}
+
+	if (strongest == LOCK_NONE) {
+		lock_mutex_exit();
+		return(NULL);
+	}
+
+	for (/* No op */; i >= 0; --i) {
 		const lock_t*	lock;
 
 		lock = *static_cast<const lock_t**>(

@@ -871,15 +871,9 @@ void PFS_connection_stat_visitor::visit_account(PFS_account *pfs)
   m_stat.aggregate_disconnected(pfs->m_disconnected_count);
 }
 
-void PFS_connection_stat_visitor::visit_thread(PFS_thread *pfs)
+void PFS_connection_stat_visitor::visit_thread(PFS_thread *)
 {
-  /*
-    PFS_connection_stat_visitor is used in tables accounts,
-    users and hosts. It should take into account only
-    FOREGROUND threads.
-  */
-  if (pfs->m_thread_id != 0)
-    m_stat.aggregate_active(1);
+  m_stat.aggregate_active(1);
 }
 
 PFS_instance_wait_visitor::PFS_instance_wait_visitor()

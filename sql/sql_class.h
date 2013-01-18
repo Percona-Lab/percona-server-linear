@@ -546,7 +546,6 @@ typedef struct system_variables
   Gtid_specification gtid_next;
   Gtid_set_or_null gtid_next_list;
 
-  my_bool expand_fast_index_creation;
 } SV;
 
 
@@ -2012,7 +2011,6 @@ public:
   NET	  net;				// client connection descriptor
   /** Aditional network instrumentation for the server only. */
   NET_SERVER m_net_server_extension;
-  scheduler_functions *scheduler;       // Scheduler for this connection
   Protocol *protocol;			// Current protocol
   Protocol_text   protocol_text;	// Normal protocol
   Protocol_binary protocol_binary;	// Binary protocol
@@ -2136,9 +2134,6 @@ public:
   /* <> 0 if we are inside of trigger or stored function. */
   uint in_sub_stmt;
 
-  /* Do not set socket timeouts for wait_timeout (used with threadpool) */
-  bool skip_wait_timeout;
-
   /* container for handler's private per-connection data */
   Ha_data ha_data[MAX_HA];
 
@@ -2217,7 +2212,45 @@ public:
     return (variables.optimizer_switch & flag);
   }
 
+  enum binlog_filter_state
+  {
+    BINLOG_FILTER_UNKNOWN,
+    BINLOG_FILTER_CLEAR,
+    BINLOG_FILTER_SET
+  };
+
+  inline void reset_binlog_local_stmt_filter()
+  {
+    m_binlog_filter_state= BINLOG_FILTER_UNKNOWN;
+  }
+
+  inline void clear_binlog_local_stmt_filter()
+  {
+    DBUG_ASSERT(m_binlog_filter_state == BINLOG_FILTER_UNKNOWN);
+    m_binlog_filter_state= BINLOG_FILTER_CLEAR;
+  }
+
+  inline void set_binlog_local_stmt_filter()
+  {
+    DBUG_ASSERT(m_binlog_filter_state == BINLOG_FILTER_UNKNOWN);
+    m_binlog_filter_state= BINLOG_FILTER_SET;
+  }
+
+  inline binlog_filter_state get_binlog_local_stmt_filter()
+  {
+    return m_binlog_filter_state;
+  }
+
 private:
+  /**
+    Indicate if the current statement should be discarded
+    instead of written to the binlog.
+    This is used to discard special statements, such as
+    DML or DDL that affects only 'local' (non replicated)
+    tables, such as performance_schema.*
+  */
+  binlog_filter_state m_binlog_filter_state;
+
   /**
     Indicates the format in which the current statement will be
     logged.  This can only be set from @c decide_logging_format().
@@ -2819,8 +2852,6 @@ public:
 
   /// @todo: slave_thread is completely redundant, we should use 'system_thread' instead /sven
   bool       slave_thread, one_shot_set;
-  bool       extra_port;                        /* If extra connection */
-
   bool	     no_errors;
   uchar      password;
   /**
@@ -3010,7 +3041,6 @@ public:
   {
     mysql_mutex_lock(&LOCK_thd_data);
     active_vio = vio;
-    vio_set_thread_id(vio, pthread_self());
     mysql_mutex_unlock(&LOCK_thd_data);
   }
   inline void clear_active_vio()
@@ -3663,7 +3693,7 @@ public:
     *p_db_length= db_length;
     return FALSE;
   }
-  thd_scheduler event_scheduler;
+  thd_scheduler scheduler;
 
 public:
   inline Internal_error_handler *get_internal_handler()
@@ -3846,6 +3876,9 @@ public:
 
     Moreover, we can drop the second condition if we fix BUG#11756034.
 
+    @param transactional_table true if the statement updates some
+    transactional table; false otherwise.
+
     @param non_transactional_table true if the statement updates some
     non-transactional table; false otherwise.
 
@@ -3856,7 +3889,8 @@ public:
     @retval false if the statement is not compatible.
   */
   bool
-  is_dml_gtid_compatible(bool non_transactional,
+  is_dml_gtid_compatible(bool transactional_table,
+                         bool non_transactional_table,
                          bool non_transactional_tmp_tables) const;
   bool is_ddl_gtid_compatible() const;
   void binlog_invoker() { m_binlog_invoker= TRUE; }
@@ -5059,8 +5093,6 @@ inline bool add_group_to_list(THD *thd, Item *item, bool asc)
 {
   return thd->lex->current_select->add_group_to_list(thd, item, asc);
 }
-
-extern pthread_attr_t *get_connection_attrib(void);
 
 #endif /* MYSQL_SERVER */
 
