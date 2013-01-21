@@ -891,6 +891,7 @@ MySQL clients support the protocol:
 #include "sql/tc_log.h"           // tc_log
 #include "sql/thd_raii.h"
 #include "sql/thr_malloc.h"
+#include "sql/threadpool.h"
 #include "sql/transaction.h"
 #include "sql/tztime.h"  // Time_zone
 #include "sql/udf_service_impl.h"
@@ -1350,7 +1351,7 @@ bool opt_log_unsafe_statements;
 
 const char *timestamp_type_names[] = {"UTC", "SYSTEM", NullS};
 ulong opt_log_timestamps;
-uint mysqld_port, test_flags, select_errors, ha_open_options;
+uint mysqld_port, test_flags = 0, select_errors, ha_open_options;
 uint mysqld_port_timeout;
 ulong delay_key_write_options;
 uint protocol_version;
@@ -1405,6 +1406,7 @@ bool host_cache_size_specified = false;
 bool table_definition_cache_specified = false;
 ulong locked_account_connection_count = 0;
 
+ulonglong denied_connections = 0;
 ulonglong global_conn_mem_limit = 0;
 ulonglong global_conn_memory_status_limit = 0;
 ulonglong global_conn_mem_counter = 0;
@@ -11571,6 +11573,16 @@ static int show_ssl_get_cipher_list(THD *thd, SHOW_VAR *var, char *buff) {
   return 0;
 }
 
+#ifdef HAVE_POOL_OF_THREADS
+static int show_threadpool_idle_threads(THD *thd [[maybe_unused]],
+                                        SHOW_VAR *var, char *buff) {
+  var->type = SHOW_INT;
+  var->value = buff;
+  *(int *)buff = tp_get_idle_thread_count();
+  return 0;
+}
+#endif
+
 static int show_replica_open_temp_tables(THD *, SHOW_VAR *var, char *buf) {
   var->type = SHOW_INT;
   var->value = buf;
@@ -12027,6 +12039,12 @@ SHOW_VAR status_vars[] = {
      SHOW_SCOPE_GLOBAL},
     {"Tc_log_page_waits", (char *)&tc_log_page_waits, SHOW_LONG,
      SHOW_SCOPE_GLOBAL},
+#ifdef HAVE_POOL_OF_THREADS
+    {"Threadpool_idle_threads", (char *)&show_threadpool_idle_threads,
+     SHOW_FUNC, SHOW_SCOPE_GLOBAL},
+    {"Threadpool_threads", (char *)&tp_stats.num_worker_threads, SHOW_INT,
+     SHOW_SCOPE_GLOBAL},
+#endif
     {"Threads_cached",
      (char *)&Per_thread_connection_handler::blocked_pthread_count,
      SHOW_LONG_NOFLUSH, SHOW_SCOPE_GLOBAL},
