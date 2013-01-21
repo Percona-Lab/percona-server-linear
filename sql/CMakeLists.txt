@@ -611,6 +611,7 @@ SET(SQL_SHARED_SOURCES
   table_trigger_dispatcher.cc
   tc_log.cc
   thr_malloc.cc
+  threadpool_common.cc
   time_zone_common.cc
   transaction.cc
   transaction_info.cc
@@ -754,6 +755,12 @@ ELSEIF(SOLARIS)
 ELSEIF(WIN32)
   LIST(APPEND SQL_SHARED_SOURCES
     resourcegroups/platform/thread_attrs_api_win.cc)
+ENDIF()
+
+IF(WIN32)
+  LIST(APPEND SQL_SHARED_SOURCES threadpool_win.cc)
+ELSE()
+  LIST(APPEND SQL_SHARED_SOURCES threadpool_unix.cc)
 ENDIF()
 
 SET(SQL_SOURCE
