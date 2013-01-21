@@ -189,11 +189,22 @@ void vio_end(void);
 #define vio_keepalive(vio, set_keep_alive)  (vio)->viokeepalive(vio, set_keep_alive)
 #define vio_should_retry(vio)                   (vio)->should_retry(vio)
 #define vio_was_timeout(vio)                    (vio)->was_timeout(vio)
-#define vio_shutdown(vio)                       ((vio)->vioshutdown)(vio)
+#define vio_shutdown(vio,how)                   ((vio)->vioshutdown)(vio,how)
 #define vio_peer_addr(vio, buf, prt, buflen)    (vio)->peer_addr(vio, buf, prt, buflen)
 #define vio_io_wait(vio, event, timeout)        (vio)->io_wait(vio, event, timeout)
 #define vio_is_connected(vio)                   (vio)->is_connected(vio)
 #endif /* !defined(DONT_MAP_VIO) */
+
+#ifdef _WIN32
+/*
+  Set thread id for io cancellation (required on Windows XP only,
+  and should to be removed if XP is no more supported)
+*/
+
+#define vio_set_thread_id(vio, tid) if(vio) vio->thread_id= tid
+#else
+#define vio_set_thread_id(vio, tid)
+#endif
 
 /* This enumerator is used in parser - should be always visible */
 enum SSL_type
@@ -256,10 +267,12 @@ struct st_vio
   */
   int     (*vioshutdown)(Vio*);
   my_bool (*is_connected)(Vio*);
+  int (*shutdown)(Vio *, int);
   my_bool (*has_data) (Vio*);
   int (*io_wait)(Vio*, enum enum_vio_io_event, int);
   my_bool (*connect)(Vio*, struct sockaddr *, socklen_t, int);
 #ifdef _WIN32
+  DWORD thread_id; /* Used on XP only by vio_shutdown() */
   OVERLAPPED overlapped;
   HANDLE hPipe;
 #endif
