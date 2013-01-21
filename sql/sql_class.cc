@@ -1192,8 +1192,7 @@ void THD::awake(THD::killed_state state_to_set) {
 
     /* Send an event to the scheduler that a thread should be killed. */
     if (!slave_thread)
-      MYSQL_CALLBACK(Connection_handler_manager::event_functions,
-                     post_kill_notification, (this));
+      MYSQL_CALLBACK(this->scheduler, post_kill_notification, (this));
   }
 
   /* Interrupt target waiting inside a storage engine. */
@@ -1361,6 +1360,8 @@ void THD::store_globals() {
   set_my_thread_var_id(m_thread_id);
 #endif
   real_id = my_thread_self();  // For debugging
+
+  vio_set_thread_id(net.vio, real_id);
 }
 
 /*
@@ -1605,7 +1606,7 @@ void THD::shutdown_active_vio() {
   DBUG_ENTER("shutdown_active_vio");
   mysql_mutex_assert_owner(&LOCK_thd_data);
   if (active_vio) {
-    vio_shutdown(active_vio);
+    vio_shutdown(active_vio, SHUT_RDWR);
     active_vio = 0;
     m_SSL = NULL;
   }
@@ -1624,7 +1625,7 @@ void THD::shutdown_clone_vio() {
   DBUG_ENTER("shutdown_clone_vio");
   mysql_mutex_assert_owner(&LOCK_thd_data);
   if (clone_vio != nullptr) {
-    vio_shutdown(clone_vio);
+    vio_shutdown(clone_vio, SHUT_RDWR);
     clone_vio = nullptr;
   }
   DBUG_VOID_RETURN;
@@ -1888,6 +1889,7 @@ void THD::begin_attachable_rw_transaction() {
 
   m_attachable_trx = new Attachable_trx_rw(this);
 }
+
 
 /****************************************************************************
   Handling of statement states in functions and triggers.
