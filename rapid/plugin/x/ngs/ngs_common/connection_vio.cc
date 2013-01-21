@@ -260,7 +260,7 @@ int Connection_vio::shutdown(Shutdown_type how_to_shutdown)
 #endif
 
   Mutex_lock lock(m_shutdown_mutex);
-  return vio_shutdown(m_vio);
+  return vio_shutdown(m_vio, SHUT_RDWR);
 }
 
 
