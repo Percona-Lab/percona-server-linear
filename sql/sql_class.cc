@@ -1650,8 +1650,7 @@ void THD::awake(THD::killed_state state_to_set) {
 
     /* Send an event to the scheduler that a thread should be killed. */
     if (!slave_thread)
-      MYSQL_CALLBACK(Connection_handler_manager::event_functions,
-                     post_kill_notification, (this));
+      MYSQL_CALLBACK(this->scheduler, post_kill_notification, (this));
   }
 
   /* Interrupt target waiting inside a storage engine. */
@@ -1844,6 +1843,8 @@ void THD::store_globals() {
   set_my_thread_var_id(m_thread_id);
 #endif
   real_id = my_thread_self();
+
+  vio_set_thread_id(net.vio, real_id);
 }
 
 /*
@@ -2081,7 +2082,7 @@ void THD::shutdown_active_vio() {
     // invalid thread id.
     active_vio->thread_id = real_id;
 #endif /* USE_PPOLL_IN_VIO */
-    vio_shutdown(active_vio);
+    vio_shutdown(active_vio, SHUT_RDWR);
     active_vio = nullptr;
     m_SSL = nullptr;
   }
@@ -2107,7 +2108,7 @@ void THD::shutdown_clone_vio() {
     // invalid thread id.
     clone_vio->thread_id = real_id;
 #endif /* USE_PPOLL_IN_VIO */
-    vio_shutdown(clone_vio);
+    vio_shutdown(clone_vio, SHUT_RDWR);
     clone_vio = nullptr;
   }
 }
