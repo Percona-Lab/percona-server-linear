@@ -75,6 +75,7 @@
 #include "mysql/psi/mysql_mutex.h"
 #include "mysql/psi/mysql_statement.h"
 #include "mysql/psi/mysql_thread.h"
+#include "mysql/service_thread_scheduler.h"
 #include "mysql/thread_type.h"
 #include "mysql_com.h"
 #include "mysql_com_server.h"  // NET_SERVER
@@ -1051,6 +1052,10 @@ class THD : public MDL_context_owner,
 
   /** Aditional network instrumentation for the server only. */
   NET_SERVER m_net_server_extension;
+  /** Thread scheduler callbacks for this connection per-thread and one-thread
+  scheduler callbacks are no-ops, so nullptr works for them, threadpool
+  scheduler will change this for its THDs */
+  THD_event_functions *scheduler{nullptr};
   /**
     Hash for user variables.
     User variables are per session,
@@ -1499,6 +1504,13 @@ class THD : public MDL_context_owner,
  public:
   /* <> 0 if we are inside of trigger or stored function. */
   uint in_sub_stmt;
+
+  /* Do not set socket timeouts for wait_timeout (used with threadpool) */
+  bool skip_wait_timeout{false};
+
+  inline ulong get_wait_timeout(void) const noexcept {
+    return variables.net_wait_timeout;
+  }
 
   /**
     Used by fill_status() to avoid acquiring LOCK_status mutex twice
@@ -3776,7 +3788,7 @@ class THD : public MDL_context_owner,
     return copy_db_to(const_cast<char const **>(p_db), p_db_length);
   }
 
-  thd_scheduler scheduler;
+  thd_scheduler event_scheduler;
 
   /**
     Get resource group context.
