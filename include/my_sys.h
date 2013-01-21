@@ -824,6 +824,8 @@ extern time_t my_time(myf flags);
 extern ulonglong my_micro_time();
 extern bool my_gethwaddr(uchar *to);
 
+#define my_microsecond_getsystime()    (my_getsystime()/10)
+
 #ifdef HAVE_SYS_MMAN_H
 #include <sys/mman.h>
 

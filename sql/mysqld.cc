@@ -537,6 +537,7 @@
 #include "sql/tc_log.h"           // tc_log
 #include "sql/thd_raii.h"
 #include "sql/thr_malloc.h"
+#include "sql/threadpool.h"
 #include "sql/transaction.h"
 #include "sql/tztime.h"  // Time_zone
 #include "sql/xa.h"
@@ -947,7 +948,8 @@ volatile sig_atomic_t calling_initgroups = 0; /**< Used in SIGSEGV handler. */
 #endif
 const char *timestamp_type_names[] = {"UTC", "SYSTEM", NullS};
 ulong opt_log_timestamps;
-uint mysqld_port, test_flags, select_errors, ha_open_options;
+uint mysqld_port, test_flags = 0, select_errors, ha_open_options;
+uint mysqld_extra_port;
 uint mysqld_port_timeout;
 ulong delay_key_write_options;
 uint protocol_version;
@@ -2301,8 +2303,8 @@ static bool network_init(void) {
     std::string const bind_addr_str(my_bind_addr_str ? my_bind_addr_str : "");
 
     Mysqld_socket_listener *mysqld_socket_listener = new (std::nothrow)
-        Mysqld_socket_listener(bind_addr_str, mysqld_port, back_log,
-                               mysqld_port_timeout, unix_sock_name);
+        Mysqld_socket_listener(bind_addr_str, mysqld_port, mysqld_extra_port,
+                               back_log, mysqld_port_timeout, unix_sock_name);
     if (mysqld_socket_listener == NULL) return true;
 
     mysqld_socket_acceptor = new (std::nothrow)
@@ -6767,14 +6769,14 @@ static void adjust_open_files_limit(ulong *requested_open_files) {
   ulong effective_open_files;
 
   /* MyISAM requires two file handles per table. */
-  limit_1 = 10 + max_connections + table_cache_size * 2;
+  limit_1 = 10 + max_connections + extra_max_connections + table_cache_size * 2;
 
   /*
     We are trying to allocate no less than max_connections*5 file
     handles (i.e. we are trying to set the limit so that they will
     be available).
   */
-  limit_2 = max_connections * 5;
+  limit_2 = (max_connections + extra_max_connections) * 5;
 
   /* Try to allocate no less than 5000 by default. */
   limit_3 = open_files_limit ? open_files_limit : 5000;
@@ -7916,6 +7918,16 @@ static int show_ssl_get_server_not_after(THD *, SHOW_VAR *var, char *buff) {
 
 #endif /* HAVE_OPENSSL */
 
+#ifdef HAVE_POOL_OF_THREADS
+static int show_threadpool_idle_threads(THD *thd MY_ATTRIBUTE((unused)),
+                                        SHOW_VAR *var, char *buff) {
+  var->type = SHOW_INT;
+  var->value = buff;
+  *(int *)buff = tp_get_idle_thread_count();
+  return 0;
+}
+#endif
+
 static int show_slave_open_temp_tables(THD *, SHOW_VAR *var, char *buf) {
   var->type = SHOW_INT;
   var->value = buf;
@@ -8213,6 +8225,12 @@ SHOW_VAR status_vars[] = {
      SHOW_SCOPE_GLOBAL},
     {"Tc_log_page_waits", (char *)&tc_log_page_waits, SHOW_LONG,
      SHOW_SCOPE_GLOBAL},
+#ifdef HAVE_POOL_OF_THREADS
+    {"Threadpool_idle_threads", (char *)&show_threadpool_idle_threads,
+     SHOW_FUNC, SHOW_SCOPE_GLOBAL},
+    {"Threadpool_threads", (char *)&tp_stats.num_worker_threads, SHOW_INT,
+     SHOW_SCOPE_GLOBAL},
+#endif
     {"Threads_cached",
      (char *)&Per_thread_connection_handler::blocked_pthread_count,
      SHOW_LONG_NOFLUSH, SHOW_SCOPE_GLOBAL},
