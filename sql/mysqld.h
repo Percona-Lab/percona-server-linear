@@ -332,6 +332,7 @@ extern ulonglong opt_mts_pending_jobs_size_max;
 extern ulong rpl_stop_replica_timeout;
 extern bool log_bin_use_v1_row_events;
 extern ulong what_to_log, flush_time;
+extern ulonglong denied_connections;
 extern ulong max_prepared_stmt_count, prepared_stmt_count;
 extern ulong open_files_limit;
 extern bool clone_startup;
@@ -422,6 +423,8 @@ extern ulonglong global_conn_mem_counter;
 extern bool migrate_connect_options;
 
 extern LEX_CSTRING sql_statement_names[(uint)SQLCOM_END + 1];
+
+extern char *enforce_storage_engine;
 
 extern char *enforce_storage_engine;
 
