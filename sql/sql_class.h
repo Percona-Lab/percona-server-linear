@@ -2121,6 +2121,7 @@ public:
   NET	  net;				// client connection descriptor
   /** Aditional network instrumentation for the server only. */
   NET_SERVER m_net_server_extension;
+  scheduler_functions *scheduler;       // Scheduler for this connection
   Protocol *protocol;			// Current protocol
   Protocol_text   protocol_text;	// Normal protocol
   Protocol_binary protocol_binary;	// Binary protocol
@@ -3009,6 +3010,8 @@ public:
 
   /// @todo: slave_thread is completely redundant, we should use 'system_thread' instead /sven
   bool       slave_thread, one_shot_set;
+  bool       extra_port;                        /* If extra connection */
+
   bool	     no_errors;
   uchar      password;
   /**
@@ -3198,6 +3201,7 @@ public:
   {
     mysql_mutex_lock(&LOCK_thd_data);
     active_vio = vio;
+    vio_set_thread_id(vio, pthread_self());
     mysql_mutex_unlock(&LOCK_thd_data);
   }
   inline void clear_active_vio()
@@ -3856,7 +3860,7 @@ public:
     *p_db_length= db_length;
     return FALSE;
   }
-  thd_scheduler scheduler;
+  thd_scheduler event_scheduler;
 
 public:
   inline Internal_error_handler *get_internal_handler()
@@ -5331,6 +5335,8 @@ inline bool add_group_to_list(THD *thd, Item *item, bool asc)
 {
   return thd->lex->current_select->add_group_to_list(thd, item, asc);
 }
+
+extern pthread_attr_t *get_connection_attrib(void);
 
 #endif /* MYSQL_SERVER */
 
