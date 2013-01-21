@@ -2070,7 +2070,8 @@ acl_log_connect(const char *user,
   @retval 1  error
 */
 int
-acl_authenticate(THD *thd, enum_server_command command)
+acl_authenticate(THD *thd, enum_server_command command,
+                 bool extra_port_connection)
 {
   int res= CR_OK;
   MPVIO_EXT mpvio;

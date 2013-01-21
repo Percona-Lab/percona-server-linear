@@ -144,6 +144,9 @@ bool Connection_handler_manager::init()
   case SCHEDULER_NO_THREADS:
     connection_handler= new (std::nothrow) One_thread_connection_handler();
     break;
+  case SCHEDULER_THREAD_POOL:
+    connection_handler= new (std::nothrow) Thread_pool_connection_handler();
+    break;
   default:
     DBUG_ASSERT(false);
   }
@@ -269,7 +272,7 @@ void destroy_channel_info(Channel_info* channel_info)
 
 void dec_connection_count()
 {
-  Connection_handler_manager::dec_connection_count();
+  Connection_handler_manager::dec_connection_count(false);
 }
 #endif // !EMBEDDED_LIBRARY
 

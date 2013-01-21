@@ -103,6 +103,7 @@ public:
   {
     SCHEDULER_ONE_THREAD_PER_CONNECTION=0,
     SCHEDULER_NO_THREADS,
+    SCHEDULER_THREAD_POOL,
     SCHEDULER_TYPES_COUNT
   };
 
@@ -173,7 +174,7 @@ public:
   /**
     Decrease the number of current connections.
   */
-  static void dec_connection_count()
+  static void dec_connection_count(bool extra_port_connection)
   {
     mysql_mutex_lock(&LOCK_connection_count);
     connection_count--;
