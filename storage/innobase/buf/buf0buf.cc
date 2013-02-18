@@ -68,9 +68,7 @@ _increment_page_get_statistics(buf_block_t* block, trx_t* trx)
 	byte            block_hash_offset;
 
 	ut_ad(block);
-
-	if (!innobase_get_slow_log() || !trx || !trx->take_stats)
-		return;
+	ut_ad(trx && trx->take_stats);
 
 	if (!trx->distinct_page_access_hash) {
 		trx->distinct_page_access_hash
@@ -2061,7 +2059,7 @@ buf_page_get_zip(
 	ib_uint64_t	finish_time;
 	buf_pool_t*	buf_pool = buf_pool_get(space, offset);
 
-	if (innobase_get_slow_log()) {
+	if (UNIV_UNLIKELY(innobase_get_slow_log())) {
 		trx = innobase_get_trx();
 	}
 	buf_pool->stat.n_page_gets++;
@@ -2163,7 +2161,7 @@ got_block:
 		/* Let us wait until the read operation
 		completes */
 
-		if (innobase_get_slow_log() && trx && trx->take_stats)
+		if (UNIV_UNLIKELY(trx && trx->take_stats))
 		{
 			ut_usectime(&sec, &ms);
 			start_time = (ib_uint64_t)sec * 1000000 + ms;
@@ -2184,7 +2182,7 @@ got_block:
 				break;
 			}
 		}
-		if (innobase_get_slow_log() && trx && trx->take_stats && start_time)
+		if (UNIV_UNLIKELY(start_time != 0))
 		{
 			ut_usectime(&sec, &ms);
 			finish_time = (ib_uint64_t)sec * 1000000 + ms;
@@ -2562,7 +2560,7 @@ buf_page_get_gen(
 	      || ibuf_page_low(space, zip_size, offset,
 			       FALSE, file, line, NULL));
 #endif
-	if (innobase_get_slow_log()) {
+	if (UNIV_UNLIKELY(innobase_get_slow_log())) {
 		trx = innobase_get_trx();
 	}
 	buf_pool->stat.n_page_gets++;
@@ -2987,7 +2985,7 @@ wait_until_unfixed:
 			/* Let us wait until the read operation
 			completes */
 
-			if (innobase_get_slow_log() && trx && trx->take_stats)
+			if (UNIV_UNLIKELY(trx && trx->take_stats))
 			{
 				ut_usectime(&sec, &ms);
 				start_time = (ib_uint64_t)sec * 1000000 + ms;
@@ -3009,7 +3007,7 @@ wait_until_unfixed:
 					break;
 				}
 			}
-			if (innobase_get_slow_log() && trx && trx->take_stats && start_time)
+			if (UNIV_UNLIKELY(start_time != 0))
 			{
 				ut_usectime(&sec, &ms);
 				finish_time = (ib_uint64_t)sec * 1000000 + ms;
@@ -3053,7 +3051,7 @@ wait_until_unfixed:
 	ut_ad(!rw_lock_own(hash_lock, RW_LOCK_SHARED));
 #endif /* UNIV_SYNC_DEBUG */
 
-	if (innobase_get_slow_log()) {
+	if (UNIV_UNLIKELY(trx && trx->take_stats)) {
 		_increment_page_get_statistics(block, trx);
 	}
 
@@ -3157,7 +3155,7 @@ buf_page_optimistic_get(
 	ut_a(!block->page.file_page_was_freed);
 	mutex_exit(&block->mutex);
 #endif
-	if (innobase_get_slow_log()) {
+	if (UNIV_UNLIKELY(innobase_get_slow_log())) {
 		trx = innobase_get_trx();
 	}
 
@@ -3178,7 +3176,7 @@ buf_page_optimistic_get(
 	buf_pool = buf_pool_from_block(block);
 	buf_pool->stat.n_page_gets++;
 
-	if (innobase_get_slow_log()) {
+	if (UNIV_UNLIKELY(trx && trx->take_stats)) {
 		_increment_page_get_statistics(block, trx);
 	}
 	return(TRUE);
@@ -3287,9 +3285,13 @@ buf_page_get_known_nowait(
 #endif
 	buf_pool->stat.n_page_gets++;
 
-	if (innobase_get_slow_log()) {
+	if (UNIV_UNLIKELY(innobase_get_slow_log())) {
+
 		trx = innobase_get_trx();
-		_increment_page_get_statistics(block, trx);
+		if (trx != NULL && trx->take_stats) {
+
+			_increment_page_get_statistics(block, trx);
+		}
 	}
 
 	return(TRUE);
