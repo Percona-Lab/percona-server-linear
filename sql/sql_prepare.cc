@@ -2300,7 +2300,7 @@ void mysqld_stmt_prepare(THD *thd, const char *packet, uint packet_length)
   double start_cpu_nsecs= 0;
   double end_cpu_nsecs=   0;
 
-  if (opt_userstat)
+  if (unlikely(opt_userstat))
   {
 #ifdef HAVE_CLOCK_GETTIME
     /* get start cputime */
@@ -2342,7 +2342,7 @@ void mysqld_stmt_prepare(THD *thd, const char *packet, uint packet_length)
 
   /* check_prepared_statemnt sends the metadata packet in case of success */
 end:
-  if (opt_userstat)
+  if (unlikely(opt_userstat))
   {
     // Gets the end time.
     if (!(end_time_error= gettimeofday(&end_time, NULL)))
@@ -2384,11 +2384,15 @@ end:
     else
       thd->cpu_time = 0;
   }
+
   // Updates THD stats and the global user stats.
-  thd->update_stats(true);
+  if (unlikely(opt_userstat))
+  {
+    thd->update_stats(true);
 #ifndef EMBEDDED_LIBRARY
-  update_global_user_stats(thd, true, time(NULL));
+    update_global_user_stats(thd, true, time(NULL));
 #endif
+  }
 
   DBUG_VOID_RETURN;
 }
@@ -2854,11 +2858,15 @@ end:
     else
       thd->cpu_time = 0;
   }
+
   // Updates THD stats and the global user stats.
-  thd->update_stats(true);
+  if (unlikely(opt_userstat))
+  {
+    thd->update_stats(true);
 #ifndef EMBEDDED_LIBRARY
-  update_global_user_stats(thd, true, time(NULL));
+    update_global_user_stats(thd, true, time(NULL));
 #endif
+  }
 
   DBUG_VOID_RETURN;
 }
@@ -3039,11 +3047,15 @@ end:
     } else
       thd->cpu_time= 0;
   }
+
   // Updates THD stats and the global user stats.
-  thd->update_stats(true);
+  if (unlikely(opt_userstat))
+  {
+    thd->update_stats(true);
 #ifndef EMBEDDED_LIBRARY
-  update_global_user_stats(thd, true, time(NULL));
+    update_global_user_stats(thd, true, time(NULL));
 #endif
+  }
 
   DBUG_VOID_RETURN;
 }
@@ -3175,11 +3187,15 @@ end:
     else
       thd->cpu_time= 0;
   }
+
   // Updates THD stats and the global user stats.
-  thd->update_stats(true);
+  if (unlikely(opt_userstat))
+  {
+    thd->update_stats(true);
 #ifndef EMBEDDED_LIBRARY
-  update_global_user_stats(thd, true, time(NULL));
+    update_global_user_stats(thd, true, time(NULL));
 #endif
+  }
 
   DBUG_VOID_RETURN;
 }
