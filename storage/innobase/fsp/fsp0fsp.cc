@@ -199,10 +199,7 @@ fsp_get_space_header(
 
 	block = buf_page_get(id, zip_size, 0, RW_X_LATCH, mtr);
 
-	if (srv_pass_corrupt_table && !block) {
-		return(0);
-	}
-	ut_a(block);
+	SRV_CORRUPT_TABLE_CHECK(block, return(0););
 
 	header = FSP_HEADER_OFFSET + buf_block_get_frame(block);
 	buf_block_dbg_add_level(block, SYNC_FSP_PAGE);
@@ -509,10 +506,7 @@ xdes_get_descriptor(
 
 	block = buf_page_get(space, zip_size, 0, RW_X_LATCH, mtr);
 
-	if (srv_pass_corrupt_table && !block) {
-		return(0);
-	}
-	ut_a(block);
+	SRV_CORRUPT_TABLE_CHECK(block, return(0););
 
 	buf_block_dbg_add_level(block, SYNC_FSP_PAGE);
 
@@ -1624,15 +1618,7 @@ fsp_seg_inode_page_find_free(
 	ulint	zip_size,/*!< in: compressed page size, or 0 */
 	mtr_t*	mtr)	/*!< in/out: mini-transaction */
 {
-	if (srv_pass_corrupt_table && !page) {
-		return(ULINT_UNDEFINED);
-	}
-	ut_a(page);
-
-	if (srv_pass_corrupt_table && !page) {
-		return(ULINT_UNDEFINED);
-	}
-	ut_a(page);
+	SRV_CORRUPT_TABLE_CHECK(page, return(ULINT_UNDEFINED););
 
 	for (; i < FSP_SEG_INODES_PER_PAGE(zip_size); i++) {
 
@@ -1749,10 +1735,7 @@ fsp_alloc_seg_inode(
 
 	page = buf_block_get_frame(block);
 
-	if (srv_pass_corrupt_table && !page) {
-		return(0);
-	}
-	ut_a(page);
+	SRV_CORRUPT_TABLE_CHECK(page, return(0););
 
 	n = fsp_seg_inode_page_find_free(page, 0, zip_size, mtr);
 
@@ -1847,10 +1830,7 @@ fseg_inode_try_get(
 
 	inode = fut_get_ptr(space, zip_size, inode_addr, RW_X_LATCH, mtr);
 
-	if (srv_pass_corrupt_table && !inode) {
-		return(0);
-	}
-	ut_a(inode);
+	SRV_CORRUPT_TABLE_CHECK(inode, return(0););
 
 	if (UNIV_UNLIKELY(!mach_read_from_8(inode + FSEG_ID))) {
 
@@ -1878,7 +1858,7 @@ fseg_inode_get(
 {
 	fseg_inode_t*	inode
 		= fseg_inode_try_get(header, space, zip_size, mtr);
-	ut_a(srv_pass_corrupt_table || inode);
+	SRV_CORRUPT_TABLE_CHECK(inode, ; /* do nothing */);
 	return(inode);
 }
 
@@ -3059,10 +3039,11 @@ fseg_free_page_low(
 
 	descr = xdes_get_descriptor(space, zip_size, page, mtr);
 
-	if (srv_pass_corrupt_table && !descr) {
+	SRV_CORRUPT_TABLE_CHECK(descr,
+	{
 		/* The page may be corrupt. pass it. */
 		return;
-	}
+	});
 
 	if (xdes_mtr_get_bit(descr, XDES_FREE_BIT,
 			     page % FSP_EXTENT_SIZE, mtr)) {
@@ -3350,10 +3331,11 @@ fseg_free_step(
 
 	descr = xdes_get_descriptor(space, zip_size, header_page, mtr);
 
-	if (srv_pass_corrupt_table && !descr) {
+	SRV_CORRUPT_TABLE_CHECK(descr,
+	{
 		/* The page may be corrupt. pass it. */
 		return(TRUE);
-	}
+	});
 
 	/* Check that the header resides on a page which has not been
 	freed yet */
@@ -3436,11 +3418,11 @@ fseg_free_step_not_header(
 
 	inode = fseg_inode_get(header, space, zip_size, mtr);
 
-	if (srv_pass_corrupt_table && !inode) {
+	SRV_CORRUPT_TABLE_CHECK(inode,
+	{
 		/* ignore the corruption */
 		return(TRUE);
-	}
-	ut_a(inode);
+	});
 
 	descr = fseg_get_first_extent(inode, space, zip_size, mtr);
 
