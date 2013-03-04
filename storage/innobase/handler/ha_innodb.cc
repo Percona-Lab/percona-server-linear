@@ -5012,7 +5012,8 @@ ha_innobase::open(
 		DBUG_RETURN(1);
 	}
 
-	if (srv_pass_corrupt_table <= 1 && share->ib_table && share->ib_table->is_corrupt) {
+	if (UNIV_UNLIKELY(share->ib_table && share->ib_table->is_corrupt &&
+			  srv_pass_corrupt_table <= 1)) {
 		free_share(share);
 
 		DBUG_RETURN(HA_ERR_CRASHED_ON_USAGE);
@@ -5063,7 +5064,8 @@ ha_innobase::open(
 		is_part = NULL;
 	}
 
-	if (srv_pass_corrupt_table <= 1 && ib_table && ib_table->is_corrupt) {
+	if (UNIV_UNLIKELY(ib_table && ib_table->is_corrupt &&
+			  srv_pass_corrupt_table <= 1)) {
 		free_share(share);
 		my_free(upd_buf);
 		upd_buf = NULL;
