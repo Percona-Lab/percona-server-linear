@@ -138,8 +138,6 @@ trx_create(void)
 
 	trx->search_latch_timeout = BTR_SEA_TIMEOUT;
 
-	trx->global_read_view_heap = mem_heap_create(256);
-
 	trx->io_reads = 0;
 	trx->io_read = 0;
 	trx->io_reads_wait_timer = 0;
@@ -246,10 +244,6 @@ trx_free(
 
 	ut_a(UT_LIST_GET_LEN(trx->lock.trx_locks) == 0);
 
-	if (trx->global_read_view_heap) {
-		mem_heap_free(trx->global_read_view_heap);
-	}
-
 	ut_a(ib_vector_is_empty(trx->autoinc_locks));
 	/* We allocated a dedicated heap for the vector. */
 	ib_vector_free(trx->autoinc_locks);
@@ -260,6 +254,8 @@ trx_free(
 	}
 
 	mutex_free(&trx->mutex);
+
+	read_view_free(trx->prebuilt_view);
 
 	mem_free(trx);
 }
@@ -1233,8 +1229,6 @@ trx_commit_in_memory(
 
 	if (trx->global_read_view != NULL) {
 
-		mem_heap_empty(trx->global_read_view_heap);
-
 		trx->global_read_view = NULL;
 	}
 
@@ -1486,10 +1480,8 @@ trx_assign_read_view(
 	}
 
 	if (!trx->read_view) {
-
-		trx->read_view = read_view_open_now(
-			trx->id, trx->global_read_view_heap);
-
+		trx->read_view = read_view_open_now(trx->id,
+						    trx->prebuilt_view);
 		trx->global_read_view = trx->read_view;
 	}
 
