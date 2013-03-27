@@ -1303,7 +1303,7 @@ void mysql_read_default_options(struct st_mysql_options *options,
           break;
         case OPT_plugin_dir:
           {
-            char buff[FN_REFLEN], buff2[FN_REFLEN];
+            char buff[FN_REFLEN];
             if (strlen(opt_arg) >= FN_REFLEN)
               opt_arg[FN_REFLEN]= '\0';
             if (my_realpath(buff, opt_arg, 0))
