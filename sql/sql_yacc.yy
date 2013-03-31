@@ -1068,6 +1068,7 @@ bool my_yyoverflow(short **a, YYSTYPE **b, ulong *yystacksize);
 %token  AND_AND_SYM                   /* OPERATOR */
 %token  AND_SYM                       /* SQL-2003-R */
 %token  ANY_SYM                       /* SQL-2003-R */
+%token  ARCHIVED_SYM                  /* MYSQL      */
 %token  AS                            /* SQL-2003-R */
 %token  ASC                           /* SQL-2003-N */
 %token  ASCII_SYM                     /* MYSQL-FUNC */
@@ -13005,7 +13006,8 @@ purge:
         ;
 
 purge_options:
-          master_or_binary LOGS_SYM purge_option
+          ARCHIVED_SYM LOGS_SYM purge_archive_option
+          | master_or_binary LOGS_SYM purge_option
         ;
 
 purge_option:
@@ -13019,6 +13021,21 @@ purge_option:
             lex->value_list.empty();
             lex->value_list.push_front($2);
             lex->sql_command= SQLCOM_PURGE_BEFORE;
+          }
+        ;
+
+purge_archive_option:
+          TO_SYM TEXT_STRING_sys
+          {
+            Lex->to_log = $2.str;
+            Lex->sql_command= SQLCOM_PURGE_ARCHIVE;
+          }
+        | BEFORE_SYM expr
+          {
+            LEX *lex= Lex;
+            lex->value_list.empty();
+            lex->value_list.push_front($2);
+            lex->sql_command= SQLCOM_PURGE_ARCHIVE_BEFORE;
           }
         ;
 
@@ -14150,6 +14167,7 @@ keyword_sp:
         | AGGREGATE_SYM            {}
         | ALGORITHM_SYM            {}
         | ANALYSE_SYM              {}
+        | ARCHIVED_SYM             {}
         | ANY_SYM                  {}
         | AT_SYM                   {}
         | AUTO_INC                 {}
