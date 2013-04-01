@@ -30,6 +30,7 @@
 
 // Initialize static members
 uint Connection_handler_manager::connection_count= 0;
+uint Connection_handler_manager::extra_connection_count= 0;
 ulong Connection_handler_manager::max_used_connections= 0;
 ulong Connection_handler_manager::max_used_connections_time= 0;
 THD_event_functions* Connection_handler_manager::event_functions= NULL;
@@ -72,11 +73,20 @@ static void scheduler_wait_sync_end()
 }
 
 
-bool Connection_handler_manager::valid_connection_count()
+bool Connection_handler_manager::valid_connection_count(
+                                               bool extra_port_connection)
 {
   bool connection_accepted= true;
   mysql_mutex_lock(&LOCK_connection_count);
-  if (connection_count > max_connections)
+  if (extra_port_connection)
+  {
+    if (extra_connection_count > extra_max_connections)
+    {
+      connection_accepted= false;
+      m_connection_errors_max_connection++;
+    }
+  }
+  else if (connection_count > max_connections)
   {
     connection_accepted= false;
     m_connection_errors_max_connection++;
@@ -86,7 +96,8 @@ bool Connection_handler_manager::valid_connection_count()
 }
 
 
-bool Connection_handler_manager::check_and_incr_conn_count()
+bool Connection_handler_manager::check_and_incr_conn_count(
+                                               bool extra_port_connection)
 {
   bool connection_accepted= true;
   mysql_mutex_lock(&LOCK_connection_count);
@@ -98,7 +109,19 @@ bool Connection_handler_manager::check_and_incr_conn_count()
     checked later during authentication where valid_connection_count()
     is called for non-SUPER users only.
   */
-  if (connection_count > max_connections)
+  if (extra_port_connection)
+  {
+    if (extra_connection_count > extra_max_connections)
+    {
+      connection_accepted= false;
+      m_connection_errors_max_connection++;
+    }
+    else
+    {
+      ++extra_connection_count;
+    }
+  }
+  else if (connection_count > max_connections)
   {
     connection_accepted= false;
     m_connection_errors_max_connection++;
@@ -151,14 +174,18 @@ bool Connection_handler_manager::init()
     DBUG_ASSERT(false);
   }
 
-  if (connection_handler == NULL)
+  Connection_handler *extra_connection_handler=
+    new (std::nothrow) Per_thread_connection_handler();
+
+  if (connection_handler == NULL || extra_connection_handler == NULL)
   {
     // This is a static member function.
     Per_thread_connection_handler::destroy();
     return true;
   }
 
-  m_instance= new (std::nothrow) Connection_handler_manager(connection_handler);
+  m_instance= new (std::nothrow)
+    Connection_handler_manager(connection_handler, extra_connection_handler);
 
   if (m_instance == NULL)
   {
@@ -239,14 +266,19 @@ bool Connection_handler_manager::unload_connection_handler()
 void
 Connection_handler_manager::process_new_connection(Channel_info* channel_info)
 {
-  if (abort_loop || !check_and_incr_conn_count())
+  if (abort_loop
+      || !check_and_incr_conn_count(channel_info->is_on_extra_port()))
   {
     channel_info->send_error_and_close_channel(ER_CON_COUNT_ERROR, 0, true);
+    sql_print_warning("%s", ER_DEFAULT(ER_CON_COUNT_ERROR));
     delete channel_info;
     return;
   }
 
-  if (m_connection_handler->add_connection(channel_info))
+  Connection_handler* handler= channel_info->is_on_extra_port()
+      ? m_extra_connection_handler : m_connection_handler;
+
+  if (handler->add_connection(channel_info))
   {
     inc_aborted_connects();
     delete channel_info;

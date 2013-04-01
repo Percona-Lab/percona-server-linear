@@ -2428,7 +2428,8 @@ acl_authenticate(THD *thd, enum_server_command command,
       !(thd->m_main_security_ctx.check_access(SUPER_ACL)))
   {
 #ifndef EMBEDDED_LIBRARY
-    if (!Connection_handler_manager::get_instance()->valid_connection_count())
+    if (!Connection_handler_manager::get_instance()
+        ->valid_connection_count(extra_port_connection))
     {                                         // too many connections
       release_user_connection(thd);
       my_error(ER_CON_COUNT_ERROR, MYF(0));

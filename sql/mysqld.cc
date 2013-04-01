@@ -1642,8 +1642,8 @@ static bool network_init(void)
 
     Mysqld_socket_listener *mysqld_socket_listener=
       new (std::nothrow) Mysqld_socket_listener(bind_addr_str,
-                                                mysqld_port, back_log,
-                                                mysqld_port_timeout,
+                                                mysqld_port, mysqld_extra_port,
+                                                back_log, mysqld_port_timeout,
                                                 unix_sock_name);
     if (mysqld_socket_listener == NULL)
       return true;
