@@ -1398,6 +1398,21 @@ srv_printf_innodb_monitor(
 	fprintf(file, "%lu read views open inside InnoDB\n",
 		trx_sys->mvcc->size());
 
+	mutex_enter(&trx_sys->mutex);
+
+	fprintf(file, "%lu RW transactions active inside InnoDB\n",
+		UT_LIST_GET_LEN(trx_sys->rw_trx_list));
+
+	ReadView*	oldest_view = trx_sys->mvcc->get_oldest_view();
+	if (oldest_view) {
+
+		fprintf(file, "---OLDEST VIEW---\n");
+		oldest_view->print(file);
+		fprintf(file, "-----------------\n");
+	}
+
+	mutex_exit(&trx_sys->mutex);
+
 	n_reserved = fil_space_get_n_reserved_extents(0);
 	if (n_reserved > 0) {
 		fprintf(file,
@@ -1667,7 +1682,6 @@ srv_export_innodb_status(void)
 		srv_truncated_status_writes;
 
 	export_vars.innodb_available_undo_logs = srv_available_undo_logs;
-
 #ifdef UNIV_DEBUG
 	rw_lock_s_lock(&purge_sys->latch);
 	trx_id_t	up_limit_id;
