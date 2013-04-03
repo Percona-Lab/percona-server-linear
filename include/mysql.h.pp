@@ -244,7 +244,7 @@ bool my_thread_init(void);
 void my_thread_end(void);
 unsigned long net_field_length(unsigned char **packet);
 unsigned long net_field_length_checked(unsigned char **packet,
-                                       unsigned long max_length);
+                                               unsigned long max_length);
 unsigned long long net_field_length_ll(unsigned char **packet);
 unsigned char *net_store_length(unsigned char *pkg, unsigned long long length);
 unsigned int net_length_size(unsigned long long num);
@@ -309,6 +309,7 @@ typedef struct MYSQL_TIME {
 void init_client_errs(void);
 void finish_client_errs(void);
 extern const char *client_errors[];
+extern const char **mysql_client_errors;
 static inline const char *ER_CLIENT(int client_errno) {
   if (client_errno >= 2000 && client_errno <= 2064)
     return client_errors[client_errno - 2000];
