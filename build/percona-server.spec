@@ -259,7 +259,7 @@ be eligible for hot fixes, and boost your team's productivity.
 %package -n Percona-Server-server%{product_suffix}
 Summary:        Percona Server: a very fast and reliable SQL database server
 Group:          Applications/Databases
-Requires:       %{distro_requires} Percona-Server-shared%{product_suffix}
+Requires:       %{distro_requires} Percona-Server-shared%{product_suffix} Percona-Server-client%{product_suffix}
 Provides:       mysql-server MySQL-server
 Conflicts:	Percona-SQL-server-50 Percona-Server-server-51 Percona-Server-server-55
 
@@ -322,8 +322,9 @@ For a description of Percona Server see http://www.percona.com/software/percona-
 %package -n Percona-Server-shared%{product_suffix}
 Summary:        Percona Server - Shared libraries
 Group:          Applications/Databases
-Provides:       mysql-shared
+Provides:       mysql-shared mysql-libs
 Conflicts:	Percona-Server-shared-55
+Obsoletes:	mysql-libs
 
 %description -n Percona-Server-shared%{product_suffix}
 This package contains the shared libraries (*.so*) which certain languages
@@ -404,6 +405,7 @@ mkdir debug
            -DCMAKE_BUILD_TYPE=Debug \
            -DENABLE_DTRACE=OFF \
            -DWITH_EMBEDDED_SERVER=OFF \
+           -DWITH_SSL=system \
            -DMYSQL_UNIX_ADDR="/var/lib/mysql/mysql.sock" \
            -DFEATURE_SET="%{feature_set}" \
            -DCOMPILATION_COMMENT="%{compilation_comment_debug}" \
@@ -421,6 +423,7 @@ mkdir release
            -DCMAKE_BUILD_TYPE=RelWithDebInfo \
            -DENABLE_DTRACE=OFF \
            -DWITH_EMBEDDED_SERVER=OFF \
+           -DWITH_SSL=system \
            -DMYSQL_UNIX_ADDR="/var/lib/mysql/mysql.sock" \
            -DFEATURE_SET="%{feature_set}" \
            -DCOMPILATION_COMMENT="%{compilation_comment_release}" \
@@ -714,11 +717,6 @@ STATUS_FILE=$mysql_datadir/RPM_UPGRADE_MARKER
 # Create data directory if needed, check whether upgrade or install
 # ----------------------------------------------------------------------
 if [ ! -d $mysql_datadir ] ; then mkdir -m 755 $mysql_datadir; fi
-if [ -f $STATUS_FILE ] ; then
-	SERVER_TO_START=`grep '^SERVER_TO_START=' $STATUS_FILE | cut -c17-`
-else
-	SERVER_TO_START=''
-fi
 # echo "Analyzed: SERVER_TO_START=$SERVER_TO_START"
 if [ ! -d $mysql_datadir/mysql ] ; then
 	mkdir $mysql_datadir/mysql;
@@ -976,6 +974,7 @@ echo "====="                                     >> $STATUS_HISTORY
 %doc %attr(644, root, man) %{_mandir}/man1/resolve_stack_dump.1*
 %doc %attr(644, root, man) %{_mandir}/man1/resolveip.1*
 %doc %attr(644, root, man) %{_mandir}/man1/mysql_plugin.1*
+%doc %attr(644, root, man) %{_mandir}/man8/mysqld.8*
 
 %ghost %config(noreplace,missingok) %{_sysconfdir}/my.cnf
 
@@ -1088,6 +1087,7 @@ echo "====="                                     >> $STATUS_HISTORY
 %doc %attr(644, root, man) %{_mandir}/man1/mysqlimport.1*
 %doc %attr(644, root, man) %{_mandir}/man1/mysqlshow.1*
 %doc %attr(644, root, man) %{_mandir}/man1/mysqlslap.1*
+%doc %attr(644, root, man) %{_mandir}/man1/mysql_config_editor.1*
 
 # ----------------------------------------------------------------------------
 %files -n Percona-Server-devel%{product_suffix} -f optional-files-devel
