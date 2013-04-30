@@ -4841,6 +4841,8 @@ static void do_change_user(struct st_command *command) {
     cur_con->stmt = nullptr;
     mysql_reconnect(&cur_con->mysql);
   }
+  else
+    handle_no_error(command);
 
   dynstr_free(&ds_user);
   dynstr_free(&ds_passwd);
