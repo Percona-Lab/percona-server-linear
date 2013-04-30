@@ -1244,7 +1244,22 @@ bool dispatch_command(enum enum_server_command command, THD *thd,
     uint save_db_length= thd->db_length;
     Security_context save_security_ctx= *thd->security_ctx;
 
-    auth_rc= acl_authenticate(thd, packet_length);
+    /* Ensure we don't free security_ctx->user in case we have to revert */
+    thd->security_ctx->user= 0;
+    thd->set_user_connect(0);
+
+    /*
+      to limit COM_CHANGE_USER ability to brute-force passwords,
+      we only allow three unsuccessful COM_CHANGE_USER per connection.
+    */
+    if (thd->failed_com_change_user >= 3)
+    {
+      my_message(ER_UNKNOWN_COM_ERROR, ER(ER_UNKNOWN_COM_ERROR), MYF(0));
+      auth_rc= 1;
+    }
+    else
+      auth_rc= acl_authenticate(thd, packet_length);
+
     MYSQL_AUDIT_NOTIFY_CONNECTION_CHANGE_USER(thd);
     if (auth_rc)
     {
