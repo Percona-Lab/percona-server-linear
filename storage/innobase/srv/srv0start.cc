@@ -2410,8 +2410,30 @@ files_checked:
 				return(srv_init_abort(err));
 			}
 
+			if (saved_srv_track_changed_pages) {
+				log_mutex_enter();
+				lsn_t checkpoint_lsn
+					= log_sys->last_checkpoint_lsn;
+				log_sys->last_checkpoint_lsn = log_sys->lsn;
+				log_mutex_exit();
+				ib::info()
+					<< "Tracking redo log synchronously "
+					"until " << checkpoint_lsn;
+				srv_track_changed_pages = true;
+				if (!log_online_follow_redo_log()) {
+					return(srv_init_abort(DB_ERROR));
+				}
+				srv_track_changed_pages = false;
+			}
+
+			/* create_log_files() can increase system lsn that is
+			why FIL_PAGE_FILE_FLUSH_LSN have to be updated */
+			flushed_lsn = log_get_lsn();
+			fil_write_flushed_lsn(flushed_lsn);
+			fil_flush_file_spaces(FIL_TYPE_TABLESPACE);
+
 			create_log_files_rename(
-				logfilename, dirnamelen, flushed_lsn,
+				logfilename, dirnamelen, log_get_lsn(),
 				logfile0);
 
 			if (saved_srv_track_changed_pages) {
