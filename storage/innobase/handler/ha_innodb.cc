@@ -16071,7 +16071,7 @@ static MYSQL_SYSVAR_STR(log_group_home_dir, srv_log_group_home_dir,
 static MYSQL_SYSVAR_ULONG(log_arch_expire_sec,
   srv_log_arch_expire_sec, PLUGIN_VAR_OPCMDARG,
   "Expiration time for archived innodb transaction logs.",
-  NULL, innodb_log_archive_expire_update, 0, 0, ~0L, 0);
+  NULL, innodb_log_archive_expire_update, 0, 0, ~0UL, 0);
 
 static MYSQL_SYSVAR_ULONG(max_dirty_pages_pct, srv_max_buf_pool_modified_pct,
   PLUGIN_VAR_RQCMDARG,

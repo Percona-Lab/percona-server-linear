@@ -236,13 +236,8 @@ URL:            http://www.percona.com/
 Packager:       Percona MySQL Development Team <mysqldev@percona.com>
 Vendor:         %{percona_server_vendor}
 Provides:       mysql-server
-#
-%if %{rhel}
-BuildRequires: pam-devel
-%endif
-#
 BuildRequires:  %{distro_buildreq}
-#
+
 # Think about what you use here since the first step is to
 # run a rm -rf
 BuildRoot:    %{_tmppath}/%{name}-%{version}-build
@@ -412,8 +407,7 @@ mkdir debug
            -DMYSQL_UNIX_ADDR="/var/lib/mysql/mysql.sock" \
            -DFEATURE_SET="%{feature_set}" \
            -DCOMPILATION_COMMENT="%{compilation_comment_debug}" \
-           -DMYSQL_SERVER_SUFFIX="%{server_suffix}" \
-	   -DWITH_PAM=ON
+           -DMYSQL_SERVER_SUFFIX="%{server_suffix}"
   echo BEGIN_DEBUG_CONFIG ; egrep '^#define' include/config.h ; echo END_DEBUG_CONFIG
   make ${MAKE_JFLAG}
 )
@@ -430,8 +424,7 @@ mkdir release
            -DMYSQL_UNIX_ADDR="/var/lib/mysql/mysql.sock" \
            -DFEATURE_SET="%{feature_set}" \
            -DCOMPILATION_COMMENT="%{compilation_comment_release}" \
-           -DMYSQL_SERVER_SUFFIX="%{server_suffix}" \
-           -DWITH_PAM=ON
+           -DMYSQL_SERVER_SUFFIX="%{server_suffix}"
   echo BEGIN_NORMAL_CONFIG ; egrep '^#define' include/config.h ; echo END_NORMAL_CONFIG
   make ${MAKE_JFLAG}
   cd ../
@@ -1015,6 +1008,7 @@ echo "====="                                     >> $STATUS_HISTORY
 %attr(755, root, root) %{_sbindir}/mysqld
 %attr(755, root, root) %{_sbindir}/mysqld-debug
 %attr(755, root, root) %{_sbindir}/rcmysql
+%attr(755, root, root) %{_bindir}/innodb_memcached_config.sql
 %attr(755, root, root) %{_libdir}/mysql/plugin/daemon_example.ini
 %attr(755, root, root) %{_libdir}/mysql/plugin/adt_null.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/libdaemon_example.so
