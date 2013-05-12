@@ -403,7 +403,7 @@ static PSI_thread_info	all_innodb_threads[] = {
 	{&srv_master_thread_key, "srv_master_thread", 0},
 	{&srv_purge_thread_key, "srv_purge_thread", 0},
 	{&buf_page_cleaner_thread_key, "page_cleaner_thread", 0},
-	{&recv_writer_thread_key, "recovery writer thread", 0},
+	{&recv_writer_thread_key, "recv_writer_thread", 0},
 	{&srv_log_tracking_thread_key, "srv_redo_log_follow_thread", 0}
 };
 # endif /* UNIV_PFS_THREAD */
