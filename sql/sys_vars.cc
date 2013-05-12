@@ -4047,17 +4047,6 @@ static Sys_var_set Sys_log_slow_verbosity(
         log_slow_verbosity_name, DEFAULT(SLOG_V_MICROTIME),
         NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(0),
         ON_UPDATE(update_log_slow_verbosity_helper));
-static Sys_var_mybool Sys_log_slow_slave_statements(
-       "log_slow_slave_statements",
-       "Log queries replayed be the slave SQL thread",
-       GLOBAL_VAR(opt_log_slow_slave_statements), CMD_LINE(OPT_ARG),
-       DEFAULT(FALSE));
-static Sys_var_mybool Sys_log_slow_admin_statements(
-       "log_slow_admin_statements",
-       "Log slow OPTIMIZE, ANALYZE, ALTER and other administrative statements"
-       " to the slow log if it is open.",
-       GLOBAL_VAR(opt_log_slow_admin_statements), CMD_LINE(OPT_ARG),
-       DEFAULT(FALSE));
 static Sys_var_mybool Sys_log_slow_sp_statements(
        "log_slow_sp_statements",
        "Log slow statements executed by stored procedure to the slow log if it is open.",
