@@ -7495,6 +7495,7 @@ int handler::ha_write_row(uchar *buf)
               m_lock_type == F_WRLCK);
 
   DBUG_ENTER("handler::ha_write_row");
+  DEBUG_SYNC(ha_thd(), "start_ha_write_row");
   DBUG_EXECUTE_IF("inject_error_ha_write_row",
                   DBUG_RETURN(HA_ERR_INTERNAL_ERROR); );
 
