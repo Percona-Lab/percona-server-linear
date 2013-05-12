@@ -210,7 +210,7 @@ static long yassl_send(void *ptr, const void *buf, size_t len)
 
 #endif
 
-int vio_ssl_shutdown(Vio *vio)
+int vio_ssl_shutdown(Vio *vio, int how)
 {
   int r= 0;
   SSL *ssl= (SSL*)vio->ssl_arg;
@@ -245,7 +245,7 @@ int vio_ssl_shutdown(Vio *vio)
       break;
     }
   }
-  DBUG_RETURN(vio_shutdown(vio));
+  DBUG_RETURN(vio_shutdown(vio, how));
 }
 
 
@@ -255,7 +255,7 @@ void vio_ssl_delete(Vio *vio)
     return; /* It must be safe to delete null pointer */
 
   if (vio->inactive == FALSE)
-    vio_ssl_shutdown(vio); /* Still open, close connection first */
+    vio_ssl_shutdown(vio, SHUT_RDWR); /* Still open, close connection first */
 
   if (vio->ssl_arg)
   {
