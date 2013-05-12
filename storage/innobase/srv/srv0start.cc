@@ -1611,10 +1611,6 @@ innobase_start_or_create_for_mysql(void)
 #endif /* UNIV_ZIP_COPY */
 
 
-	ib_logf(IB_LOG_LEVEL_INFO,
-		"CPU %s crc32 instructions",
-		ut_crc32_sse2_enabled ? "supports" : "does not support");
-
 	/* Since InnoDB does not currently clean up all its internal data
 	structures in MySQL Embedded Server Library server_end(), we
 	print an error message if someone tries to start up InnoDB a
@@ -1754,6 +1750,10 @@ innobase_start_or_create_for_mysql(void)
 	}
 
 	srv_boot();
+
+	ib_logf(IB_LOG_LEVEL_INFO,
+		"%s CPU crc32 instructions",
+		ut_crc32_sse2_enabled ? "Using" : "Not using");
 
 	if (!srv_read_only_mode) {
 
@@ -1909,7 +1909,7 @@ innobase_start_or_create_for_mysql(void)
 
 	/* Create i/o-handler threads: */
 
-	for (ulint i = 0; i < srv_n_file_io_threads; ++i) {
+	for (i = 0; i < srv_n_file_io_threads; ++i) {
 
 		n[i] = i;
 
@@ -2451,14 +2451,8 @@ files_checked:
 				return(err);
 			}
 
-			/* create_log_files() can increase system lsn that is
-			why FIL_PAGE_FILE_FLUSH_LSN have to be updated */
-			min_flushed_lsn = max_flushed_lsn = log_get_lsn();
-			fil_write_flushed_lsn_to_data_files(min_flushed_lsn, 0);
-			fil_flush_file_spaces(FIL_TABLESPACE);
-
 			create_log_files_rename(logfilename, dirnamelen,
-						log_get_lsn(), logfile0);
+						max_flushed_lsn, logfile0);
 		}
 
 		srv_startup_is_before_trx_rollback_phase = FALSE;

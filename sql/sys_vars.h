@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, 2011, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2009, 2013, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -193,6 +193,9 @@ public:
       if (SIGNED)
       {
         longlong max_val= *max_var_ptr();
+        fprintf(stderr, "v = %lld, max_val = %lld\n", v, max_val);
+        fprintf(stderr, "save_result = %lld\n",
+                (longlong)(var->save_result.ulonglong_value));
         if (((longlong)(var->save_result.ulonglong_value)) > max_val)
           var->save_result.ulonglong_value= max_val;
         /*
@@ -215,6 +218,12 @@ public:
       (getopt_constraint_get_min_value(option.name, 0, FALSE));
     vmax= static_cast<const T *>
       (getopt_constraint_get_max_value(option.name, 0, FALSE));
+    if (vmin)
+      fprintf(stderr, "vmin = signed %lld, unsigned %llu\n",
+              (long long)*vmin, (unsigned long long)*vmin);
+    if (vmax)
+      fprintf(stderr, "vmax = signed %lld, unsigned %llu\n",
+              (long long)*vmax, (unsigned long long)*vmax);
 
     if (SIGNED)
     {
@@ -1921,7 +1930,7 @@ public:
   { DBUG_ASSERT(FALSE); return NULL; }
 };
 
-#ifdef HAVE_NDB_BINLOG
+#ifdef HAVE_GTID_NEXT_LIST
 /**
   Class for variables that store values of type Gtid_set.
 
@@ -2246,7 +2255,10 @@ end:
   }
 
   void global_save_default(THD *thd, set_var *var)
-  { DBUG_ASSERT(FALSE); }
+  {
+    /* gtid_purged does not have default value */
+    my_error(ER_NO_DEFAULT, MYF(0), var->var->name.str);
+  }
 
   bool do_check(THD *thd, set_var *var)
   {
@@ -2306,7 +2318,7 @@ public:
       DBUG_RETURN((uchar *)thd->strdup(""));
     if (thd->owned_gtid.sidno == -1)
     {
-#ifdef HAVE_NDB_BINLOG
+#ifdef HAVE_GTID_NEXT_LIST
       buf= (char *)thd->alloc(thd->owned_gtid_set.get_string_length() + 1);
       if (buf)
       {

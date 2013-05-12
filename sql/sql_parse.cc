@@ -1,4 +1,4 @@
-/* Copyright (c) 2000, 2012, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2000, 2013, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -451,7 +451,9 @@ void init_update_queries(void)
   sql_command_flags[SQLCOM_GRANT]=             CF_CHANGES_DATA;
   sql_command_flags[SQLCOM_REVOKE]=            CF_CHANGES_DATA;
   sql_command_flags[SQLCOM_REVOKE_ALL]=        CF_CHANGES_DATA;
+  sql_command_flags[SQLCOM_REPAIR]=            CF_CHANGES_DATA;
   sql_command_flags[SQLCOM_OPTIMIZE]=          CF_CHANGES_DATA;
+  sql_command_flags[SQLCOM_ANALYZE]=           CF_CHANGES_DATA;
   sql_command_flags[SQLCOM_CREATE_FUNCTION]=   CF_CHANGES_DATA | CF_AUTO_COMMIT_TRANS;
   sql_command_flags[SQLCOM_CREATE_PROCEDURE]=  CF_CHANGES_DATA | CF_AUTO_COMMIT_TRANS;
   sql_command_flags[SQLCOM_CREATE_SPFUNCTION]= CF_CHANGES_DATA | CF_AUTO_COMMIT_TRANS;
@@ -478,9 +480,9 @@ void init_update_queries(void)
     The following admin table operations are allowed
     on log tables.
   */
-  sql_command_flags[SQLCOM_REPAIR]=    CF_WRITE_LOGS_COMMAND | CF_AUTO_COMMIT_TRANS;
+  sql_command_flags[SQLCOM_REPAIR]|=    CF_WRITE_LOGS_COMMAND | CF_AUTO_COMMIT_TRANS;
   sql_command_flags[SQLCOM_OPTIMIZE]|= CF_WRITE_LOGS_COMMAND | CF_AUTO_COMMIT_TRANS;
-  sql_command_flags[SQLCOM_ANALYZE]=   CF_WRITE_LOGS_COMMAND | CF_AUTO_COMMIT_TRANS;
+  sql_command_flags[SQLCOM_ANALYZE]|=   CF_WRITE_LOGS_COMMAND | CF_AUTO_COMMIT_TRANS;
   sql_command_flags[SQLCOM_CHECK]=     CF_WRITE_LOGS_COMMAND | CF_AUTO_COMMIT_TRANS;
 
   sql_command_flags[SQLCOM_CREATE_USER]|=       CF_AUTO_COMMIT_TRANS;
@@ -1274,22 +1276,7 @@ bool dispatch_command(enum enum_server_command command, THD *thd,
     const CHARSET_INFO *save_character_set_results=
       thd->variables.character_set_results;
 
-    /* Ensure we don't free security_ctx->user in case we have to revert */
-    thd->security_ctx->user= 0;
-    thd->set_user_connect(0);
-
-    /*
-      to limit COM_CHANGE_USER ability to brute-force passwords,
-      we only allow three unsuccessful COM_CHANGE_USER per connection.
-    */
-    if (thd->failed_com_change_user >= 3)
-    {
-      my_message(ER_UNKNOWN_COM_ERROR, ER(ER_UNKNOWN_COM_ERROR), MYF(0));
-      auth_rc= 1;
-    }
-    else
-      auth_rc= acl_authenticate(thd, packet_length);
-
+    auth_rc= acl_authenticate(thd, packet_length);
     MYSQL_AUDIT_NOTIFY_CONNECTION_CHANGE_USER(thd);
     if (auth_rc)
     {
@@ -1301,8 +1288,6 @@ bool dispatch_command(enum enum_server_command command, THD *thd,
       thd->variables.collation_connection= save_collation_connection;
       thd->variables.character_set_results= save_character_set_results;
       thd->update_charset();
-      thd->failed_com_change_user++;
-      my_sleep(1000000);
     }
     else
     {
@@ -2980,7 +2965,16 @@ case SQLCOM_PREPARE:
     {
       mysql_mutex_lock(&LOCK_active_mi);
     }
-    res = show_slave_status(thd, active_mi);
+    if (active_mi != NULL)
+    {
+      res = show_slave_status(thd, active_mi);
+    }
+    else
+    {
+      push_warning(thd, Sql_condition::WARN_LEVEL_WARN,
+                   WARN_NO_MASTER_INFO, ER(WARN_NO_MASTER_INFO));
+      my_ok(thd);
+    }
     if(do_lock)
     {
       mysql_mutex_unlock(&LOCK_active_mi);
@@ -6176,8 +6170,18 @@ mysql_new_select(LEX *lex, bool move_down)
         This subquery is part of an ON clause, so we need to link the
         name resolution context for this subquery with the ON context.
 
-        @todo In which cases is this not the same as
-        &select_lex->outer_select()->context?
+        @todo outer_context is not the same as
+        &select_lex->outer_select()->context in one case:
+        (SELECT 1 as a) UNION (SELECT 2) ORDER BY (SELECT a);
+        When we create the select_lex for the subquery in ORDER BY,
+        1) outer_context is the context of the second SELECT of the
+        UNION
+        2) &select_lex->outer_select() is the fake select_lex, which context
+        is the one of the first SELECT of the UNION (see
+        st_select_lex_unit::add_fake_select_lex()).
+        2) is the correct context, per the documentation. 1) is not, and using
+        it leads to a resolving error for the query above.
+        We should fix 1) and then use it unconditionally here.
       */
       select_lex->context.outer_context= outer_context;
     else
@@ -7219,6 +7223,9 @@ bool st_select_lex_unit::add_fake_select_lex(THD *thd_arg)
   @param left_op   left  operand of the JOIN
   @param right_op  rigth operand of the JOIN
 
+  @todo Research if we should set the "outer_context" member of the new ON
+  context.
+
   @retval
     FALSE  if all is OK
   @retval
@@ -7238,6 +7245,9 @@ push_new_name_resolution_context(THD *thd,
   on_context->last_name_resolution_table=
     right_op->last_leaf_for_name_resolution();
   on_context->select_lex= thd->lex->current_select;
+  // Save join nest's context in right_op, to find it later in view merging.
+  DBUG_ASSERT(right_op->context_of_embedding == NULL);
+  right_op->context_of_embedding= on_context;
   return thd->lex->push_context(on_context);
 }
 

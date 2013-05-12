@@ -1,4 +1,4 @@
-/* Copyright (c) 2000, 2012, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2000, 2013, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -1336,7 +1336,7 @@ void close_files()
 void free_used_memory()
 {
   uint i;
-  DBUG_ENTER("free_used_memory");
+  // Do not use DBUG_ENTER("free_used_memory"); here, see below.
 
   if (connections)
     close_connections();
@@ -2024,18 +2024,9 @@ void check_result()
     size_t reject_length;
     dirname_part(reject_file, result_file_name, &reject_length);
 
-    if (access(reject_file, W_OK) == 0)
-    {
-      /* Result file directory is writable, save reject file there */
-      fn_format(reject_file, result_file_name, NULL,
-                ".reject", MY_REPLACE_EXT);
-    }
-    else
-    {
-      /* Put reject file in opt_logdir */
-      fn_format(reject_file, result_file_name, opt_logdir,
+    /* Put reject file in opt_logdir */
+    fn_format(reject_file, result_file_name, opt_logdir,
                 ".reject", MY_REPLACE_DIR | MY_REPLACE_EXT);
-    }
 
     if (my_copy(log_file.file_name(), reject_file, MYF(0)) != 0)
       die("Failed to copy '%s' to '%s', errno: %d",
@@ -4165,10 +4156,7 @@ void do_change_user(struct st_command *command)
                       cur_con->name, ds_user.str, ds_passwd.str, ds_db.str));
 
   if (mysql_change_user(mysql, ds_user.str, ds_passwd.str, ds_db.str))
-    handle_error(command, mysql_errno(mysql), mysql_error(mysql),
-                 mysql_sqlstate(mysql), &ds_res);
-  else
-    handle_no_error(command);
+    die("change user failed: %s", mysql_error(mysql));
 
   dynstr_free(&ds_user);
   dynstr_free(&ds_passwd);
@@ -5506,6 +5494,7 @@ void do_connect(struct st_command *command)
   char *con_options;
   my_bool con_ssl= 0, con_compress= 0;
   my_bool con_pipe= 0, con_shm= 0, con_cleartext_enable= 0;
+  my_bool con_secure_auth= 1;
   struct st_connection* con_slot;
 
   static DYNAMIC_STRING ds_connection_name;
@@ -5597,6 +5586,8 @@ void do_connect(struct st_command *command)
       con_shm= 1;
     else if (!strncmp(con_options, "CLEARTEXT", 9))
       con_cleartext_enable= 1;
+    else if (!strncmp(con_options, "SKIPSECUREAUTH",14))
+      con_secure_auth= 0;
     else
       die("Illegal option to connect: %.*s", 
           (int) (end - con_options), con_options);
@@ -5707,6 +5698,10 @@ void do_connect(struct st_command *command)
   if (con_cleartext_enable)
     mysql_options(&con_slot->mysql, MYSQL_ENABLE_CLEARTEXT_PLUGIN,
                   (char*) &con_cleartext_enable);
+
+  if (!con_secure_auth)
+    mysql_options(&con_slot->mysql, MYSQL_SECURE_AUTH,
+                  (char*) &con_secure_auth);
 
   /* Special database to allow one to connect without a database name */
   if (ds_database.length && !strcmp(ds_database.str,"*NO-ONE*"))
