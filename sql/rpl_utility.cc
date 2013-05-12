@@ -1632,7 +1632,6 @@ void Deferred_log_events::rewind()
     if (array.elements > array.max_element)
       freeze_size(&array);
     reset_dynamic(&array);
-    last_added= NULL;
   }
 }
 
