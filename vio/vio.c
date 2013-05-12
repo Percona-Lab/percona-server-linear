@@ -56,18 +56,6 @@ my_bool vio_shared_memory_has_data(Vio *vio)
 {
   return (vio->shared_memory_remain > 0);
 }
-
-int vio_shared_memory_shutdown(Vio *vio, int how)
-{
-  SetEvent(vio->event_conn_closed);
-  SetEvent(vio->event_server_wrote);
-  return 0;
-}
-
-int vio_pipe_shutdown(Vio *vio, int how)
-{
-  return cancel_io(vio->hPipe, vio->thread_id);
-}
 #endif
 
 /*
@@ -108,7 +96,6 @@ static void vio_init(Vio *vio, enum enum_vio_type type,
     vio->io_wait        =no_io_wait;
     vio->is_connected   =vio_is_connected_pipe;
     vio->has_data       =has_no_data;
-    vio->shutdown       =vio_pipe_shutdown;
     DBUG_VOID_RETURN;
   }
 #endif
@@ -128,7 +115,6 @@ static void vio_init(Vio *vio, enum enum_vio_type type,
     vio->io_wait        =no_io_wait;
     vio->is_connected   =vio_is_connected_shared_memory;
     vio->has_data       =vio_shared_memory_has_data;
-    vio->shutdown       =vio_shared_memory_shutdown;
     DBUG_VOID_RETURN;
   }
 #endif
@@ -149,7 +135,6 @@ static void vio_init(Vio *vio, enum enum_vio_type type,
     vio->is_connected   =vio_is_connected;
     vio->has_data       =vio_ssl_has_data;
     vio->timeout        =vio_socket_timeout;
-    vio->shutdown       =vio_socket_shutdown;
     DBUG_VOID_RETURN;
   }
 #endif /* HAVE_OPENSSL */
@@ -166,7 +151,6 @@ static void vio_init(Vio *vio, enum enum_vio_type type,
   vio->io_wait          =vio_io_wait;
   vio->is_connected     =vio_is_connected;
   vio->timeout          =vio_socket_timeout;
-  vio->shutdown         =vio_socket_shutdown;
   vio->has_data=        (flags & VIO_BUFFERED_READ) ?
                             vio_buff_has_data : has_no_data;
   DBUG_VOID_RETURN;
@@ -359,7 +343,7 @@ void vio_delete(Vio* vio)
     return; /* It must be safe to delete null pointers. */
 
   if (vio->inactive == FALSE)
-    vio->vioshutdown(vio);
+    vio->vioshutdown(vio, SHUT_RDWR);
   my_free(vio->read_buffer);
   my_free(vio);
 }

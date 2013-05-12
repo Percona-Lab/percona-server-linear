@@ -4175,7 +4175,7 @@ dump:
 							    update)
 		    && (!page_zip || btr_cur_update_alloc_zip(
 				page_zip, &page_cur, index, offsets,
-				rec_offs_size(offsets), false, mtr))) {
+				rec_offs_size(offsets), false, mtr, NULL))) {
 			/* This is the easy case. Do something similar
 			to btr_cur_update_in_place(). */
 			rec = page_cur_get_rec(&page_cur);

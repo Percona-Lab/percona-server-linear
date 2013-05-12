@@ -2306,7 +2306,9 @@ purge_archived_logs(
 			continue;
 		}
 
-		if (os_file_delete_if_exists(archived_log_filename) == FALSE) {
+		if (!os_file_delete_if_exists(innodb_file_data_key,
+					     archived_log_filename)) {
+
 			ib_logf(IB_LOG_LEVEL_WARN,
 				"can't delete archived log file %s.\n",
 				archived_log_filename);
