@@ -249,18 +249,6 @@ int cancel_io(HANDLE handle, DWORD thread_id)
 }
 #endif
 
-int vio_socket_shutdown(Vio *vio, int how)
-{
-  int ret= shutdown(mysql_socket_getfd(vio->mysql_socket), how);
-#ifdef  _WIN32
-  /* Cancel possible IO in progress (shutdown does not do that on Windows). */
-  (void) cancel_io((HANDLE)vio->mysql_socket, vio->thread_id);
-#endif
-  return ret;
-}
-
-
-
 //WL#4896: Not covered
 static int vio_set_blocking(Vio *vio, my_bool status)
 {
@@ -456,7 +444,7 @@ vio_was_timeout(Vio *vio)
 }
 
 
-int vio_shutdown(Vio * vio)
+int vio_shutdown(Vio * vio, int how)
 {
   int r=0;
   DBUG_ENTER("vio_shutdown");
@@ -468,8 +456,13 @@ int vio_shutdown(Vio * vio)
       vio->type == VIO_TYPE_SSL);
 
     DBUG_ASSERT(mysql_socket_getfd(vio->mysql_socket) >= 0);
-    if (mysql_socket_shutdown(vio->mysql_socket, SHUT_RDWR))
+    if (mysql_socket_shutdown(vio->mysql_socket, how))
       r= -1;
+#ifdef  _WIN32
+    /* Cancel possible IO in progress (shutdown does not do that on
+    Windows). */
+    (void) cancel_io((HANDLE)vio->mysql_socket, vio->thread_id);
+#endif
     if (mysql_socket_close(vio->mysql_socket))
       r= -1;
   }
