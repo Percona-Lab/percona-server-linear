@@ -1373,7 +1373,8 @@ btr_cur_optimistic_insert(
 	page = buf_block_get_frame(block);
 	index = cursor->index;
 
-	ut_ad(mtr_memo_contains(mtr, block, MTR_MEMO_PAGE_X_FIX));
+	ut_ad((thr && thr_get_trx(thr)->fake_changes)
+	      || mtr_memo_contains(mtr, block, MTR_MEMO_PAGE_X_FIX));
 	ut_ad(!dict_index_is_online_ddl(index)
 	      || dict_index_is_clust(index)
 	      || (flags & BTR_CREATE_FLAG));
@@ -1394,8 +1395,9 @@ btr_cur_optimistic_insert(
 	}
 #endif /* UNIV_DEBUG */
 
-	ut_ad((thr && thr_get_trx(thr)->fake_changes) || mtr_memo_contains(mtr, block, MTR_MEMO_PAGE_X_FIX));
-	max_size = page_get_max_insert_size_after_reorganize(page, 1);
+	ut_ad((thr && thr_get_trx(thr)->fake_changes)
+	      || mtr_memo_contains(mtr, block, MTR_MEMO_PAGE_X_FIX));
+
 	leaf = page_is_leaf(page);
 
 	/* Calculate the record size when entry is converted to a record */
@@ -1722,7 +1724,7 @@ btr_cur_pessimistic_insert(
 
 	if (thr && thr_get_trx(thr)->fake_changes) {
 		/* skip CHANGE, LOG */
-		if (n_extents > 0) {
+		if (n_reserved > 0) {
 			fil_space_release_free_extents(index->space,
 						       n_reserved);
 		}
@@ -1991,7 +1993,8 @@ btr_cur_update_alloc_zip_func(
 	ulint		length,	/*!< in: size needed */
 	bool		create,	/*!< in: true=delete-and-insert,
 				false=update-in-place */
-	mtr_t*		mtr)	/*!< in/out: mini-transaction */
+	mtr_t*		mtr,	/*!< in/out: mini-transaction */
+	trx_t*		trx)	/*!< in: NULL or transaction */
 {
 	const page_t*	page = page_cur_get_page(cursor);
 
@@ -2017,19 +2020,16 @@ btr_cur_update_alloc_zip_func(
 		return(false);
 	}
 
-	if (trx && trx->fake_changes) {
+	if (UNIV_UNLIKELY(trx && trx->fake_changes)) {
 		/* Don't call page_zip_compress_write_log_no_data as that has
 		assert which would fail. Assume there won't be a compression
 		failure. */
 
-		return TRUE;
+		return(true);
 	}
 
-	if (!page_zip_compress(
-		page_zip, page, index, compression_level,
-		log_compressed ? mtr : NULL)) {
-		/* Unable to compress the page */
-		return(FALSE);
+	if (!btr_page_reorganize(cursor, index, mtr)) {
+		goto out_of_space;
 	}
 
 	rec_offs_make_valid(page_cur_get_rec(cursor), index, offsets);
@@ -2127,7 +2127,7 @@ btr_cur_update_in_place(
 		if (!btr_cur_update_alloc_zip(
 			    page_zip, btr_cur_get_page_cur(cursor),
 			    index, offsets, rec_offs_size(offsets),
-			    false, mtr)) {
+			    false, mtr, trx)) {
 			return(DB_ZIP_OVERFLOW);
 		}
 
@@ -2348,7 +2348,7 @@ any_extern:
 	if (page_zip) {
 		if (!btr_cur_update_alloc_zip(
 			    page_zip, page_cursor, index, *offsets,
-			    new_rec_size, true, mtr)) {
+			    new_rec_size, true, mtr, thr_get_trx(thr))) {
 			return(DB_ZIP_OVERFLOW);
 		}
 
@@ -2618,6 +2618,7 @@ btr_cur_pessimistic_update(
 
 	if (optim_err == DB_OVERFLOW) {
 		ulint	reserve_flag;
+		ulint	n_extents;
 
 		/* First reserve enough free space for the file segments
 		of the index tree, so that the update will not fail because
@@ -3461,6 +3462,8 @@ btr_cur_pessimistic_delete(
 		/* First reserve enough free space for the file segments
 		of the index tree, so that the node pointer updates will
 		not fail because of lack of space */
+
+		ut_a(cursor->tree_height != ULINT_UNDEFINED);
 
 		ulint	n_extents = cursor->tree_height / 32 + 1;
 
