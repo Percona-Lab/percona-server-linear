@@ -57,6 +57,7 @@ Created 12/19/1997 Heikki Tuuri
 #include "read0read.h"
 #include "buf0lru.h"
 #include "ha_prototypes.h"
+#include "srv0start.h"
 #include "m_string.h" /* for my_sys.h */
 #include "my_sys.h" /* DEBUG_SYNC_C */
 

@@ -2600,17 +2600,13 @@ prepare_inplace_alter_table_dict(
 	the data dictionary tables. */
 	ctx->trx = innobase_trx_allocate(ctx->prebuilt->trx->mysql_thd);
 
-	if (UNIV_UNLIKELY(trx->fake_changes)) {
-		trx_rollback_to_savepoint(trx, NULL);
-		trx_free_for_mysql(trx);
+	if (UNIV_UNLIKELY(ctx->trx->fake_changes)) {
+		trx_rollback_to_savepoint(ctx->trx, NULL);
+		trx_free_for_mysql(ctx->trx);
 		DBUG_RETURN(HA_ERR_WRONG_COMMAND);
 	}
 
-	trx_start_for_ddl(trx, TRX_DICT_OP_INDEX);
-
-	if (!heap) {
-		heap = mem_heap_create(1024);
-	}
+	trx_start_for_ddl(ctx->trx, TRX_DICT_OP_INDEX);
 
 	/* Create table containing all indexes to be built in this
 	ALTER TABLE ADD INDEX so that they are in the correct order

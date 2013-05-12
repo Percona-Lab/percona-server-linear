@@ -72,7 +72,7 @@ Vio* vio_new_win32shared_memory(HANDLE handle_file_map,
 #endif /* __WIN__ */
 
 void    vio_delete(Vio* vio);
-int vio_shutdown(Vio* vio);
+int vio_shutdown(Vio* vio, int how);
 my_bool vio_reset(Vio* vio, enum enum_vio_type type,
                   my_socket sd, void *ssl, uint flags);
 size_t  vio_read(Vio *vio, uchar *	buf, size_t size);
@@ -265,9 +265,8 @@ struct st_vio
      further communications can take place, however any related buffers,
      descriptors, handles can remain valid after a shutdown.
   */
-  int     (*vioshutdown)(Vio*);
+  int     (*vioshutdown)(Vio*, int);
   my_bool (*is_connected)(Vio*);
-  int     (*shutdown)(Vio *, int);
   my_bool (*has_data) (Vio*);
   int (*io_wait)(Vio*, enum enum_vio_io_event, int);
   my_bool (*connect)(Vio*, struct sockaddr *, socklen_t, int);
