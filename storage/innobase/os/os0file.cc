@@ -3840,7 +3840,6 @@ os_file_set_eof(
 	return(!ftruncate(fileno(file), ftell(file)));
 }
 
-#ifdef UNIV_HOTBACKUP
 /** Closes a file handle.
 @param[in]	file		Handle to a file
 @return true if success */
@@ -3850,7 +3849,6 @@ os_file_close_no_error_handling(
 {
 	return(close(file) != -1);
 }
-#endif /* UNIV_HOTBACKUP */
 
 /** This function can be called if one wants to post a batch of reads and
 prefers an i/o-handler thread to handle them all at once later. You must
@@ -5159,7 +5157,6 @@ os_file_set_eof(
 	return(SetEndOfFile(h));
 }
 
-#ifdef UNIV_HOTBACKUP
 /** Closes a file handle.
 @param[in]	file		Handle to close
 @return true if success */
@@ -5169,7 +5166,6 @@ os_file_close_no_error_handling(
 {
 	return(CloseHandle(file) ? true : false);
 }
-#endif /* UNIV_HOTBACKUP */
 
 /** This function can be called if one wants to post a batch of reads and
 prefers an i/o-handler thread to handle them all at once later. You must

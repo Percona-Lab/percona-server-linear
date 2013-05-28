@@ -1727,7 +1727,7 @@ log_online_bitmap_iterator_next(
 
 			/* Advance file */
 			i->in_i++;
-			success = os_file_close(i->in.file);
+			success = os_file_close_no_error_handling(i->in.file);
 			i->in.file = os_file_invalid;
 			if (UNIV_UNLIKELY(!success)) {
 

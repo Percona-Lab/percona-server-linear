@@ -1316,13 +1316,11 @@ to original un-instrumented file I/O APIs */
 
 #endif	/* UNIV_PFS_IO */
 
-#ifdef UNIV_HOTBACKUP
 /** Closes a file handle.
 @param[in] file		handle to a file
 @return true if success */
 bool
 os_file_close_no_error_handling(os_file_t file);
-#endif /* UNIV_HOTBACKUP */
 
 /** Gets a file size.
 @param[in]	file		handle to a file
