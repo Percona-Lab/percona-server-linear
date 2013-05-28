@@ -70,6 +70,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "pars0pars.h"
 #include "srv0mon.h"
 #include "srv0start.h"
+#include "srv0srv.h"
 #include "trx0i_s.h"
 #include "trx0trx.h"
 #include "log0online.h"
@@ -7276,4 +7277,5 @@ struct st_mysql_plugin i_s_innodb_changed_pages = {
     STRUCT_FLD(__reserved1, nullptr),
     STRUCT_FLD(flags, 0UL),
 };
+
 
