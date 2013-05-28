@@ -42,6 +42,7 @@ Created July 18, 2007 Vasil Dimov
 #include "dict0mem.h"
 #include "dict0types.h"
 #include "srv0start.h"
+#include "srv0srv.h"
 #include "trx0i_s.h"
 #include "trx0trx.h"
 #include "srv0mon.h"
@@ -9196,3 +9197,4 @@ i_s_files_table_fill(
 
 	DBUG_RETURN(0);
 }
+
