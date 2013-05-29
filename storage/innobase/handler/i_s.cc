@@ -8428,10 +8428,6 @@ i_s_innodb_changed_pages_fill(
 
 	RETURN_IF_INNODB_NOT_STARTED(tables->schema_table_name);
 
-	if (!srv_track_changed_pages) {
-		DBUG_RETURN(0);
-	}
-
 	if (cond) {
 		limit_lsn_range_from_condition(table, cond, &min_lsn,
 					       &max_lsn);
