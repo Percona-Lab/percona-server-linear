@@ -187,7 +187,7 @@ trx_release_descriptor(
 
 		UT_LIST_REMOVE(trx_serial_list, trx_sys->trx_serial_list,
 			       trx);
-		trx->in_trx_serial_list = 0;
+		trx->in_trx_serial_list = false;
 	}
 
 	descr = trx_find_descriptor(trx_sys->descriptors,
@@ -1104,12 +1104,12 @@ trx_serialisation_number_get(
 
 	trx->no = trx_sys_get_new_trx_id();
 
-	if (UNIV_LIKELY(trx->in_trx_serial_list == 0)) {
+	if (UNIV_LIKELY(!trx->in_trx_serial_list)) {
 
 		UT_LIST_ADD_LAST(trx_serial_list, trx_sys->trx_serial_list,
 				 trx);
 
-		trx->in_trx_serial_list = 1;
+		trx->in_trx_serial_list = true;
 	}
 
 	/* If the rollack segment is not empty then the
