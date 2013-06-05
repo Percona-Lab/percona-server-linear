@@ -25,10 +25,10 @@
 %define mysql_vendor            Oracle and/or its affiliates
 %define percona_server_vendor	Percona, Inc
 
-%define mysql_version   5.6.11
+%define mysql_version   5.6.12
 %define redhatversion %(lsb_release -rs | awk -F. '{ print $1}')
 %define majorversion 60
-%define minorversion 3
+%define minorversion 4
 %define distribution  rhel%{redhatversion}
 %define percona_server_version	rc%{majorversion}.%{minorversion}
 
@@ -348,7 +348,7 @@ BuildUDF() {
         CXXFLAGS="$CXXFLAGS -I$RPM_BUILD_DIR/%{src_dir}/release/include" \
         ./configure --includedir=$RPM_BUILD_DIR/%{src_dir}/include \
         --libdir=%{_libdir}/mysql/plugin
-    make all
+    make ${MAKE_JFLAG} all
     cd -
 }
 
