@@ -6874,14 +6874,14 @@ void adjust_open_files_limit()
   ulong effective_open_files;
 
   /* MyISAM requires two file handles per table. */
-  limit_1= 10 + max_connections + table_cache_size * 2;
+  limit_1= 10 + max_connections + extra_max_connections + table_cache_size * 2;
 
   /*
     We are trying to allocate no less than max_connections*5 file
     handles (i.e. we are trying to set the limit so that they will
     be available).
   */
-  limit_2= max_connections * 5;
+  limit_2= (max_connections + extra_max_connections) * 5;
 
   /* Try to allocate no less than 5000 by default. */
   limit_3= open_files_limit ? open_files_limit : 5000;
@@ -6918,7 +6918,7 @@ void adjust_open_files_limit()
   open_files_limit= effective_open_files;
 }
 
-void adjust_max_connections()
+static void adjust_max_connections()
 {
   ulong limit;
 
@@ -6937,7 +6937,7 @@ void adjust_max_connections()
   }
 }
 
-void adjust_table_cache_size()
+static void adjust_table_cache_size()
 {
   ulong limit;
 
