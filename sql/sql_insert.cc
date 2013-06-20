@@ -311,18 +311,6 @@ static int check_update_fields(THD *thd, TABLE_LIST *insert_table_list,
                                bool fields_and_values_from_different_maps,
                                table_map *map)
 {
-  TABLE *table= insert_table_list->table;
-  my_bool autoinc_mark= FALSE;
-
-  table->next_number_field_updated= FALSE;
-
-  if (table->found_next_number_field)
-  {
-    autoinc_mark=
-      bitmap_test_and_clear(table->write_set,
-                            table->found_next_number_field->field_index);
-  }
-
   /* Check the fields we are going to modify */
   if (setup_fields(thd, Ref_ptr_array(),
                    update_fields, MARK_COLUMNS_WRITE, 0, 0))
@@ -335,16 +323,6 @@ static int check_update_fields(THD *thd, TABLE_LIST *insert_table_list,
                                insert_table_list, map))
     return -1;
 
-  if (table->found_next_number_field)
-  {
-    if (bitmap_is_set(table->write_set,
-                      table->found_next_number_field->field_index))
-      table->next_number_field_updated= TRUE;
-
-    if (autoinc_mark)
-      bitmap_set_bit(table->write_set,
-                     table->found_next_number_field->field_index);
-  }
   return 0;
 }
 
@@ -1673,7 +1651,6 @@ int write_record(THD *thd, TABLE *table, COPY_INFO *info, COPY_INFO *update)
   MY_BITMAP *save_read_set, *save_write_set;
   ulonglong prev_insert_id= table->file->next_insert_id;
   ulonglong insert_id_for_cur_row= 0;
-  ulonglong prev_insert_id_for_cur_row= 0;
   DBUG_ENTER("write_record");
 
   info->stats.records++;
@@ -1859,13 +1836,13 @@ int write_record(THD *thd, TABLE *table, COPY_INFO *info, COPY_INFO *update)
             Except if LAST_INSERT_ID(#) was in the INSERT query, which is
             handled separately by THD::arg_of_last_insert_id_function.
           */
-          prev_insert_id_for_cur_row= table->file->insert_id_for_cur_row;
           insert_id_for_cur_row= table->file->insert_id_for_cur_row= 0;
           trg_error= (table->triggers &&
                       table->triggers->process_triggers(thd, TRG_EVENT_UPDATE,
                                                         TRG_ACTION_AFTER, TRUE));
           info->stats.copied++;
         }
+
 
         goto ok_or_after_trg_err;
       }
