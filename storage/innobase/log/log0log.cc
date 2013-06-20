@@ -2443,7 +2443,7 @@ log_archived_get_offset(
 
 	*offset = archived_lsn - file_no + LOG_FILE_HDR_SIZE;
 
-	if (archived_lsn != IB_ULONGLONG_MAX) {
+	if (archived_lsn != LSN_MAX) {
 		*offset = archived_lsn - file_no + LOG_FILE_HDR_SIZE;
 	} else {
 		/* Archiving was OFF prior startup */
