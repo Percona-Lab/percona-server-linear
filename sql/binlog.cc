@@ -4569,7 +4569,8 @@ int MYSQL_BIN_LOG::purge_logs_maximum_number(ulong max_nr_files)
     }
   }
 
-  error= (to_log[0] ? purge_logs(to_log, 1, 0, 1, (ulonglong *) 0) : 0);
+  error= (to_log[0] ? purge_logs(to_log, true, false, true,
+                                 (ulonglong *) 0, true) : 0);
 
 err:
   mysql_mutex_unlock(&LOCK_index);

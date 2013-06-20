@@ -1672,10 +1672,10 @@ Query_cache::send_result_to_client(THD *thd, char *sql, uint query_length)
   Query_cache_block_table *block_table, *block_table_end;
   ulong tot_length;
   Query_cache_query_flags flags;
-  enum xa_states xa_state= thd->transaction.xid_state.xa_state;
   QueryStripComments *query_strip_comments = &(thd->query_strip_comments);
   char *sql_backup          = sql;
   uint  query_length_backup = query_length;
+  enum xa_states xa_state= thd->transaction.xid_state.xa_state;
   DBUG_ENTER("Query_cache::send_result_to_client");
 
   /*

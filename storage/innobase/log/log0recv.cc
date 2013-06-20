@@ -3840,7 +3840,8 @@ ask_again:
 #endif /* UNIV_DEBUG */
 
 		fil_io(OS_FILE_READ | OS_FILE_LOG, true,
-		       group->archive_space_id, 0, read_offset / UNIV_PAGE_SIZE,
+		       group->archive_space_id, 0,
+		       read_offset / UNIV_PAGE_SIZE,
 		       read_offset % UNIV_PAGE_SIZE, len, buf, NULL);
 
 		ret = recv_scan_log_recs(
