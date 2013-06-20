@@ -285,53 +285,6 @@ read_view_add(
 	ut_ad(read_view_list_validate());
 }
 
-/** Functor to create thew view trx_ids array. */
-struct	CreateView {
-
-	CreateView(read_view_t*	view)
-		: m_view(view)
-	{
-		  m_n_trx = m_view->n_trx_ids;
-		  m_view->n_trx_ids = 0;
-	}
-
-	void	operator()(const trx_t* trx)
-	{
-		ut_ad(mutex_own(&trx_sys->mutex));
-		ut_ad(trx->in_rw_trx_list);
-
-		/* trx->state cannot change from or to NOT_STARTED
-		while we are holding the trx_sys->mutex. It may change
-		from ACTIVE to PREPARED or COMMITTED. */
-
-		if (trx->id != m_view->creator_trx_id
-		    && !trx_state_eq(trx, TRX_STATE_COMMITTED_IN_MEMORY)) {
-
-			ut_ad(m_n_trx > m_view->n_trx_ids);
-
-			m_view->trx_ids[m_view->n_trx_ids++] = trx->id;
-
-			/* NOTE that a transaction whose trx number is <
-			trx_sys->max_trx_id can still be active, if it is
-			in the middle of its commit! Note that when a
-			transaction starts, we initialize trx->no to
-			TRX_ID_MAX. */
-
-			/* trx->no is protected by trx_sys->mutex, which
-			we are holding. It is assigned by trx_commit()
-			before lock_trx_release_locks() assigns
-			trx->state = TRX_STATE_COMMITTED_IN_MEMORY. */
-
-			if (m_view->low_limit_no > trx->no) {
-				m_view->low_limit_no = trx->no;
-			}
-		}
-	}
-
-	read_view_t*	m_view;
-	ulint		m_n_trx;
-};
-
 /*********************************************************************//**
 Opens a read view where exactly the transactions serialized before this
 point in time are seen in the view.
@@ -391,7 +344,7 @@ read_view_open_now_low(
 
 	/* NOTE that a transaction whose trx number is < trx_sys->max_trx_id can
 	still be active, if it is in the middle of its commit! Note that when a
-	transaction starts, we initialize trx->no to IB_ULONGLONG_MAX. */
+	transaction starts, we initialize trx->no to TRX_ID_MAX. */
 
 	if (UT_LIST_GET_LEN(trx_sys->trx_serial_list) > 0) {
 
