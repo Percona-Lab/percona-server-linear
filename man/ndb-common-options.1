@@ -1,5 +1,5 @@
 '\" t
-.\"     Title: \fBndb_select_all\fR
+.\"     Title: Options Common to MySQL Cluster Programs
 .\"    Author: [FIXME: author] [see http://docbook.sf.net/el/author]
 .\" Generator: DocBook XSL Stylesheets v1.77.1 <http://docbook.sf.net/>
 .\"      Date: 05/21/2013
@@ -7,7 +7,7 @@
 .\"    Source: MySQL 5.6
 .\"  Language: English
 .\"
-.TH "\FBNDB_SELECT_ALL\FR" "1" "05/21/2013" "MySQL 5\&.6" "MySQL Database System"
+.TH "OPTIONS COMMON TO MY" "1" "05/21/2013" "MySQL 5\&.6" "MySQL Database System"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -27,41 +27,77 @@
 .\" -----------------------------------------------------------------
 .\" * MAIN CONTENT STARTS HERE *
 .\" -----------------------------------------------------------------
-.\" ndb_select_all
+.\" MySQL Cluster: administration
+.\" command-line options (MySQL Cluster)
+.\" program options (MySQL Cluster)
+.\" MySQL Cluster: ndbd
+.\" MySQL Cluster: mgm
+.\" MySQL Cluster: mgmd
 .SH "NAME"
-ndb_select_all \- print rows from an NDB table
-.SH "SYNOPSIS"
-.HP \w'\fBndb_select_all\ \-c\ \fR\fB\fIconnect_string\fR\fR\fB\ \fR\fB\fItbl_name\fR\fR\fB\ \-d\ \fR\fB\fIdb_name\fR\fR\fB\ [>\ \fR\fB\fIfile_name\fR\fR\fB]\fR\ 'u
-\fBndb_select_all \-c \fR\fB\fIconnect_string\fR\fR\fB \fR\fB\fItbl_name\fR\fR\fB \-d \fR\fB\fIdb_name\fR\fR\fB [> \fR\fB\fIfile_name\fR\fR\fB]\fR
+ndb-common-options \- MySQL Cluster Common Program Options
 .SH "DESCRIPTION"
 .PP
-\fBndb_select_all\fR
-prints all rows from an
-NDB
-table to
-stdout\&.
-        Usage
+All MySQL Cluster programs accept the options described in this section, with the following exceptions:
 .sp
-.if n \{\
 .RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
 .\}
-.nf
-ndb_select_all \-c \fIconnect_string\fR \fItbl_name\fR \-d \fIdb_name\fR [> \fIfile_name\fR]
-.fi
-.if n \{\
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+\fBmysqld\fR
 .RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
 .\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+\fBndb_print_backup_file\fR
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+\fBndb_print_schema_file\fR
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+\fBndb_print_sys_file\fR
+.RE
 .PP
-The following table includes options that are specific to the MySQL Cluster native backup restoration program
-\fBndb_select_all\fR\&. Additional descriptions follow the table\&. For options common to most MySQL Cluster programs (including
-\fBndb_select_all\fR), see
-Options Common to MySQL Cluster Programs(1)\&.
+Users of earlier MySQL Cluster versions should note that some of these options have been changed to make them consistent with one another as well as with
+\fBmysqld\fR\&. You can use the
+\fB\-\-help\fR
+option with any MySQL Cluster program\(emwith the exception of
+\fBndb_print_backup_file\fR,
+\fBndb_print_schema_file\fR, and
+\fBndb_print_sys_file\fR\(emto view a list of the options which the program supports\&.
+.PP
+The options in the following table are common to all MySQL Cluster executables (except those noted previously in this section)\&.
 .sp
 .it 1 an-trap
 .nr an-no-space-flag 1
 .nr an-break-flag 1
 .br
-.B Table\ \&17.23.\ \&ndb_select_all Options and Variables: MySQL Cluster NDB 7.3
+.B Table\ \&17.29.\ \&Common MySQL Cluster Program Options and Variables: MySQL Cluster NDB 7.3
 .TS
 allbox tab(:);
 lB lB lB.
@@ -81,496 +117,520 @@ l l l
 l l l
 l l l
 l l l
-l l l
-l l l
-l l l
-l l l
 l l l.
 T{
 .PP
---database=dbname,
+--help,
 .PP
--d
+--usage,
+.PP
+-?
 T}:T{
-Name of the database in which the table is found
-T}:T{
-.PP
-All MySQL 5\&.6 based releases
-T}
-T{
-.PP
---parallelism=#,
-.PP
--p
-T}:T{
-Degree of parallelism
+Display help message and exit
 T}:T{
 .PP
 All MySQL 5\&.6 based releases
 T}
 T{
 .PP
---lock=#,
+--ndb-connectstring=connectstring,
 .PP
--l
+--connect-string=connectstring,
+.PP
+-c
 T}:T{
-Lock type
-T}:T{
-.PP
-All MySQL 5\&.6 based releases
-T}
-T{
-.PP
---order=index,
-.PP
--o
-T}:T{
-Sort resultset according to index whose name is supplied
+Set connectstring for connecting to ndb_mgmd\&. Syntax:
+            [nodeid=<id>;][host=]<hostname>[:<port>]\&.
+            Overrides entries specified in NDB_CONNECTSTRING or my\&.cnf\&.
 T}:T{
 .PP
 All MySQL 5\&.6 based releases
 T}
 T{
 .PP
---descending,
-.PP
--z
+--ndb-mgmd-host=host[:port]
 T}:T{
-Sort resultset in descending order (requires order flag)
-T}:T{
-.PP
-All MySQL 5\&.6 based releases
-T}
-T{
-.PP
---header,
-.PP
--h
-T}:T{
-Print header (set to 0|FALSE to disable headers in output)
+Set the host (and port, if desired) for connecting to the management
+            server
 T}:T{
 .PP
 All MySQL 5\&.6 based releases
 T}
 T{
 .PP
---useHexFormat,
-.PP
--x
+--ndb-nodeid=#
 T}:T{
-Output numbers in hexadecimal format
+Set node id for this node
 T}:T{
 .PP
 All MySQL 5\&.6 based releases
 T}
 T{
 .PP
---delimiter=char,
-.PP
--D
+--ndb-optimized-node-selection
 T}:T{
-Set a column delimiter
+Select nodes for transactions in a more optimal way
 T}:T{
 .PP
 All MySQL 5\&.6 based releases
 T}
 T{
 .PP
---disk
+--character-sets-dir=path
 T}:T{
-Print disk references (useful only for Disk Data tables having
-            nonindexed columns)
-T}:T{
-.PP
-All MySQL 5\&.6 based releases
-T}
-T{
-.PP
---rowid
-T}:T{
-Print rowid
+Directory where character sets are
 T}:T{
 .PP
 All MySQL 5\&.6 based releases
 T}
 T{
 .PP
---gci
+--debug=options
 T}:T{
-Include GCI in output
-T}:T{
-.PP
-All MySQL 5\&.6 based releases
-T}
-T{
-.PP
---tup,
-.PP
--t
-T}:T{
-Scan in tup order
+Enable output from debug calls\&. Can be used only for versions compiled
+            with debugging enabled
 T}:T{
 .PP
 All MySQL 5\&.6 based releases
 T}
 T{
 .PP
---nodata
+--core-file
 T}:T{
-Do not print table column data
+Write core on errors (defaults to TRUE in debug builds)
+T}:T{
+.PP
+All MySQL 5\&.6 based releases
+T}
+T{
+.PP
+--version,
+.PP
+-V
+T}:T{
+Output version information and exit
 T}:T{
 .PP
 All MySQL 5\&.6 based releases
 T}
 .TE
 .sp 1
-.sp
-.RS 4
-.ie n \{\
-\h'-04'\(bu\h'+03'\c
-.\}
-.el \{\
-.sp -1
-.IP \(bu 2.3
-.\}
-.\" ndb_select_all: database option
-\fB\-\-database=\fR\fB\fIdbname\fR\fR,
-\fB\-d\fR
-\fIdbname\fR
-.sp
-Name of the database in which the table is found\&. The default value is
-TEST_DB\&.
-.RE
-.sp
-.RS 4
-.ie n \{\
-\h'-04'\(bu\h'+03'\c
-.\}
-.el \{\
-.sp -1
-.IP \(bu 2.3
-.\}
-.\" ndb_select_all: parallelism option
-\fBparallelism=\fR\fB\fI#\fR\fR,
-\fB\-p\fR
-\fI#\fR
-.sp
-Specifies the degree of parallelism\&.
-.RE
-.sp
-.RS 4
-.ie n \{\
-\h'-04'\(bu\h'+03'\c
-.\}
-.el \{\
-.sp -1
-.IP \(bu 2.3
-.\}
-.\" ndb_select_all: lock option
-.\" lock option: ndb_select_all
-\fB\-\-lock=\fR\fB\fIlock_type\fR\fR,
-\fB\-l \fR\fB\fIlock_type\fR\fR
-.sp
-Employs a lock when reading the table\&. Possible values for
-\fIlock_type\fR
-are:
-.sp
-.RS 4
-.ie n \{\
-\h'-04'\(bu\h'+03'\c
-.\}
-.el \{\
-.sp -1
-.IP \(bu 2.3
-.\}
-0: Read lock
-.RE
-.sp
-.RS 4
-.ie n \{\
-\h'-04'\(bu\h'+03'\c
-.\}
-.el \{\
-.sp -1
-.IP \(bu 2.3
-.\}
-1: Read lock with hold
-.RE
-.sp
-.RS 4
-.ie n \{\
-\h'-04'\(bu\h'+03'\c
-.\}
-.el \{\
-.sp -1
-.IP \(bu 2.3
-.\}
-2: Exclusive read lock
-.RE
-.sp
-There is no default value for this option\&.
-.RE
-.sp
-.RS 4
-.ie n \{\
-\h'-04'\(bu\h'+03'\c
-.\}
-.el \{\
-.sp -1
-.IP \(bu 2.3
-.\}
-.\" ndb_select_all: order option
-.\" order option: ndb_select_all
-\fB\-\-order=\fR\fB\fIindex_name\fR\fR,
-\fB\-o \fR\fB\fIindex_name\fR\fR
-.sp
-Orders the output according to the index named
-\fIindex_name\fR\&. Note that this is the name of an index, not of a column, and that the index must have been explicitly named when created\&.
-.RE
-.sp
-.RS 4
-.ie n \{\
-\h'-04'\(bu\h'+03'\c
-.\}
-.el \{\
-.sp -1
-.IP \(bu 2.3
-.\}
-.\" ndb_select_all: descending option
-.\" descending option: ndb_select_all
-\fB\-\-descending\fR,
-\fB\-z\fR
-.sp
-Sorts the output in descending order\&. This option can be used only in conjunction with the
-\fB\-o\fR
-(\fB\-\-order\fR) option\&.
-.RE
-.sp
-.RS 4
-.ie n \{\
-\h'-04'\(bu\h'+03'\c
-.\}
-.el \{\
-.sp -1
-.IP \(bu 2.3
-.\}
-.\" ndb_select_all: header option
-.\" header option: ndb_select_all
-\fB\-\-header=FALSE\fR
-.sp
-Excludes column headers from the output\&.
-.RE
-.sp
-.RS 4
-.ie n \{\
-\h'-04'\(bu\h'+03'\c
-.\}
-.el \{\
-.sp -1
-.IP \(bu 2.3
-.\}
-.\" ndb_select_all: useHexFormat option
-.\" useHexFormat option: ndb_select_all
-\fB\-\-useHexFormat\fR
-\fB\-x\fR
-.sp
-Causes all numeric values to be displayed in hexadecimal format\&. This does not affect the output of numerals contained in strings or datetime values\&.
-.RE
-.sp
-.RS 4
-.ie n \{\
-\h'-04'\(bu\h'+03'\c
-.\}
-.el \{\
-.sp -1
-.IP \(bu 2.3
-.\}
-.\" ndb_select_all: delimiter option
-.\" delimiter option: ndb_select_all
-\fB\-\-delimiter=\fR\fB\fIcharacter\fR\fR,
-\fB\-D \fR\fB\fIcharacter\fR\fR
-.sp
-Causes the
-\fIcharacter\fR
-to be used as a column delimiter\&. Only table data columns are separated by this delimiter\&.
-.sp
-The default delimiter is the tab character\&.
-.RE
-.sp
-.RS 4
-.ie n \{\
-\h'-04'\(bu\h'+03'\c
-.\}
-.el \{\
-.sp -1
-.IP \(bu 2.3
-.\}
-.\" ndb_select_all: disk option
-.\" disk option: ndb_select_all
-\fB\-\-disk\fR
-.sp
-Adds a disk reference column to the output\&. The column is nonempty only for Disk Data tables having nonindexed columns\&.
-.RE
-.sp
-.RS 4
-.ie n \{\
-\h'-04'\(bu\h'+03'\c
-.\}
-.el \{\
-.sp -1
-.IP \(bu 2.3
-.\}
-.\" ndb_select_all: rowid option
-.\" rowid option: ndb_select_all
-\fB\-\-rowid\fR
-.sp
-Adds a
-ROWID
-column providing information about the fragments in which rows are stored\&.
-.RE
-.sp
-.RS 4
-.ie n \{\
-\h'-04'\(bu\h'+03'\c
-.\}
-.el \{\
-.sp -1
-.IP \(bu 2.3
-.\}
-.\" ndb_select_all: gci option
-.\" gci option: ndb_select_all
-\fB\-\-gci\fR
-.sp
-Adds a column to the output showing the global checkpoint at which each row was last updated\&. See
-Section\ \&17.1, \(lqMySQL Cluster Overview\(rq, and
-Section\ \&17.5.6.2, \(lqMySQL Cluster Log Events\(rq, for more information about checkpoints\&.
-.RE
-.sp
-.RS 4
-.ie n \{\
-\h'-04'\(bu\h'+03'\c
-.\}
-.el \{\
-.sp -1
-.IP \(bu 2.3
-.\}
-.\" ndb_select_all: tupscan option
-.\" tupscan option: ndb_select_all
-\fB\-\-tupscan\fR,
-\fB\-t\fR
-.sp
-Scan the table in the order of the tuples\&.
-.RE
-.sp
-.RS 4
-.ie n \{\
-\h'-04'\(bu\h'+03'\c
-.\}
-.el \{\
-.sp -1
-.IP \(bu 2.3
-.\}
-.\" ndb_select_all: nodata option
-.\" nodata option: ndb_select_all
-\fB\-\-nodata\fR
-.sp
-Causes any table data to be omitted\&.
-.RE
-        Sample Output
 .PP
-Output from a MySQL
-SELECT
-statement:
+For options specific to individual MySQL Cluster programs, see
+Section\ \&17.4, \(lqMySQL Cluster Programs\(rq\&.
+.PP
+See
+Section\ \&17.3.4.2, \(lqMySQL Server Options for MySQL Cluster\(rq, for
+\fBmysqld\fR
+options relating to MySQL Cluster\&.
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+.\" help option (MySQL Cluster programs)
+.\" usage option (MySQL Cluster programs)
+.\" -? option (MySQL Cluster programs)
+\fB\-\-help\fR,
+\fB\-\-usage\fR,
+\fB\-?\fR
+.TS
+allbox tab(:);
+l l s s
+l l s s
+l l s s.
+T{
+\fBCommand\-Line Format\fR
+T}:T{
+\-\-help
+T}
+T{
+T}:T{
+\-\-usage
+T}
+T{
+T}:T{
+\-?
+T}
+.TE
+.sp 1
+Prints a short list with descriptions of the available command options\&.
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+.\" character-sets-dir option (MySQL Cluster programs)
+.\" character-sets-dir option (MySQL Cluster programs)
+\fB\-\-character\-sets\-dir=\fR\fB\fIname\fR\fR
+.TS
+allbox tab(:);
+l l s s
+l l s s
+^ l l s
+^ l l s.
+T{
+\fBCommand\-Line Format\fR
+T}:T{
+\-\-character\-sets\-dir=path
+T}
+T{
+\ \&
+T}:T{
+\fBPermitted Values \fR
+T}
+:T{
+\fBType\fR
+T}:T{
+file name
+T}
+:T{
+\fBDefault\fR
+T}:T{
+T}
+.TE
+.sp 1
+Tells the program where to find character set information\&.
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+.\" ndb-connectstring option (MySQL Cluster programs)
+.\" connect-string option (MySQL Cluster programs)
+.\" -c option (MySQL Cluster programs)
+\fB\-\-ndb\-connectstring=\fR\fB\fIconnect_string\fR\fR,
+\fB\-\-connect\-string=\fR\fB\fIconnect_string\fR\fR,
+\fB\-c \fR\fB\fIconnect_string\fR\fR
+.TS
+allbox tab(:);
+l l s s
+l l s s
+l l s s
+l l s s
+^ l l s
+^ l l s.
+T{
+\fBCommand\-Line Format\fR
+T}:T{
+\-\-ndb\-connectstring=connectstring
+T}
+T{
+T}:T{
+\-\-connect\-string=connectstring
+T}
+T{
+T}:T{
+\-c
+T}
+T{
+\ \&
+T}:T{
+\fBPermitted Values \fR
+T}
+:T{
+\fBType\fR
+T}:T{
+string
+T}
+:T{
+\fBDefault\fR
+T}:T{
+localhost:1186
+T}
+.TE
+.sp 1
+This option takes a MySQL Cluster connectstring that specifies the management server for the application to connect to, as shown here:
 .sp
 .if n \{\
 .RS 4
 .\}
 .nf
-mysql> \fBSELECT * FROM ctest1\&.fish;\fR
-+\-\-\-\-+\-\-\-\-\-\-\-\-\-\-\-+
-| id | name      |
-+\-\-\-\-+\-\-\-\-\-\-\-\-\-\-\-+
-|  3 | shark     |
-|  6 | puffer    |
-|  2 | tuna      |
-|  4 | manta ray |
-|  5 | grouper   |
-|  1 | guppy     |
-+\-\-\-\-+\-\-\-\-\-\-\-\-\-\-\-+
-6 rows in set (0\&.04 sec)
+shell> \fBndbd \-\-ndb\-connectstring="nodeid=2;host=ndb_mgmd\&.mysql\&.com:1186"\fR
 .fi
 .if n \{\
 .RE
 .\}
-.PP
-Output from the equivalent invocation of
-\fBndb_select_all\fR:
 .sp
-.if n \{\
-.RS 4
-.\}
-.nf
-shell> \fB\&./ndb_select_all \-c localhost fish \-d ctest1\fR
-id      name
-3       [shark]
-6       [puffer]
-2       [tuna]
-4       [manta ray]
-5       [grouper]
-1       [guppy]
-6 rows returned
-NDBT_ProgramExit: 0 \- OK
-.fi
-.if n \{\
+For more information, see
+Section\ \&17.3.2.3, \(lqThe MySQL Cluster Connectstring\(rq\&.
 .RE
-.\}
-.PP
-Note that all string values are enclosed by square brackets (\(lq[\&.\&.\&.]\(rq) in the output of
-\fBndb_select_all\fR\&. For a further example, consider the table created and populated as shown here:
 .sp
-.if n \{\
 .RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
 .\}
-.nf
-CREATE TABLE dogs (
-    id INT(11) NOT NULL AUTO_INCREMENT,
-    name VARCHAR(25) NOT NULL,
-    breed VARCHAR(50) NOT NULL,
-    PRIMARY KEY pk (id),
-    KEY ix (name)
-)
-TABLESPACE ts STORAGE DISK
-ENGINE=NDBCLUSTER;
-INSERT INTO dogs VALUES
-    (\*(Aq\*(Aq, \*(AqLassie\*(Aq, \*(Aqcollie\*(Aq),
-    (\*(Aq\*(Aq, \*(AqScooby\-Doo\*(Aq, \*(AqGreat Dane\*(Aq),
-    (\*(Aq\*(Aq, \*(AqRin\-Tin\-Tin\*(Aq, \*(AqAlsatian\*(Aq),
-    (\*(Aq\*(Aq, \*(AqRosscoe\*(Aq, \*(AqMutt\*(Aq);
-.fi
-.if n \{\
-.RE
+.el \{\
+.sp -1
+.IP \(bu 2.3
 .\}
-.PP
-This demonstrates the use of several additional
-\fBndb_select_all\fR
-options:
+.\" core-file option (MySQL Cluster programs)
+\fB\-\-core\-file\fR
+.TS
+allbox tab(:);
+l l s s
+l l s s
+^ l l s
+^ l l s.
+T{
+\fBCommand\-Line Format\fR
+T}:T{
+\-\-core\-file
+T}
+T{
+\ \&
+T}:T{
+\fBPermitted Values \fR
+T}
+:T{
+\fBType\fR
+T}:T{
+boolean
+T}
+:T{
+\fBDefault\fR
+T}:T{
+FALSE
+T}
+.TE
+.sp 1
+Write a core file if the program dies\&. The name and location of the core file are system\-dependent\&. (For MySQL Cluster programs nodes running on Linux, the default location is the program\*(Aqs working directory\(emfor a data node, this is the node\*(Aqs
+DataDir\&.) For some systems, there may be restrictions or limitations; for example, it might be necessary to execute
+\fBulimit \-c unlimited\fR
+before starting the server\&. Consult your system documentation for detailed information\&.
 .sp
-.if n \{\
-.RS 4
-.\}
-.nf
-shell> \fB\&./ndb_select_all \-d ctest1 dogs \-o ix \-z \-\-gci \-\-disk\fR
-GCI     id name          breed        DISK_REF
-834461  2  [Scooby\-Doo]  [Great Dane] [ m_file_no: 0 m_page: 98 m_page_idx: 0 ]
-834878  4  [Rosscoe]     [Mutt]       [ m_file_no: 0 m_page: 98 m_page_idx: 16 ]
-834463  3  [Rin\-Tin\-Tin] [Alsatian]   [ m_file_no: 0 m_page: 34 m_page_idx: 0 ]
-835657  1  [Lassie]      [Collie]     [ m_file_no: 0 m_page: 66 m_page_idx: 0 ]
-4 rows returned
-NDBT_ProgramExit: 0 \- OK
-.fi
-.if n \{\
+If MySQL Cluster was built using the
+\fB\-\-debug\fR
+option for
+\fBconfigure\fR, then
+\fB\-\-core\-file\fR
+is enabled by default\&. For regular builds,
+\fB\-\-core\-file\fR
+is disabled by default\&.
 .RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
 .\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+.\" debug option (MySQL Cluster programs)
+\fB\-\-debug[=\fR\fB\fIoptions\fR\fR\fB]\fR
+.TS
+allbox tab(:);
+l l s s
+l l s s
+^ l l s
+^ l l s.
+T{
+\fBCommand\-Line Format\fR
+T}:T{
+\-\-debug=options
+T}
+T{
+\ \&
+T}:T{
+\fBPermitted Values \fR
+T}
+:T{
+\fBType\fR
+T}:T{
+string
+T}
+:T{
+\fBDefault\fR
+T}:T{
+d:t:O,/tmp/ndb_restore\&.trace
+T}
+.TE
+.sp 1
+This option can be used only for versions compiled with debugging enabled\&. It is used to enable output from debug calls in the same manner as for the
+\fBmysqld\fR
+process\&.
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+.\" ndb-mgmd-host option (MySQL Cluster programs)
+\fB\-\-ndb\-mgmd\-host=\fR\fB\fIhost\fR\fR\fB[:\fR\fB\fIport\fR\fR\fB]\fR
+.TS
+allbox tab(:);
+l l s s
+l l s s
+l l s s
+^ l l s
+^ l l s.
+T{
+\fBCommand\-Line Format\fR
+T}:T{
+\-\-ndb\-mgmd\-host=host[:port]
+T}
+T{
+\fBOption\-File Format\fR
+T}:T{
+ndb\-mgmd\-host
+T}
+T{
+\ \&
+T}:T{
+\fBPermitted Values \fR
+T}
+:T{
+\fBType\fR
+T}:T{
+string
+T}
+:T{
+\fBDefault\fR
+T}:T{
+localhost:1186
+T}
+.TE
+.sp 1
+Can be used to set the host and port number of a single management server for the program to connect to\&. If the program requires node IDs or references to multiple management servers (or both) in its connection information, use the
+\fB\-\-ndb\-connectstring\fR
+option instead\&.
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+.\" ndb-nodeid option (MySQL Cluster programs)
+\fB\-\-ndb\-nodeid=\fR\fB\fI#\fR\fR
+.TS
+allbox tab(:);
+l l s s
+l l s s
+^ l l s
+^ l l s.
+T{
+\fBCommand\-Line Format\fR
+T}:T{
+\-\-ndb\-nodeid=#
+T}
+T{
+\ \&
+T}:T{
+\fBPermitted Values \fR
+T}
+:T{
+\fBType\fR
+T}:T{
+numeric
+T}
+:T{
+\fBDefault\fR
+T}:T{
+0
+T}
+.TE
+.sp 1
+Sets this node\*(Aqs MySQL Cluster node ID\&.
+\fIThe range of permitted values depends on the node\*(Aqs type (data, management, or API) and the MySQL Cluster software version\fR\&. See
+Section\ \&17.1.6.2, \(lqLimits and Differences of MySQL Cluster from Standard MySQL Limits\(rq, for more information\&.
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+.\" ndb-optimized-node-selection option (MySQL Cluster)
+\fB\-\-ndb\-optimized\-node\-selection\fR
+.TS
+allbox tab(:);
+l l s s
+l l s s
+^ l l s
+^ l l s.
+T{
+\fBCommand\-Line Format\fR
+T}:T{
+\-\-ndb\-optimized\-node\-selection
+T}
+T{
+\ \&
+T}:T{
+\fBPermitted Values \fR
+T}
+:T{
+\fBType\fR
+T}:T{
+boolean
+T}
+:T{
+\fBDefault\fR
+T}:T{
+TRUE
+T}
+.TE
+.sp 1
+Optimize selection of nodes for transactions\&. Enabled by default\&.
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+.\" version option (MySQL Cluster programs)
+.\" -V option (MySQL Cluster programs)
+\fB\-\-version\fR,
+\fB\-V\fR
+.TS
+allbox tab(:);
+l l s s
+l l s s.
+T{
+\fBCommand\-Line Format\fR
+T}:T{
+\-\-version
+T}
+T{
+T}:T{
+\-V
+T}
+.TE
+.sp 1
+Prints the MySQL Cluster version number of the executable\&. The version number is relevant because not all versions can be used together, and the MySQL Cluster startup process verifies that the versions of the binaries being used can co\-exist in the same cluster\&. This is also important when performing an online (rolling) software upgrade or downgrade of MySQL Cluster\&.
+.sp
+See
+Section\ \&17.5.5, \(lqPerforming a Rolling Restart of a MySQL Cluster\(rq), for more information\&.
+.RE
 .SH "COPYRIGHT"
 .br
 .PP

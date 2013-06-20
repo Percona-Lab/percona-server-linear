@@ -2650,6 +2650,15 @@ bool change_password(THD *thd, const char *host, const char *user,
     my_message(ER_PASSWORD_NO_MATCH, ER(ER_PASSWORD_NO_MATCH), MYF(0));
     goto end;
   }
+
+  /* trying to change the password of the utility user? */
+  if (acl_is_utility_user(acl_user->user, acl_user->host.get_host(), NULL))
+  {
+    mysql_mutex_unlock(&acl_cache->lock);
+    my_message(ER_PASSWORD_NO_MATCH, ER(ER_PASSWORD_NO_MATCH), MYF(0));
+    goto end;
+  }
+
   mysql_mutex_assert_owner(&acl_cache->lock);
   table->use_all_columns();
   DBUG_ASSERT(host != '\0');
@@ -2673,15 +2682,6 @@ bool change_password(THD *thd, const char *host, const char *user,
   }
 
   plugin_empty= plugin_temp ? false: true;
-
-  /* trying to change the password of the utility user? */
-  if (acl_is_utility_user(acl_user->user, acl_user->host.get_host(), NULL))
-  {
-    mysql_mutex_unlock(&acl_cache->lock);
-    my_message(ER_PASSWORD_NO_MATCH, ER(ER_PASSWORD_NO_MATCH), MYF(0));
-    goto end;
-  }
-
 
   if (acl_user->plugin.length == 0)
   {

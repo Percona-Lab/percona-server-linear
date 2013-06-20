@@ -1046,12 +1046,6 @@ public:
 
   Field *next_number_field;		/* Set if next_number is activated */
   Field *found_next_number_field;	/* Set on open */
-  /*
-    Set if next_number_field is in the UPDATE fields of INSERT ... ON DUPLICATE
-    KEY UPDATE.
-  */
-  my_bool next_number_field_updated;
-
   /* Table's triggers, 0 if there are no of them */
   Table_triggers_list *triggers;
   TABLE_LIST *pos_in_table_list;/* Element referring to this table */
