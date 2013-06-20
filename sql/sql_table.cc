@@ -269,14 +269,6 @@ uint explain_filename(THD* thd,
         subpart_name= tmp_p + 3;
         tmp_p+= 3;
       }
-      else if ((tmp_p[1] == 'Q' || tmp_p[1] == 'q') &&
-               (tmp_p[2] == 'L' || tmp_p[2] == 'l') &&
-                tmp_p[3] == '-')
-      {
-        tmp_p+= 4; /* sql- prefix found */
-      }
-      else
-        res= 2;
       break;
     case 'T':
     case 't':
