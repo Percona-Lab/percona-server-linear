@@ -5465,25 +5465,11 @@ static void setup_error_log() {
   help information. Since the implementation of plugin server
   variables the help output is now written much later.
 
-  randominit(&sql_rand, (ulong)server_start_time, (ulong)server_start_time / 2);
-  setup_fpu();
-  init_slave_list();
-
-  init_global_table_stats();
-  init_global_index_stats();
-
-  /* Setup logs */
-
-  /*
-    Enable old-fashioned error log, except when the user has requested
-    help information. Since the implementation of plugin server
-    variables the help output is now written much later.
-
-    log_error_dest can be:
-    disabled_my_option     --log-error was not used or --log-error=
-    ""                     --log-error without arguments (no '=')
-    filename               --log-error=filename
-  */
+  log_error_dest can be:
+  disabled_my_option     --log-error was not used or --log-error=
+  ""                     --log-error without arguments (no '=')
+  filename               --log-error=filename
+*/
 #ifdef _WIN32
   /*
     Enable the error log file only if console option is not specified
@@ -5766,6 +5752,9 @@ static int init_server_components() {
   randominit(&sql_rand, (ulong)server_start_time, (ulong)server_start_time / 2);
   setup_fpu();
   init_slave_list();
+
+  init_global_table_stats();
+  init_global_index_stats();
 
   setup_error_log();  // opens the log if needed
 
