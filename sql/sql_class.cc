@@ -1198,6 +1198,7 @@ THD::THD(bool enable_plugins)
    in_sub_stmt(0),
    fill_status_recursion_level(0),
    fill_variables_recursion_level(0),
+   order_deterministic(false),
    binlog_row_event_extra_data(NULL),
    binlog_unsafe_warning_flags(0),
    binlog_table_maps(0),
