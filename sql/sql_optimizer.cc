@@ -265,6 +265,25 @@ JOIN::optimize()
     }
   }
 
+  if (thd->lex->sql_command == SQLCOM_INSERT_SELECT ||
+      thd->lex->sql_command == SQLCOM_REPLACE_SELECT)
+  {
+    /*
+      Statement-based replication of INSERT ... SELECT ... LIMIT and
+      REPLACE ... SELECT is safe as order of row is defined with either
+      ORDER BY or other condition. However it is too late for it have
+      an impact to our decision to switch to row- based. We can only
+      suppress warning here.
+    */
+    if (select_lex->select_limit &&
+        select_lex->select_limit->fixed &&
+        select_lex->select_limit->val_int() &&
+        !is_order_deterministic(&select_lex->top_join_list, where_cond, order))
+    {
+      thd->order_deterministic= false;
+    }
+  }
+
   if (select_lex->partitioned_table_count && prune_table_partitions())
   {
     error= 1;
@@ -11261,4 +11280,3 @@ static uint32 get_key_length_tmp_table(Item *item)
 
   return len;
 }
-
