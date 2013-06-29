@@ -236,7 +236,7 @@ URL:            http://www.percona.com/
 Packager:       Percona MySQL Development Team <mysqldev@percona.com>
 Vendor:         %{percona_server_vendor}
 Provides:       mysql-server
-BuildRequires:  %{distro_buildreq} pam-devel
+BuildRequires:  %{distro_buildreq} pam-devel openssl-devel
 
 # Think about what you use here since the first step is to
 # run a rm -rf
@@ -559,7 +559,7 @@ rm -f $RBR%{_mandir}/man1/make_win_bin_dist.1*
 # Check local settings to support them.
 if [ -x %{_bindir}/my_print_defaults ]
 then
-  mysql_datadir=`%{_bindir}/my_print_defaults server mysqld | grep '^--datadir=' | sed -n 's/--datadir=//p'`
+  mysql_datadir=`%{_bindir}/my_print_defaults server mysqld | grep '^--datadir=' | sed -n 's/--datadir=//p' | tail -n 1`
 fi
 if [ -z "$mysql_datadir" ]
 then
@@ -722,7 +722,7 @@ fi
 # Check local settings to support them.
 if [ -x %{_bindir}/my_print_defaults ]
 then
-  mysql_datadir=`%{_bindir}/my_print_defaults server mysqld | grep '^--datadir=' | sed -n 's/--datadir=//p'`
+  mysql_datadir=`%{_bindir}/my_print_defaults server mysqld | grep '^--datadir=' | sed -n 's/--datadir=//p' | tail -n 1`
 fi
 if [ -z "$mysql_datadir" ]
 then
@@ -737,13 +737,11 @@ STATUS_FILE=$mysql_datadir/RPM_UPGRADE_MARKER
 if [ ! -d $mysql_datadir ] ; then mkdir -m 755 $mysql_datadir; fi
 # echo "Analyzed: SERVER_TO_START=$SERVER_TO_START"
 if [ ! -d $mysql_datadir/mysql ] ; then
-	mkdir $mysql_datadir/mysql;
 	echo "MySQL RPM installation of version $NEW_VERSION" >> $STATUS_FILE
 else
 	# If the directory exists, we may assume it is an upgrade.
 	echo "MySQL RPM upgrade to version $NEW_VERSION" >> $STATUS_FILE
 fi
-if [ ! -d $mysql_datadir/test ] ; then mkdir $mysql_datadir/test; fi
 
 # ----------------------------------------------------------------------
 # Make MySQL start/shutdown automatically when the machine does it.
@@ -778,8 +776,15 @@ chown -R %{mysqld_user}:%{mysqld_group} $mysql_datadir
 # ----------------------------------------------------------------------
 # Initiate databases if needed
 # ----------------------------------------------------------------------
-%{_bindir}/mysql_install_db --rpm --user=%{mysqld_user} \
-    --datadir=$mysql_datadir
+    # Does $mysql_datadir/mysql exist? In this case, this is probably an
+    # upgrade from a previous version or a reinstall. It's best not to
+    # call mysql_install_db in this case since the test db would be
+    # possibly recreated (bug #1169522).
+    if test ! -e $mysql_datadir/mysql
+    then
+        %{_bindir}/mysql_install_db --rpm --user=%{mysqld_user} \
+            --datadir=$mysql_datadir
+    fi
 
 # ----------------------------------------------------------------------
 # Upgrade databases if needed would go here - but it cannot be automated yet
@@ -912,7 +917,7 @@ fi
 # Check local settings to support them.
 if [ -x %{_bindir}/my_print_defaults ]
 then
-  mysql_datadir=`%{_bindir}/my_print_defaults server mysqld | grep '^--datadir=' | sed -n 's/--datadir=//p'`
+  mysql_datadir=`%{_bindir}/my_print_defaults server mysqld | grep '^--datadir=' | sed -n 's/--datadir=//p' | tail -n 1`
 fi
 if [ -z "$mysql_datadir" ]
 then
