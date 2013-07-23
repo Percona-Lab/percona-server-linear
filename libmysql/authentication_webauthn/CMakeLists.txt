@@ -55,7 +55,7 @@ MYSQL_ADD_PLUGIN(authentication_webauthn_client
   common.cc
   registration.cc
   LINK_LIBRARIES
-  mysqlclient
+  perconaserverclient
   ext::fido
   OpenSSL::Crypto  # Needs RAND_bytes from libcrypto.
   CLIENT_ONLY
