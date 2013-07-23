@@ -48,13 +48,13 @@ MYSQL_ADD_EXECUTABLE(mysql
   client_query_attributes.cc
   multi_factor_passwordopt-vars.cc
   ${CMAKE_CURRENT_SOURCE_DIR}/common/user_registration.cc
-  LINK_LIBRARIES mysqlclient client_base ${MY_READLINE_LIBRARY}
+  LINK_LIBRARIES perconaserverclient client_base ${MY_READLINE_LIBRARY}
   )
 
 IF(NOT WITHOUT_SERVER)
   MYSQL_ADD_EXECUTABLE(mysql_upgrade
     upgrade/program.cc
-    LINK_LIBRARIES mysqlclient client_base
+    LINK_LIBRARIES perconaserverclient client_base
     )
 ENDIF()
 
@@ -72,28 +72,28 @@ MYSQL_ADD_EXECUTABLE(mysqltest
   COMPONENT Test
   DEPENDENCIES GenError GenClientError
   ENABLE_EXPORTS
-  LINK_LIBRARIES mysqlclient
+  LINK_LIBRARIES perconaserverclient
   )
 MYSQL_ADD_EXECUTABLE(mysqlcheck
   check/mysqlcheck.cc
   check/mysqlcheck_core.cc
   multi_factor_passwordopt-vars.cc
-  LINK_LIBRARIES mysqlclient
+  LINK_LIBRARIES perconaserverclient
   )
 MYSQL_ADD_EXECUTABLE(mysqldump
   mysqldump.cc
   multi_factor_passwordopt-vars.cc
-  LINK_LIBRARIES mysqlclient
+  LINK_LIBRARIES perconaserverclient
   )
 MYSQL_ADD_EXECUTABLE(mysqlimport
   mysqlimport.cc
   multi_factor_passwordopt-vars.cc
-  LINK_LIBRARIES mysqlclient
+  LINK_LIBRARIES perconaserverclient
   )
 MYSQL_ADD_EXECUTABLE(mysqlshow
   mysqlshow.cc
   multi_factor_passwordopt-vars.cc
-  LINK_LIBRARIES mysqlclient
+  LINK_LIBRARIES perconaserverclient
   )
 
 OPTION(WITH_JSON_BINLOG_LIBRARY
@@ -223,7 +223,7 @@ SET(MYSQLBINLOG_SOURCES
 SET(MYSQLBINLOG_LIBRARIES
   binlogevents_static
   client_base
-  mysqlclient
+  perconaserverclient
   )
 
 IF(WITH_JSON_BINLOG_LIBRARY)
@@ -257,20 +257,20 @@ TARGET_INCLUDE_DIRECTORIES(mysqlbinlog PRIVATE ${CMAKE_SOURCE_DIR}/sql)
 MYSQL_ADD_EXECUTABLE(mysqladmin
   mysqladmin.cc
   multi_factor_passwordopt-vars.cc
-  LINK_LIBRARIES mysqlclient
+  LINK_LIBRARIES perconaserverclient
   )
 MYSQL_ADD_EXECUTABLE(mysqlslap
   mysqlslap.cc
   multi_factor_passwordopt-vars.cc
-  LINK_LIBRARIES mysqlclient
+  LINK_LIBRARIES perconaserverclient
   )
 MYSQL_ADD_EXECUTABLE(mysql_config_editor
   mysql_config_editor.cc
-  LINK_LIBRARIES mysqlclient
+  LINK_LIBRARIES perconaserverclient
   )
 MYSQL_ADD_EXECUTABLE(mysql_secure_installation
   mysql_secure_installation.cc
-  LINK_LIBRARIES mysqlclient
+  LINK_LIBRARIES perconaserverclient
   )
 MYSQL_ADD_EXECUTABLE(mysql_ssl_rsa_setup
   logger.cc
