@@ -16,7 +16,7 @@
 
 # Exclude mysqlpump tool from being compiled by SunStudio compiler. It has bug
 # that forbids usage of pure virtual interfaces (and other classes with no
-# fields) without dummy workarounds. In fact, only libmysql must be build with
+# fields) without dummy workarounds. In fact, only libperconaserver must be build with
 # this toolset, so it is acceptable to exclude mysqlpump here.
 
 INCLUDE_DIRECTORIES(
