@@ -524,6 +524,7 @@ emacs.h
 examples/*.ds?
 examples/*.vcproj
 examples/udf_example/udf_example.def
+extra/.deps/charset2html.Po
 extra/.deps/comp_err.Po
 extra/.deps/innochecksum.Po
 extra/.deps/my_print_defaults.Po
@@ -532,6 +533,7 @@ extra/.deps/perror.Po
 extra/.deps/replace.Po
 extra/.deps/resolve_stack_dump.Po
 extra/.deps/resolveip.Po
+extra/charset2html
 extra/comp_err
 extra/created_include_files
 extra/innochecksum
@@ -782,9 +784,9 @@ libmysql/.deps/viosocket.Plo
 libmysql/.deps/viossl.Plo
 libmysql/.deps/viosslfactories.Plo
 libmysql/.deps/xml.Plo
-libmysql/.libs/libmysqlclient.lai
-libmysql/.libs/libmysqlclient.so.15
-libmysql/.libs/libmysqlclient.so.15.0.0
+libmysql/.libs/libperconaserverclient.lai
+libmysql/.libs/libperconaserverclient.so.15
+libmysql/.libs/libperconaserverclient.so.15.0.0
 libmysql/conf_to_src
 libmysql/debug/libmysql.exp
 libmysql/libmysql.ver
@@ -918,9 +920,9 @@ libmysql_r/.deps/viosocket.Plo
 libmysql_r/.deps/viossl.Plo
 libmysql_r/.deps/viosslfactories.Plo
 libmysql_r/.deps/xml.Plo
-libmysql_r/.libs/libmysqlclient_r.lai
-libmysql_r/.libs/libmysqlclient_r.so.15
-libmysql_r/.libs/libmysqlclient_r.so.15.0.0
+libmysql_r/.libs/libperconaserverclient_r.lai
+libmysql_r/.libs/libperconaserverclient_r.so.15
+libmysql_r/.libs/libperconaserverclient_r.so.15.0.0
 libmysql_r/acconfig.h
 libmysql_r/client_settings.h
 libmysql_r/conf_to_src
@@ -1505,6 +1507,7 @@ mysys/.deps/thr_rwlock.Po
 mysys/.deps/tree.Po
 mysys/.deps/trie.Po
 mysys/.deps/typelib.Po
+mysys/charset2html
 mysys/getopt.c
 mysys/getopt1.c
 mysys/main.cc
@@ -3137,3 +3140,4 @@ support-files/plugins.files
 storage/perfschema/pfs_lex_token.h
 storage/perfschema/gen_pfs_lex_token
 sql/share/bulgarian
+doc/build
