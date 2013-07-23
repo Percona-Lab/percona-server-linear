@@ -139,7 +139,7 @@ TARGET_LINK_LIBRARIES(
   regex
   gmock
   mysqlservices
-  mysqlclient
+  perconaserverclient
   ${LIBEVENT_LIBRARY} ${LIBEVENT_LIBRARIES}
   ${CMAKE_THREAD_LIBS_INIT}
   ${PROTOBUF_LIBRARY}
