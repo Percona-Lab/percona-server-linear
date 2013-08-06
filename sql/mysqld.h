@@ -213,6 +213,7 @@ extern uint max_user_connections;
 extern ulong extra_max_connections;
 extern ulong thread_created;
 extern scheduler_functions *thread_scheduler, *extra_thread_scheduler;
+extern ulong rpl_stop_slave_timeout;
 extern my_bool log_bin_use_v1_row_events;
 extern ulonglong denied_connections;
 extern ulong what_to_log,flush_time;
