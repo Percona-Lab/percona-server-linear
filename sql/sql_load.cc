@@ -757,14 +757,14 @@ static bool write_execute_load_query_log_event(THD *thd, sql_exchange* ex,
   if (!thd->lex->update_list.is_empty())
   {
     List_iterator<Item> lu(thd->lex->update_list);
-    List_iterator<String> ls(thd->lex->load_set_str_list);
+    List_iterator<Item> lv(thd->lex->value_list);
 
     query_str.append(" SET ");
     n= 0;
 
     while ((item= lu++))
     {
-      str= ls++;
+      val= lv++;
       if (n++)
         query_str.append(", ");
       append_identifier(thd, &query_str, item->item_name.ptr(),
