@@ -16328,10 +16328,8 @@ static void test_change_user()
           "grant select on %s.* to %s@'localhost'",
           db,
           user_no_pw);
-  rc= mysql_query(mysql, buff);
-  myquery(rc);
-
-  conn= client_connect(0, MYSQL_PROTOCOL_TCP, 0);
+  rc= mysql_query(l_mysql, buff);
+  myquery2(l_mysql, rc);
 
   /* Try some combinations */
   rc= mysql_change_user(l_mysql, NULL, NULL, NULL);
@@ -16352,10 +16350,8 @@ static void test_change_user()
     printf("Got error (as expected): %s\n", mysql_error(l_mysql));
   reconnect(&l_mysql);
 
-  mysql_close(conn);
-  conn= client_connect(0, MYSQL_PROTOCOL_TCP, 0);
 
-  rc= mysql_change_user(conn, "", "", "");
+  rc= mysql_change_user(l_mysql, "", "", "");
   DIE_UNLESS(rc);
   if (! opt_silent)
     printf("Got error (as expected): %s\n", mysql_error(l_mysql));
@@ -16374,10 +16370,7 @@ static void test_change_user()
     printf("Got error (as expected): %s\n", mysql_error(l_mysql));
   reconnect(&l_mysql);
 
-  mysql_close(conn);
-  conn= client_connect(0, MYSQL_PROTOCOL_TCP, 0);
-
-  rc= mysql_change_user(conn, "", NULL, "");
+  rc= mysql_change_user(l_mysql, "", NULL, "");
   DIE_UNLESS(rc);
   if (! opt_silent)
     printf("Got error (as expected): %s\n", mysql_error(l_mysql));
@@ -16395,10 +16388,7 @@ static void test_change_user()
     printf("Got error (as expected): %s\n", mysql_error(l_mysql));
   reconnect(&l_mysql);
 
-  mysql_close(conn);
-  conn= client_connect(0, MYSQL_PROTOCOL_TCP, 0);
-
-  rc= mysql_change_user(conn, user_pw, "", NULL);
+  rc= mysql_change_user(l_mysql, user_pw, "", NULL);
   DIE_UNLESS(rc);
   if (! opt_silent)
     printf("Got error (as expected): %s\n", mysql_error(l_mysql));
@@ -16416,10 +16406,7 @@ static void test_change_user()
     printf("Got error (as expected): %s\n", mysql_error(l_mysql));
   reconnect(&l_mysql);
 
-  mysql_close(conn);
-  conn= client_connect(0, MYSQL_PROTOCOL_TCP, 0);
-
-  rc= mysql_change_user(conn, user_pw, NULL, db);
+  rc= mysql_change_user(l_mysql, user_pw, NULL, db);
   DIE_UNLESS(rc);
   if (! opt_silent)
     printf("Got error (as expected): %s\n", mysql_error(l_mysql));
@@ -16445,10 +16432,7 @@ static void test_change_user()
     printf("Got error (as expected): %s\n", mysql_error(l_mysql));
   reconnect(&l_mysql);
 
-  mysql_close(conn);
-  conn= client_connect(0, MYSQL_PROTOCOL_TCP, 0);
-
-  rc= mysql_change_user(conn, user_no_pw, pw, NULL);
+  rc= mysql_change_user(l_mysql, user_no_pw, pw, NULL);
   DIE_UNLESS(rc);
   if (! opt_silent)
     printf("Got error (as expected): %s\n", mysql_error(l_mysql));
@@ -16501,10 +16485,7 @@ static void test_change_user()
     printf("Got error (as expected): %s\n", mysql_error(l_mysql));
   reconnect(&l_mysql);
 
-  mysql_close(conn);
-  conn= client_connect(0, MYSQL_PROTOCOL_TCP, 0);
-
-  rc= mysql_change_user(conn, NULL, "", db);
+  rc= mysql_change_user(l_mysql, "", "", db);
   DIE_UNLESS(rc);
   if (! opt_silent)
     printf("Got error (as expected): %s\n", mysql_error(l_mysql));
@@ -17202,21 +17183,18 @@ static void test_bug31669()
   memset(buff, 'a', sizeof(buff));
   buff[sizeof(buff) - 1] = '\0';
 
-  mysql_close(conn);
-  conn= client_connect(0, MYSQL_PROTOCOL_TCP, 0);
-
-  rc= mysql_change_user(conn, buff, buff, buff);
+  rc= mysql_change_user(l_mysql, buff, buff, buff);
   DIE_UNLESS(rc);
   reconnect(&l_mysql);
 
-  rc = mysql_change_user(conn, opt_user, opt_password, current_db);
+  rc = mysql_change_user(mysql, opt_user, opt_password, current_db);
   DIE_UNLESS(!rc);
 
 #ifndef EMBEDDED_LIBRARY
   memset(db, 'a', sizeof(db));
   db[NAME_CHAR_LEN]= 0;
   strxmov(query, "CREATE DATABASE IF NOT EXISTS ", db, NullS);
-  rc= mysql_query(conn, query);
+  rc= mysql_query(mysql, query);
   myquery(rc);
 
   memset(user, 'b', sizeof(user));
@@ -17225,15 +17203,15 @@ static void test_bug31669()
   buff[LARGE_BUFFER_SIZE]= 0;
   strxmov(query, "GRANT ALL PRIVILEGES ON *.* TO '", user, "'@'%' IDENTIFIED BY "
                  "'", buff, "' WITH GRANT OPTION", NullS);
-  rc= mysql_query(conn, query);
+  rc= mysql_query(mysql, query);
   myquery(rc);
 
   strxmov(query, "GRANT ALL PRIVILEGES ON *.* TO '", user, "'@'localhost' IDENTIFIED BY "
                  "'", buff, "' WITH GRANT OPTION", NullS);
-  rc= mysql_query(conn, query);
+  rc= mysql_query(mysql, query);
   myquery(rc);
 
-  rc= mysql_query(conn, "FLUSH PRIVILEGES");
+  rc= mysql_query(mysql, "FLUSH PRIVILEGES");
   myquery(rc);
 
   rc= mysql_change_user(l_mysql, user, buff, db);
@@ -17256,9 +17234,6 @@ static void test_bug31669()
   DIE_UNLESS(rc);
   reconnect(&l_mysql);
 
-  mysql_close(conn);
-  conn= client_connect(0, MYSQL_PROTOCOL_TCP, 0);
-
   db[NAME_CHAR_LEN-1]= 'a';
   rc= mysql_change_user(l_mysql, user, buff, db);
   DIE_UNLESS(!rc);
@@ -17267,22 +17242,20 @@ static void test_bug31669()
   DIE_UNLESS(rc);
   reconnect(&l_mysql);
 
-  rc = mysql_change_user(conn, opt_user, opt_password, current_db);
+  rc = mysql_change_user(mysql, opt_user, opt_password, current_db);
   DIE_UNLESS(!rc);
 
   strxmov(query, "DROP DATABASE ", db, NullS);
-  rc= mysql_query(conn, query);
+  rc= mysql_query(mysql, query);
   myquery(rc);
 
   strxmov(query, "DELETE FROM mysql.user WHERE User='", user, "'", NullS);
-  rc= mysql_query(conn, query);
+  rc= mysql_query(mysql, query);
   myquery(rc);
   DIE_UNLESS(mysql_affected_rows(mysql) == 2);
 
   mysql_close(l_mysql);
 #endif
-
-  mysql_close(conn);
 
   DBUG_VOID_RETURN;
 }
