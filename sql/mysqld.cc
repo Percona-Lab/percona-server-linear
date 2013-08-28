@@ -951,6 +951,7 @@ bool opt_mandatory_roles_cache = false;
 bool opt_always_activate_granted_roles = false;
 bool opt_bin_log;
 bool opt_general_log, opt_slow_log, opt_general_log_raw;
+ulonglong slow_query_log_always_write_time = 10000000;
 ulonglong log_output_options;
 bool opt_log_queries_not_using_indexes = 0;
 ulong opt_log_throttle_queries_not_using_indexes = 0;
