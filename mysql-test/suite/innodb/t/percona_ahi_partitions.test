@@ -2,11 +2,10 @@
 # Basic test for InnoDB adaptive hash index partitions.
 # TODO: add another testcase that uses DEBUG_SYNC to check the partition locking
 #
---source include/have_innodb.inc
 
 # Check setup
 SELECT @@GLOBAL.innodb_adaptive_hash_index;
-SELECT @@GLOBAL.innodb_adaptive_hash_index_partitions;
+SELECT @@GLOBAL.innodb_adaptive_hash_index_parts;
 
 SET GLOBAL innodb_monitor_enable=module_adaptive_hash;
 
