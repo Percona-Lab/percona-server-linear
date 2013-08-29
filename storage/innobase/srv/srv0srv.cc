@@ -1181,14 +1181,15 @@ srv_printf_innodb_monitor(
 	double	time_elapsed;
 	time_t	current_time;
 	ulint	n_reserved;
+	ibool	ret;
+
 	ulong	btr_search_sys_constant;
-
 	ulong	btr_search_sys_variable;
-
 	ulint	lock_sys_subtotal;
 	ulint	recv_sys_subtotal;
+
+	ulint	i;
 	trx_t*	trx;
-	ibool	ret;
 
 	mutex_enter(&srv_innodb_monitor_mutex);
 
@@ -1309,7 +1310,8 @@ srv_printf_innodb_monitor(
 		"Dictionary memory allocated " ULINTPF "\n",
 		os_total_large_mem_allocated, dict_sys->size);
 
-	/* Calculate AHI constant and variable memory allocations. */
+	/* Calculate AHI constant and variable memory allocations */
+
 	btr_search_sys_constant = 0;
 	btr_search_sys_variable = 0;
 
@@ -1321,6 +1323,8 @@ srv_printf_innodb_monitor(
 		ut_ad(ht);
 		ut_ad(ht->heap);
 
+		/* Multiple mutexes/heaps are currently never used for adaptive
+		hash index tables. */
 		ut_ad(!ht->n_sync_obj);
 		ut_ad(!ht->heaps);
 
@@ -1346,44 +1350,45 @@ srv_printf_innodb_monitor(
 		? mem_heap_get_size(recv_sys->heap) : 0;
 
 	fprintf(file,
-		"Internal hash tables (constant factor + variable factor)\n"
-		"    Adaptive hash index %lu \t(%lu + " ULINTPF ")\n"
-		"    Page hash           %lu (buffer pool 0 only)\n"
-		"    Dictionary cache    %lu \t(%lu + " ULINTPF ")\n"
-		"    File system         %lu \t(%lu + " ULINTPF ")\n"
-		"    Lock system         %lu \t(%lu + " ULINTPF ")\n"
-		"    Recovery system     %lu \t(%lu + " ULINTPF ")\n",
-		btr_search_sys_constant + btr_search_sys_variable,
-		btr_search_sys_constant,
-		btr_search_sys_variable,
-		(ulong) (buf_pool_from_array(0)->page_hash->n_cells
-			 * sizeof(hash_cell_t)),
-		(ulong) (dict_sys ? ((dict_sys->table_hash->n_cells
-				      + dict_sys->table_id_hash->n_cells)
-				     * sizeof(hash_cell_t)
-				     + dict_sys->size) : 0),
-		(ulong) (dict_sys ? ((dict_sys->table_hash->n_cells
-				      + dict_sys->table_id_hash->n_cells)
-				     * sizeof(hash_cell_t)) : 0),
-		dict_sys ? dict_sys->size : 0,
-		(ulong) (fil_system_hash_cells() * sizeof(hash_cell_t)
-			 + fil_system_hash_nodes()),
-		(ulong) (fil_system_hash_cells() * sizeof(hash_cell_t)),
-		fil_system_hash_nodes(),
-		(ulong) ((lock_sys ? (lock_sys->rec_hash->n_cells
-				      * sizeof(hash_cell_t)) : 0)
-			 + lock_sys_subtotal),
-		(ulong) (lock_sys ? (lock_sys->rec_hash->n_cells
-				     * sizeof(hash_cell_t)) : 0),
-		lock_sys_subtotal,
-		(ulong) (((recv_sys && recv_sys->addr_hash)
-			  ? (recv_sys->addr_hash->n_cells
-			     * sizeof(hash_cell_t)) : 0)
-			 + recv_sys_subtotal),
-		(ulong) ((recv_sys && recv_sys->addr_hash)
-			 ? (recv_sys->addr_hash->n_cells
-			    * sizeof(hash_cell_t)) : 0),
-		recv_sys_subtotal);
+			"Internal hash tables (constant factor + variable factor)\n"
+			"    Adaptive hash index %lu \t(%lu + " ULINTPF ")\n"
+			"    Page hash           %lu (buffer pool 0 only)\n"
+			"    Dictionary cache    %lu \t(%lu + " ULINTPF ")\n"
+			"    File system         %lu \t(%lu + " ULINTPF ")\n"
+			"    Lock system         %lu \t(%lu + " ULINTPF ")\n"
+			"    Recovery system     %lu \t(%lu + " ULINTPF ")\n",
+
+			btr_search_sys_constant + btr_search_sys_variable,
+			btr_search_sys_constant,
+			btr_search_sys_variable,
+
+			(ulong) (buf_pool_from_array(0)->page_hash->n_cells * sizeof(hash_cell_t)),
+
+			(ulong) (dict_sys ? ((dict_sys->table_hash->n_cells
+						+ dict_sys->table_id_hash->n_cells
+						) * sizeof(hash_cell_t)
+					+ dict_sys->size) : 0),
+			(ulong) (dict_sys ? ((dict_sys->table_hash->n_cells
+							+ dict_sys->table_id_hash->n_cells
+							) * sizeof(hash_cell_t)) : 0),
+			dict_sys ? (dict_sys->size) : 0,
+
+			(ulong) (fil_system_hash_cells() * sizeof(hash_cell_t)
+					+ fil_system_hash_nodes()),
+			(ulong) (fil_system_hash_cells() * sizeof(hash_cell_t)),
+			fil_system_hash_nodes(),
+
+			(ulong) ((lock_sys ? (lock_sys->rec_hash->n_cells * sizeof(hash_cell_t)) : 0)
+					+ lock_sys_subtotal),
+			(ulong) (lock_sys ? (lock_sys->rec_hash->n_cells * sizeof(hash_cell_t)) : 0),
+			lock_sys_subtotal,
+
+			(ulong) (((recv_sys && recv_sys->addr_hash)
+						? (recv_sys->addr_hash->n_cells * sizeof(hash_cell_t)) : 0)
+					+ recv_sys_subtotal),
+			(ulong) ((recv_sys && recv_sys->addr_hash)
+					? (recv_sys->addr_hash->n_cells * sizeof(hash_cell_t)) : 0),
+			recv_sys_subtotal);
 
 	buf_print_io(file);
 
@@ -1485,11 +1490,12 @@ srv_export_innodb_status(void)
 	ut_ad(btr_search_sys->hash_tables);
 
 	for (i = 0; i < btr_ahi_parts; i++) {
-		hash_table_t* ht = btr_search_sys->hash_tables[i];
+		hash_table_t*	ht = btr_search_sys->hash_tables[i];
 
 		ut_ad(ht);
 		ut_ad(ht->heap);
-
+		/* Multiple mutexes/heaps are currently never used for adaptive
+		hash index tables. */
 		ut_ad(!ht->n_sync_obj);
 		ut_ad(!ht->heaps);
 					+ dict_sys->table_id_hash->n_cells
