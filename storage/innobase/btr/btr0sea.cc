@@ -1029,10 +1029,6 @@ ibool btr_search_guess_on_hash(dict_index_t *index, btr_search_t *info,
 #ifdef UNIV_SEARCH_PERF_STAT
   btr_search_n_succ++;
 #endif
-  if (!has_search_latch && buf_page_peek_if_too_old(&block->page)) {
-    buf_page_make_young(&block->page);
-  }
-
   /* Increment the page get statistics though we did not really
   fix the page: for user info only */
 
@@ -1077,6 +1073,7 @@ retry:
   assert_block_ahi_valid(block);
 
   if (index == nullptr) {
+    assert_block_ahi_empty(block);
     return;
   }
 
@@ -1090,10 +1087,7 @@ retry:
   Determine the ahi_slot based on the block contents. */
 
   const space_index_t index_id = btr_page_get_index_id(block->frame);
-  const ulint ahi_slot =
-      ut_fold_ulint_pair(static_cast<ulint>(index_id),
-                         static_cast<ulint>(block->page.id.space())) %
-      btr_ahi_parts;
+  const ulint ahi_slot = static_cast<ulint>(index_id) % btr_ahi_parts;
   latch = btr_search_latches[ahi_slot];
 
   ut_ad(!btr_search_own_any(RW_LOCK_S));
@@ -1104,6 +1098,7 @@ retry:
 
   if (block->index == nullptr) {
     rw_lock_s_unlock(latch);
+    assert_block_ahi_empty(block);
     return;
   }
 
