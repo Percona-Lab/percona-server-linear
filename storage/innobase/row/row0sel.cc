@@ -3727,9 +3727,10 @@ static ulint row_sel_try_search_shortcut_for_mysql(
   ut_ad(index->is_clustered());
   ut_ad(!prebuilt->templ_contains_blob);
 
+  ut_ad(trx->has_search_latch);
+
   pcur->open_no_init(index, search_tuple, PAGE_CUR_GE, BTR_SEARCH_LEAF,
-                     (trx->has_search_latch) ? RW_S_LATCH : 0, mtr,
-                     UT_LOCATION_HERE);
+                     RW_S_LATCH, mtr, UT_LOCATION_HERE);
   rec = pcur->get_rec();
 
   if (!page_rec_is_user_rec(rec)) {
@@ -4484,7 +4485,7 @@ dberr_t row_search_mvcc(byte *buf, page_cur_mode_t mode,
 
 #ifdef UNIV_DEBUG
   {
-    btrsea_sync_check check(trx->has_search_latch);
+    btrsea_sync_check check(!trx->has_search_latch);
     ut_ad(!sync_check_iterate(check));
   }
 #endif /* UNIV_DEBUG */
@@ -6062,7 +6063,7 @@ func_exit:
 
 #ifdef UNIV_DEBUG
   {
-    btrsea_sync_check check(trx->has_search_latch);
+    btrsea_sync_check check(!trx->has_search_latch);
 
     ut_ad(!sync_check_iterate(check));
   }
