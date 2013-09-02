@@ -1290,8 +1290,7 @@ dict_table_can_be_evicted(
 
 			See also: dict_index_remove_from_cache_low() */
 
-			if (btr_search_info_get_ref_count(info, index->id)
-			    > 0) {
+			if (btr_search_info_get_ref_count(info, index) > 0) {
 				return(FALSE);
 			}
 		}
@@ -2602,7 +2601,7 @@ dict_index_remove_from_cache_low(
 
 	do {
 		ulint ref_count = btr_search_info_get_ref_count(info,
-								index->id);
+								index);
 
 		if (ref_count == 0) {
 			break;
@@ -2894,6 +2893,7 @@ dict_index_build_internal_clust(
 	new_index->n_user_defined_cols = index->n_fields;
 
 	new_index->id = index->id;
+	btr_search_index_init(new_index);
 
 	/* Copy the fields of index */
 	dict_index_copy(new_index, index, table, 0, index->n_fields);
@@ -3065,6 +3065,7 @@ dict_index_build_internal_non_clust(
 	new_index->n_user_defined_cols = index->n_fields;
 
 	new_index->id = index->id;
+	btr_search_index_init(new_index);
 
 	/* Copy fields from index to new_index */
 	dict_index_copy(new_index, index, table, 0, index->n_fields);
@@ -3148,6 +3149,7 @@ dict_index_build_internal_fts(
 	new_index->n_user_defined_cols = index->n_fields;
 
 	new_index->id = index->id;
+	btr_search_index_init(new_index);
 
 	/* Copy fields from index to new_index */
 	dict_index_copy(new_index, index, table, 0, index->n_fields);
