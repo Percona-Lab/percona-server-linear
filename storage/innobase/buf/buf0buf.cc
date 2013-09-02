@@ -1036,7 +1036,6 @@ buf_block_init(
 
 	block->check_index_page_at_flush = FALSE;
 	block->index = NULL;
-	block->btr_search_latch = NULL;
 
 #ifdef UNIV_DEBUG
 	block->page.in_page_hash = FALSE;
@@ -2243,7 +2242,6 @@ buf_block_init_low(
 {
 	block->check_index_page_at_flush = FALSE;
 	block->index		= NULL;
-	block->btr_search_latch = NULL;
 
 	block->n_hash_helps	= 0;
 	block->n_fields		= 1;
