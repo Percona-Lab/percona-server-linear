@@ -572,6 +572,9 @@ The following options may be given as the first argument:
  value are used; the rest are ignored)
  --max-sp-recursion-depth[=#] 
  Maximum stored procedure recursion depth
+ --max-statement-time=# 
+ Kill any statement that takes over the specified number
+ of milliseconds
  --max-tmp-tables=#  Maximum number of temporary tables a client can keep open
  at a time
  --max-user-connections=# 
@@ -1449,7 +1452,6 @@ master-info-repository FILE
 master-retry-count 86400
 master-verify-checksum FALSE
 max-allowed-packet 4194304
-max-binlog-cache-size 18446744073709547520
 max-binlog-dump-events 0
 max-binlog-files 0
 max-binlog-size 1073741824
@@ -1469,6 +1471,7 @@ max-relay-log-size 0
 max-seeks-for-key 18446744073709551615
 max-sort-length 1024
 max-sp-recursion-depth 0
+max-statement-time 0
 max-tmp-tables 32
 max-user-connections 0
 max-write-lock-count 18446744073709551615
