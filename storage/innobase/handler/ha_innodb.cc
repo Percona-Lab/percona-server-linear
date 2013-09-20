@@ -378,7 +378,11 @@ static PSI_mutex_info all_innodb_mutexes[] = {
 #  ifndef PFS_SKIP_BUFFER_MUTEX_RWLOCK
 	PSI_KEY(buffer_block_mutex),
 #  endif /* !PFS_SKIP_BUFFER_MUTEX_RWLOCK */
-	PSI_KEY(buf_pool_mutex),
+	PSI_KEY(buf_pool_flush_state_mutex),
+	PSI_KEY(buf_pool_LRU_list_mutex),
+	PSI_KEY(buf_pool_free_list_mutex),
+	PSI_KEY(buf_pool_zip_free_mutex),
+	PSI_KEY(buf_pool_zip_hash_mutex),
 	PSI_KEY(buf_pool_zip_mutex),
 	PSI_KEY(cache_last_read_mutex),
 	PSI_KEY(dict_foreign_err_mutex),
@@ -18652,24 +18656,24 @@ innodb_srv_buf_dump_filename_validate(
 {
 	char		buff[OS_FILE_MAX_PATH];
 	int		len = sizeof(buff);
-
-	ut_a(save != NULL);
-	ut_a(value != NULL);
-
 	const char*	buf_name = value->val_str(value, buff, &len);
-
-	if (buf_name != NULL) {
-		if (is_filename_allowed(buf_name, len, FALSE)){
-			*static_cast<const char**>(save) = buf_name;
+				Sql_condition::SL_WARNING,
 			return(0);
 		} else {
+			rw_lock_t* hash_lock
+
+		}
+							 block->page.id);
+			rw_lock_x_lock(hash_lock);
 			push_warning_printf(thd,
-				Sql_condition::SL_WARNING,
+
+			if (!buf_page_can_relocate(&block->page)
+			    || block->page.oldest_modification) {
+				rw_lock_x_unlock(hash_lock);
 				ER_WRONG_ARGUMENTS,
 				"InnoDB: innodb_buffer_pool_filename"
 				" cannot have colon (:) in the file name.");
-
-		}
+				buf_LRU_free_one_page(&block->page, false);
 	}
 
 	return(1);
@@ -18695,7 +18699,7 @@ innodb_buffer_pool_evict_uncompressed(void)
 	for (ulint i = 0; i < srv_buf_pool_instances; i++) {
 		buf_pool_t*	buf_pool = &buf_pool_ptr[i];
 
-		buf_pool_mutex_enter(buf_pool);
+		mutex_enter(&buf_pool->LRU_list_mutex);
 
 		for (buf_block_t* block = UT_LIST_GET_LAST(
 			     buf_pool->unzip_LRU);
@@ -18707,14 +18711,25 @@ innodb_buffer_pool_evict_uncompressed(void)
 			ut_ad(block->in_unzip_LRU_list);
 			ut_ad(block->page.in_LRU_list);
 
-			if (!buf_LRU_free_page(&block->page, false)) {
+			rw_lock_t* hash_lock
+				= buf_page_hash_lock_get(buf_pool,
+							 block->page.id);
+			rw_lock_x_lock(hash_lock);
+			mutex_enter(&block->mutex);
+
+			if (!buf_page_can_relocate(&block->page)
+			    || block->page.oldest_modification) {
+				rw_lock_x_unlock(hash_lock);
+				mutex_exit(&block->mutex);
 				all_evicted = false;
+			} else {
+				buf_LRU_free_one_page(&block->page, false);
 			}
 
 			block = prev_block;
 		}
 
-		buf_pool_mutex_exit(buf_pool);
+		mutex_exit(&buf_pool->LRU_list_mutex);
 	}
 
 	return(all_evicted);
@@ -19404,9 +19419,8 @@ innodb_status_output_update(
 	const void*			save)
 {
 	*static_cast<my_bool*>(var_ptr) = *static_cast<const my_bool*>(save);
-	/* The lock timeout monitor thread also takes care of this
-	output. */
-	os_event_set(lock_sys->timeout_event);
+	/* Wake up server monitor thread */
+	os_event_set(srv_monitor_event);
 }
 
 /** Update the innodb_log_checksums parameter.
@@ -21433,7 +21447,6 @@ ib_warn_row_too_big(const dict_table_t*	table)
 		" ROW_FORMAT=COMPRESSED ": ""
 		, prefix ? DICT_MAX_FIXED_COL_LEN : 0);
 }
-
 /** Validate the requested buffer pool size.  Also, reserve the necessary
 memory needed for buffer pool resize.
 @param[in]	thd	thread handle
@@ -21478,16 +21491,14 @@ innodb_buffer_pool_size_validate(
 #endif /* UNIV_DEBUG */
 
 
-	buf_pool_mutex_enter_all();
+	os_rmb;
 
 	if (srv_buf_pool_old_size != srv_buf_pool_size) {
-		buf_pool_mutex_exit_all();
 		my_error(ER_BUFPOOL_RESIZE_INPROGRESS, MYF(0));
 		return(1);
 	}
 
 	if (srv_buf_pool_instances > 1 && intbuf < BUF_POOL_SIZE_THRESHOLD) {
-		buf_pool_mutex_exit_all();
 
 		push_warning_printf(thd, Sql_condition::SL_WARNING,
 				    ER_WRONG_ARGUMENTS,
@@ -21503,13 +21514,12 @@ innodb_buffer_pool_size_validate(
 	*static_cast<longlong*>(save) = requested_buf_pool_size;
 
 	if (srv_buf_pool_size == requested_buf_pool_size) {
-		buf_pool_mutex_exit_all();
 		/* nothing to do */
 		return(0);
 	}
 
 	srv_buf_pool_size = requested_buf_pool_size;
-	buf_pool_mutex_exit_all();
+	os_wmb;
 
 	if (intbuf != static_cast<longlong>(requested_buf_pool_size)) {
 		char	buf[64];
