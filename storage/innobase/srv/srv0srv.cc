@@ -416,6 +416,24 @@ ulong srv_buf_pool_dump_pct;
 /** Lock table size in bytes */
 ulint srv_lock_table_size = ULINT_MAX;
 
+/** The maximum time limit for a single LRU tail flush iteration by the page
+cleaner thread */
+ulint srv_cleaner_max_lru_time = 1000;
+
+/** The maximum time limit for a single flush list flush iteration by the page
+cleaner thread */
+ulint srv_cleaner_max_flush_time = 1000;
+
+/** Page cleaner LSN age factor formula option */
+ulong srv_cleaner_lsn_age_factor = SRV_CLEANER_LSN_AGE_FACTOR_HIGH_CHECKPOINT;
+
+/** Empty free list for a query thread handling algorithm option  */
+ulong srv_empty_free_list_algorithm = SRV_EMPTY_FREE_LIST_BACKOFF;
+
+/* The relative priority of the current thread.  If 0, low priority; if 1, high
+priority.  */
+thread_local ulint srv_current_thread_priority = 0;
+
 /* This parameter is deprecated. Use srv_n_io_[read|write]_threads
 instead. */
 ulong srv_n_read_io_threads;
@@ -1101,6 +1119,11 @@ static void srv_init(void) {
   srv_threads.m_page_cleaner_workers =
       UT_NEW_ARRAY_NOKEY(IB_thread, srv_threads.m_page_cleaner_workers_n);
 
+  srv_threads.m_lru_managers_n = srv_buf_pool_instances;
+
+  srv_threads.m_lru_managers =
+      UT_NEW_ARRAY_NOKEY(IB_thread, srv_threads.m_lru_managers_n);
+
   srv_sys = static_cast<srv_sys_t *>(ut_zalloc_nokey(srv_sys_sz));
 
   srv_sys->n_sys_threads = n_sys_threads;
@@ -1201,6 +1224,14 @@ void srv_free(void) {
   ut_free(srv_sys);
 
   srv_sys = 0;
+
+  if (srv_threads.m_lru_managers != nullptr) {
+    for (size_t i = 0; i < srv_threads.m_lru_managers_n; ++i) {
+      srv_threads.m_lru_managers[i] = {};
+    }
+    ut_free(srv_threads.m_lru_managers);
+    srv_threads.m_lru_managers = nullptr;
+  }
 
   if (srv_threads.m_page_cleaner_workers != nullptr) {
     for (size_t i = 0; i < srv_threads.m_page_cleaner_workers_n; ++i) {
