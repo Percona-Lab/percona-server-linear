@@ -230,6 +230,12 @@ struct Srv_threads {
   same shared state as m_page_cleaner_coordinator. */
   IB_thread *m_page_cleaner_workers;
 
+  /** Number of LRU manager threads and size of array below. */
+  size_t m_lru_managers_n;
+
+  /** LRU manager threads. */
+  IB_thread *m_lru_managers;
+
   /** Changed page tracking thread. */
   IB_thread m_changed_page_tracker;
 
@@ -626,7 +632,30 @@ extern ulong srv_buf_pool_dump_pct;
 
 extern ulint srv_show_locks_held;
 
+
+extern ulint srv_show_locks_held;
+
 extern ulint srv_lock_table_size;
+
+extern ulint srv_cleaner_max_lru_time; /*!< the maximum time limit for a
+                                      single LRU tail flush iteration by the
+                                      page cleaner thread */
+
+extern ulint srv_cleaner_max_flush_time; /*!< the maximum time limit for a
+                                      single flush list flush iteration by
+                                      the page cleaner thread */
+
+extern ulong srv_cleaner_lsn_age_factor;
+/*!< page cleaner LSN age factor
+formula option */
+
+extern ulong srv_empty_free_list_algorithm;
+
+/* The relative priority of the current thread.  If 0, low priority; if 1, high
+priority.  */
+extern thread_local ulint srv_current_thread_priority;
+/*!< Empty free list for a query thread
+handling algorithm option */
 
 extern ulint srv_n_file_io_threads;
 extern bool srv_random_read_ahead;
@@ -798,6 +827,7 @@ extern srv_stats_t srv_stats;
 extern mysql_pfs_key_t log_archiver_thread_key;
 extern mysql_pfs_key_t page_archiver_thread_key;
 extern mysql_pfs_key_t buf_dump_thread_key;
+extern mysql_pfs_key_t buf_lru_manager_thread_key;
 extern mysql_pfs_key_t buf_resize_thread_key;
 extern mysql_pfs_key_t clone_ddl_thread_key;
 extern mysql_pfs_key_t clone_gtid_thread_key;
