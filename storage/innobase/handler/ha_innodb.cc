@@ -402,6 +402,26 @@ static TYPELIB innodb_flush_method_typelib = {
     array_elements(innodb_flush_method_names) - 1,
     "innodb_flush_method_typelib", innodb_flush_method_names, NULL};
 
+/** Possible values for system variable "innodb_cleaner_lsn_age_factor".  */
+static const char *innodb_cleaner_lsn_age_factor_names[] = {
+    "legacy", "high_checkpoint", NullS};
+
+/** Enumeration for innodb_cleaner_lsn_age_factor.  */
+static TYPELIB innodb_cleaner_lsn_age_factor_typelib = {
+    array_elements(innodb_cleaner_lsn_age_factor_names) - 1,
+    "innodb_cleaner_lsn_age_factor_typelib",
+    innodb_cleaner_lsn_age_factor_names, nullptr};
+
+/** Possible values for system variable "innodb_empty_free_list_algorithm".  */
+static const char *innodb_empty_free_list_algorithm_names[] = {
+    "legacy", "backoff", NullS};
+
+/** Enumeration for innodb_empty_free_list_algorithm.  */
+static TYPELIB innodb_empty_free_list_algorithm_typelib = {
+    array_elements(innodb_empty_free_list_algorithm_names) - 1,
+    "innodb_empty_free_list_algorithm_typelib",
+    innodb_empty_free_list_algorithm_names, nullptr};
+
 /** Possible values for system variable "innodb_default_row_format". */
 static const char *innodb_default_row_format_names[] = {"redundant", "compact",
                                                         "dynamic", NullS};
@@ -720,6 +740,7 @@ static PSI_thread_info all_innodb_threads[] = {
     PSI_KEY(log_flusher_thread, 0, 0, PSI_DOCUMENT_ME),
     PSI_KEY(log_write_notifier_thread, 0, 0, PSI_DOCUMENT_ME),
     PSI_KEY(log_flush_notifier_thread, 0, 0, PSI_DOCUMENT_ME),
+    PSI_KEY(buf_lru_manager_thread, 0, 0, PSI_DOCUMENT_ME),
     PSI_KEY(srv_error_monitor_thread, 0, 0, PSI_DOCUMENT_ME),
     PSI_KEY(srv_lock_timeout_thread, 0, 0, PSI_DOCUMENT_ME),
     PSI_KEY(srv_log_tracking_thread, 0, 0, PSI_DOCUMENT_ME),
@@ -911,6 +932,23 @@ static int innodb_tmpdir_validate(THD *thd, SYS_VAR *var, void *save,
       static_cast<char *>(thd_memdup(thd, tmp_abs_path, tmp_abs_len + 1));
   *static_cast<const char **>(save) = innodb_tmp_dir;
   return (0);
+}
+
+/** Check whether the requested empty free list algorithm can be used.  The
+backoff algorithm requires a large enough buffer pool so that the cleaner can
+keep up with the free list demand.
+@param[in]	algorithm	desired algorithm from srv_empty_free_list_t
+@param[in]	new_buf_pool_sz	requested buffer pool size
+@return	true if it's possible to enable backoff. */
+static bool innodb_empty_free_list_algorithm_allowed(
+    srv_empty_free_list_t algorithm, long long new_buf_pool_sz = 0) {
+  if (!new_buf_pool_sz) new_buf_pool_sz = srv_buf_pool_size;
+
+  const long long buf_pool_pages =
+      new_buf_pool_sz / srv_page_size / srv_buf_pool_instances;
+
+  return (buf_pool_pages >= BUF_LRU_MIN_LEN * (4 + 1) ||
+          algorithm != SRV_EMPTY_FREE_LIST_BACKOFF);
 }
 
 /** Maps a MySQL trx isolation level code to the InnoDB isolation level code
@@ -4183,6 +4221,16 @@ static void innodb_buffer_pool_size_init() {
 
   srv_buf_pool_size = buf_pool_size_align(srv_buf_pool_size);
   srv_buf_pool_curr_size = srv_buf_pool_size;
+
+  /* Do not enable backoff algorithm for small buffer pool. */
+  if (!innodb_empty_free_list_algorithm_allowed(
+          static_cast<srv_empty_free_list_t>(srv_empty_free_list_algorithm))) {
+    sql_print_information(
+        "InnoDB: innodb_empty_free_list_algorithm has been changed to legacy "
+        "because of small buffer pool size. In order to use backoff, "
+        "increase buffer pool at least up to 20MB.\n");
+    srv_empty_free_list_algorithm = SRV_EMPTY_FREE_LIST_LEGACY;
+  }
 }
 
 /** Initialize and normalize innodb_log_file_size
@@ -20619,6 +20667,45 @@ static void innodb_thread_concurrency_update(THD *thd, SYS_VAR *var,
 which control InnoDB "status monitor" output to the error log.
 @param[out]	var_ptr   current value
 @param[in]	save      to-be-assigned value */
+/** Empty free list algorithm. This function is registered as a callback with
+MySQL.
+@param[in]	thd	thread handle
+@param[in]	var	pointer to system variable
+@param[out]	save	immediate result for update function
+@param[in]	value	incoming string
+@return	0 for valid algorithm */
+static int innodb_srv_empty_free_list_algorithm_validate(
+    THD *thd, SYS_VAR *var, void *save, struct st_mysql_value *value) {
+  char buff[STRING_BUFFER_USUAL_SIZE];
+  int len = sizeof(buff);
+  const char *const algorithm_name = value->val_str(value, buff, &len);
+
+  if (!algorithm_name) return (1);
+
+  ulint algo;
+  for (algo = 0;
+       algo < array_elements(innodb_empty_free_list_algorithm_names) - 1;
+       algo++) {
+    if (!innobase_strcasecmp(algorithm_name,
+                             innodb_empty_free_list_algorithm_names[algo]))
+      break;
+  }
+
+  if (algo == array_elements(innodb_empty_free_list_algorithm_names) - 1)
+    return (1);
+
+  const auto algorithm = static_cast<srv_empty_free_list_t>(algo);
+  if (!innodb_empty_free_list_algorithm_allowed(algorithm)) {
+    sql_print_warning(
+        "InnoDB: innodb_empty_free_list_algorithm = 'backoff' "
+        "requires at least 20MB buffer pool instances.\n");
+    return (1);
+  }
+
+  *reinterpret_cast<ulong *>(save) = static_cast<ulong>(algorithm);
+  return (0);
+}
+
 static void innodb_status_output_update(THD *, SYS_VAR *, void *var_ptr,
                                         const void *save) {
   *static_cast<bool *>(var_ptr) = *static_cast<const bool *>(save);
@@ -21006,7 +21093,46 @@ static MYSQL_SYSVAR_ULONG(
     PLUGIN_VAR_OPCMDARG | PLUGIN_VAR_READONLY,
     "Number of pages reserved in doublewrite buffer for batch flushing", NULL,
     NULL, 120, 1, 127, 0);
+
+// TODO: the option is here, but currently a no-op
+static MYSQL_SYSVAR_ULONG(
+    cleaner_max_lru_time, srv_cleaner_max_lru_time, PLUGIN_VAR_RQCMDARG,
+    "The maximum time limit for a single LRU tail flush iteration by the page "
+    "cleaner thread in miliseconds",
+    NULL, NULL, 1000, 0, ~0UL, 0);
+
+// TODO: the option is here, but currently a no-op
+static MYSQL_SYSVAR_ULONG(cleaner_max_flush_time, srv_cleaner_max_flush_time,
+                          PLUGIN_VAR_RQCMDARG,
+                          "The maximum time limit for a single flush list "
+                          "flush iteration by the page "
+                          "cleaner thread in miliseconds",
+                          NULL, NULL, 1000, 0, ~0UL, 0);
+
 #endif /* defined UNIV_DEBUG || defined UNIV_PERF_DEBUG */
+
+static MYSQL_SYSVAR_ENUM(
+    cleaner_lsn_age_factor, srv_cleaner_lsn_age_factor, PLUGIN_VAR_OPCMDARG,
+    "The formula for LSN age factor for page cleaner adaptive flushing. "
+    "LEGACY: Original Oracle MySQL 5.6 formula. "
+    "HIGH_CHECKPOINT: (the default) Percona Server 5.6 formula.",
+    nullptr, nullptr, SRV_CLEANER_LSN_AGE_FACTOR_HIGH_CHECKPOINT,
+    &innodb_cleaner_lsn_age_factor_typelib);
+
+static MYSQL_SYSVAR_ENUM(
+    empty_free_list_algorithm, srv_empty_free_list_algorithm,
+    PLUGIN_VAR_OPCMDARG,
+    "The algorithm to use for empty free list handling.  Allowed values: "
+    "LEGACY: (default) Original Oracle MySQL 5.6 handling with single page "
+    "flushes; "
+    "BACKOFF: Wait until cleaner produces a free page.",
+    innodb_srv_empty_free_list_algorithm_validate, NULL,
+    SRV_EMPTY_FREE_LIST_LEGACY,
+    // Default changed until separate LRU flusher is merged. With a single page
+    // cleaner otherwise it is possible to loop forever in a query
+    // thread while the cleaner is waiting for the page latch held by that
+    // thread. See sys_vars.log_slow_admin_statements_func in 5.7.5.
+    &innodb_empty_free_list_algorithm_typelib);
 
 static MYSQL_SYSVAR_ULONG(buffer_pool_instances, srv_buf_pool_instances,
                           PLUGIN_VAR_RQCMDARG | PLUGIN_VAR_READONLY,
@@ -21985,9 +22111,13 @@ static SYS_VAR *innobase_system_variables[] = {
 #if defined UNIV_DEBUG || defined UNIV_PERF_DEBUG
     MYSQL_SYSVAR(page_hash_locks),
     MYSQL_SYSVAR(doublewrite_batch_size),
+    MYSQL_SYSVAR(cleaner_max_lru_time),
+    MYSQL_SYSVAR(cleaner_max_flush_time),
 #endif /* defined UNIV_DEBUG || defined UNIV_PERF_DEBUG */
     MYSQL_SYSVAR(status_output),
     MYSQL_SYSVAR(status_output_locks),
+    MYSQL_SYSVAR(cleaner_lsn_age_factor),
+    MYSQL_SYSVAR(empty_free_list_algorithm),
     MYSQL_SYSVAR(print_all_deadlocks),
     MYSQL_SYSVAR(cmp_per_index_enabled),
     MYSQL_SYSVAR(max_undo_log_size),

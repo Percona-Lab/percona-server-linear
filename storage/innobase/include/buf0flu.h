@@ -38,9 +38,14 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "univ.i"
 #include "ut0byte.h"
 
+#include <atomic>
+
 #ifndef UNIV_HOTBACKUP
 /** Flag indicating if the page_cleaner is in active state. */
 extern bool buf_page_cleaner_is_active;
+
+/** The number of running LRU manager threads. 0 if LRU manager is inactive. */
+extern std::atomic<ulint> buf_lru_manager_running_threads;
 
 #ifdef UNIV_DEBUG
 
@@ -327,6 +332,12 @@ class FlushObserver {
 };
 
 #endif /* !UNIV_HOTBACKUP */
+
+/** If LRU list of a buf_pool is less than this size then LRU eviction
+should not happen. This is because when we do LRU flushing we also put
+the blocks on free list. If LRU list is very small then we can end up
+in thrashing. */
+static constexpr auto BUF_LRU_MIN_LEN = 256;
 
 #include "buf0flu.ic"
 
