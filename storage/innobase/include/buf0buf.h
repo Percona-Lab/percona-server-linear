@@ -552,7 +552,7 @@ static inline lsn_t buf_page_get_newest_modification(
 
 /** Increment the modify clock.
 The caller must
-(1) own the buf_pool->mutex and block bufferfix count has to be zero,
+(1) own the buffer block mutex and block bufferfix count has to be zero,
 (2) own X or SX latch on the block->lock, or
 (3) operate on a thread-private temporary table
 @param[in,out]	block	buffer block */
@@ -2272,6 +2272,12 @@ struct buf_pool_t {
   /** This is in the set state when there is no flush batch of the given type
   running. Protected by flush_state_mutex. */
   os_event_t no_flush[BUF_FLUSH_N_TYPES];
+
+  /* This event is always set at startup, so LRU threads do not wait for this
+  event. Before invalidating bufferpool, this event is reset, so the next LRU
+  batch flushing will wait for the event. Bufferpool invalidation needs LRU
+  flushing to be stopped. */
+  os_event_t run_lru;
 
   /** A red-black tree is used exclusively during recovery to speed up
   insertions in the flush_list. This tree contains blocks in order of

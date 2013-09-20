@@ -278,7 +278,8 @@ static bool srv_file_check_mode(const char *name) /*!< in: filename to check */
 @param[in]	segment		The AIO segment the thread will work on */
 static void io_handler_thread(ulint segment) {
   while (srv_shutdown_state.load() != SRV_SHUTDOWN_EXIT_THREADS ||
-         buf_flush_page_cleaner_is_active() || !os_aio_all_slots_free()) {
+         buf_flush_page_cleaner_is_active() || !os_aio_all_slots_free() ||
+         buf_flush_active_lru_managers() > 0) {
     fil_aio_wait(segment);
   }
 }
@@ -3463,7 +3464,9 @@ static void srv_shutdown_page_cleaners() {
   here to let it complete the flushing of the buffer pools
   before proceeding further. */
 
-  for (uint32_t count = 0; buf_flush_page_cleaner_is_active(); ++count) {
+  for (uint32_t count = 0; buf_flush_page_cleaner_is_active() ||
+                           buf_flush_active_lru_managers() > 0;
+       ++count) {
     if (count >= SHUTDOWN_SLEEP_ROUNDS) {
       ib::info(ER_IB_MSG_1251);
       count = 0;
@@ -3472,6 +3475,8 @@ static void srv_shutdown_page_cleaners() {
     std::this_thread::sleep_for(
         std::chrono::microseconds(SHUTDOWN_SLEEP_TIME_US));
   }
+
+  ut_ad(buf_flush_active_lru_managers() == 0);
 
   for (uint32_t count = 0;; ++count) {
     const ulint pending_io = buf_pool_check_no_pending_io();
