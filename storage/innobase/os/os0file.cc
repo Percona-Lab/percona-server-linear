@@ -6430,7 +6430,8 @@ bool AIO::start(ulint n_per_seg, ulint n_readers, ulint n_writers) {
 @param[in]      segment         The AIO segment the thread will work on */
 static void io_handler_thread(ulint segment) {
   while (srv_shutdown_state.load() != SRV_SHUTDOWN_EXIT_THREADS ||
-         buf_flush_page_cleaner_is_active() || !os_aio_all_slots_free()) {
+         buf_flush_page_cleaner_is_active() || !os_aio_all_slots_free() ||
+         buf_flush_active_lru_managers() > 0) {
     fil_aio_wait(segment);
   }
 }
