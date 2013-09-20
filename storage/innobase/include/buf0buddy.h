@@ -35,10 +35,10 @@ Created December 2006 by Marko Makela
 #include "buf0types.h"
 
 /**********************************************************************//**
-Allocate a block.  The thread calling this function must hold
-buf_pool->mutex and must not hold buf_pool->zip_mutex or any
-block->mutex.  The buf_pool->mutex may be released and reacquired.
-This function should only be used for allocating compressed page frames.
+Allocate a block. This function should only be used for allocating compressed
+page frames. The thread calling this function must hold
+buf_pool->LRU_list_mutex and must not hold buf_pool->zip_mutex or any
+block->mutex.
 @return allocated block, never NULL */
 UNIV_INLINE
 byte*
@@ -46,14 +46,9 @@ buf_buddy_alloc(
 /*============*/
 	buf_pool_t*	buf_pool,	/*!< in/out: buffer pool in which
 					the page resides */
-	ulint		size,		/*!< in: compressed page size
+	ulint		size)		/*!< in: compressed page size
 					(between UNIV_ZIP_SIZE_MIN and
 					UNIV_PAGE_SIZE) */
-	ibool*		lru)		/*!< in: pointer to a variable
-					that will be assigned TRUE if
-				       	storage was allocated from the
-				       	LRU list and buf_pool->mutex was
-				       	temporarily released */
 	__attribute__((malloc, nonnull));
 
 /**********************************************************************//**

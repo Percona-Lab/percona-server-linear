@@ -342,19 +342,6 @@ operator<<(
 	const page_id_t&	page_id);
 
 #ifndef UNIV_HOTBACKUP
-/********************************************************************//**
-Acquire mutex on all buffer pool instances */
-UNIV_INLINE
-void
-buf_pool_mutex_enter_all(void);
-/*===========================*/
-
-/********************************************************************//**
-Release mutex on all buffer pool instances */
-UNIV_INLINE
-void
-buf_pool_mutex_exit_all(void);
-/*==========================*/
 
 /********************************************************************//**
 Creates the buffer pool.
@@ -725,7 +712,7 @@ buf_page_get_newest_modification(
 					page frame */
 /********************************************************************//**
 Increments the modify clock of a frame by 1. The caller must (1) own the
-buf_pool->mutex and block bufferfix count has to be zero, (2) or own an x-lock
+LRU list mutex and block bufferfix count has to be zero, (2) or own an x-lock
 on the block. */
 UNIV_INLINE
 void
@@ -1121,6 +1108,17 @@ buf_block_get_io_fix(
 	const buf_block_t*	block)	/*!< in: pointer to the control block */
 	__attribute__((warn_unused_result));
 /*********************************************************************//**
+Gets the io_fix state of a block.  Does not assert that the
+buf_page_get_mutex() mutex is held, to be used in the cases where it is safe
+not to hold it.
+@return	io_fix state */
+UNIV_INLINE
+enum buf_io_fix
+buf_page_get_io_fix_unlocked(
+/*=========================*/
+	const buf_page_t*	bpage)	/*!< in: pointer to the control block */
+	__attribute__((pure));
+/*********************************************************************//**
 Sets the io_fix state of a block. */
 UNIV_INLINE
 void
@@ -1138,7 +1136,7 @@ buf_block_set_io_fix(
 	enum buf_io_fix	io_fix);/*!< in: io_fix state */
 /*********************************************************************//**
 Makes a block sticky. A sticky block implies that even after we release
-the buf_pool->mutex and the block->mutex:
+the buf_pool->LRU_list_mutex and the block->mutex:
 * it cannot be removed from the flush_list
 * the block descriptor cannot be relocated
 * it cannot be removed from the LRU list
@@ -1444,8 +1442,9 @@ buf_pool_watch_is_sentinel(
 	__attribute__((nonnull, warn_unused_result));
 
 /** Add watch for the given page to be read in. Caller must have
-appropriate hash_lock for the bpage. This function may release the
-hash_lock and reacquire it.
+appropriate hash_lock for the bpage and hold the LRU list mutex to avoid a race
+condition with buf_LRU_free_page inserting the same page into the page hash.
+This function may release the hash_lock and reacquire it.
 @param[in]	page_id		page id
 @param[in,out]	hash_lock	hash_lock currently latched
 @return NULL if watch set, block if the page is in the buffer pool */
@@ -1534,6 +1533,16 @@ buf_flush_update_zip_checksum(
 
 #endif /* !UNIV_HOTBACKUP */
 
+/** Return how many more pages must be added to the withdraw list to reach the
+withdraw target of the currently ongoing buffer pool resize.
+@param[in]	buf_pool	buffer pool instance
+@return page count to be withdrawn or zero if the target is already achieved or
+if the buffer pool is not currently being resized. */
+UNIV_INLINE
+ulint
+buf_get_withdraw_depth(
+	buf_pool_t* buf_pool);
+
 /** The common buffer control block structure
 for compressed and uncompressed frames */
 
@@ -1546,8 +1555,7 @@ public:
 	None of these bit-fields must be modified without holding
 	buf_page_get_mutex() [buf_block_t::mutex or
 	buf_pool->zip_mutex], since they can be stored in the same
-	machine word.  Some of these fields are additionally protected
-	by buf_pool->mutex. */
+	machine word.  */
 	/* @{ */
 
 	/** Page id. Protected by buf_pool mutex. */
@@ -1569,7 +1577,10 @@ public:
 #ifndef UNIV_HOTBACKUP
 	unsigned	flush_type:2;	/*!< if this block is currently being
 					flushed to disk, this tells the
-					flush_type.
+					flush_type.  Writes during flushing
+					protected by buf_page_get_mutex_enter()
+					mutex and the corresponding flush state
+					mutex.
 					@see buf_flush_t */
 	unsigned	buf_pool_index:6;/*!< index number of the buffer pool
 					that this block belongs to */
@@ -1580,7 +1591,7 @@ public:
 #endif /* !UNIV_HOTBACKUP */
 	page_zip_des_t	zip;		/*!< compressed page; zip.data
 					(but not the data it points to) is
-					also protected by buf_pool->mutex;
+					protected by buf_pool->zip_mutex;
 					state == BUF_BLOCK_ZIP_PAGE and
 					zip.data == NULL means an active
 					buf_pool->watch */
@@ -1593,15 +1604,13 @@ public:
 	ibool		in_zip_hash;	/*!< TRUE if in buf_pool->zip_hash */
 #endif /* UNIV_DEBUG */
 
-	/** @name Page flushing fields
-	All these are protected by buf_pool->mutex. */
+	/** @name Page flushing fields */
 	/* @{ */
 
 	UT_LIST_NODE_T(buf_page_t) list;
 					/*!< based on state, this is a
 					list node, protected either by
-					buf_pool->mutex or by
-					buf_pool->flush_list_mutex,
+					a corresponding list mutex,
 					in one of the following lists in
 					buf_pool:
 
@@ -1614,7 +1623,8 @@ public:
 					then the node pointers are
 					covered by buf_pool->flush_list_mutex.
 					Otherwise these pointers are
-					protected by buf_pool->mutex.
+					protected by a corresponding list
+					mutex.
 
 					The contents of the list node
 					is undefined if !in_flush_list
@@ -1637,8 +1647,8 @@ public:
 					reads can happen while holding
 					any one of the two mutexes */
 	ibool		in_free_list;	/*!< TRUE if in buf_pool->free; when
-					buf_pool->mutex is free, the following
-					should hold: in_free_list
+					buf_pool->free_list_mutex is free, the
+					following should hold: in_free_list
 					== (state == BUF_BLOCK_NOT_USED) */
 #endif /* UNIV_DEBUG */
 
@@ -1664,9 +1674,7 @@ public:
 					reads can happen while holding
 					any one of the two mutexes */
 	/* @} */
-	/** @name LRU replacement algorithm fields
-	These fields are protected by buf_pool->mutex only (not
-	buf_pool->zip_mutex or buf_block_t::mutex). */
+	/** @name LRU replacement algorithm fields */
 	/* @{ */
 
 	UT_LIST_NODE_T(buf_page_t) LRU;
@@ -1677,7 +1685,10 @@ public:
 					debugging */
 #endif /* UNIV_DEBUG */
 	unsigned	old:1;		/*!< TRUE if the block is in the old
-					blocks in buf_pool->LRU_old */
+					blocks in buf_pool->LRU_old.  Protected
+					by the LRU list mutex.  May be read for
+					heuristics purposes under the block
+					mutex instead. */
 	unsigned	freed_page_clock:31;/*!< the value of
 					buf_pool->freed_page_clock
 					when this block was the last
@@ -1734,8 +1745,8 @@ struct buf_block_t{
 	unsigned	lock_hash_val:32;/*!< hashed value of the page address
 					in the record lock hash table;
 					protected by buf_block_t::lock
-					(or buf_block_t::mutex, buf_pool->mutex
-				        in buf_page_get_gen(),
+					(or buf_block_t::mutex in
+					buf_page_get_gen(),
 					buf_page_init_for_read()
 					and buf_page_create()) */
 	/* @} */
@@ -1749,8 +1760,8 @@ struct buf_block_t{
 					positioning: if the modify clock has
 					not changed, we know that the pointer
 					is still valid; this field may be
-					changed if the thread (1) owns the
-					pool mutex and the page is not
+					changed if the thread (1) owns the LRU
+					list mutex and the page is not
 					bufferfixed, or (2) the thread has an
 					x-latch on the block */
 	/* @} */
@@ -2000,11 +2011,11 @@ struct buf_pool_stat_t{
 	ulint	n_page_gets;	/*!< number of page gets performed;
 				also successful searches through
 				the adaptive hash index are
-				counted as page gets; this field
-				is NOT protected by the buffer
-				pool mutex */
-	ulint	n_pages_read;	/*!< number read operations */
-	ulint	n_pages_written;/*!< number write operations */
+				counted as page gets. */
+	ulint	n_pages_read;	/*!< number read operations.  Accessed
+				atomically. */
+	ulint	n_pages_written;/*!< number write operations.  Accessed
+				atomically.*/
 	ulint	n_pages_created;/*!< number of pages created
 				in the pool with no read */
 	ulint	n_ra_pages_read_rnd;/*!< number of pages read in
@@ -2050,6 +2061,12 @@ struct buf_pool_t{
 					pool instance, protects compressed
 					only pages (of type buf_page_t, not
 					buf_block_t */
+	ib_mutex_t	LRU_list_mutex;
+	ib_mutex_t	free_list_mutex;
+	ib_mutex_t	zip_free_mutex;
+	ib_mutex_t	zip_hash_mutex;
+	ib_mutex_t	flush_state_mutex;	/*!< Flush state protection
+					mutex */
 	ulint		instance_no;	/*!< Array index of this buffer
 					pool instance */
 	ulint		curr_pool_size;	/*!< Current pool size in bytes */
@@ -2093,15 +2110,17 @@ struct buf_pool_t{
 					zip buddy system,
 					indexed by block->frame */
 	ulint		n_pend_reads;	/*!< number of pending read
-					operations */
-	ulint		n_pend_unzip;	/*!< number of pending decompressions */
+					operations.  Accessed atomically */
+	ulint		n_pend_unzip;	/*!< number of pending decompressions.
+					Accesssed atomically */
 
 	time_t		last_printout_time;
 					/*!< when buf_print_io was last time
-					called */
+					called.  Accesses not protected */
 	buf_buddy_stat_t buddy_stat[BUF_BUDDY_SIZES_MAX + 1];
 					/*!< Statistics of buddy system,
-					indexed by block size */
+					indexed by block size.  Protected by
+					zip_free_mutex. */
 	buf_pool_stat_t	stat;		/*!< current statistics */
 	buf_pool_stat_t	old_stat;	/*!< old statistics */
 
@@ -2128,10 +2147,12 @@ struct buf_pool_t{
 					list */
 	ibool		init_flush[BUF_FLUSH_N_TYPES];
 					/*!< this is TRUE when a flush of the
-					given type is being initialized */
+					given type is being initialized.
+					Protected by flush_state_mutex.  */
 	ulint		n_flush[BUF_FLUSH_N_TYPES];
 					/*!< this is the number of pending
-					writes in the given flush type */
+					writes in the given flush type.
+					Protected by flush_state_mutex.  */
 	os_event_t	no_flush[BUF_FLUSH_N_TYPES];
 					/*!< this is in the set state
 					when there is no flush batch
@@ -2158,7 +2179,8 @@ struct buf_pool_t{
 					billion! A thread is allowed
 					to read this for heuristic
 					purposes without holding any
-					mutex or latch */
+					mutex or latch.  For non-heuristic
+					purposes protected by LRU_list_mutex */
 	ibool		try_LRU_scan;	/*!< Set to FALSE when an LRU
 					scan for free block fails. This
 					flag is used to avoid repeated
@@ -2167,8 +2189,7 @@ struct buf_pool_t{
 					available in the scan depth for
 					eviction. Set to TRUE whenever
 					we flush a batch from the
-					buffer pool. Protected by the
-					buf_pool->mutex */
+					buffer pool. Accessed atomically. */
 	/* @} */
 
 	/** @name LRU replacement algorithm fields */
@@ -2219,7 +2240,8 @@ struct buf_pool_t{
 
 	UT_LIST_BASE_NODE_T(buf_block_t) unzip_LRU;
 					/*!< base node of the
-					unzip_LRU list */
+					unzip_LRU list.  The list is protected
+					by LRU list mutex. */
 
 	/* @} */
 	/** @name Buddy allocator fields
@@ -2236,8 +2258,7 @@ struct buf_pool_t{
 
 	buf_page_t*			watch;
 					/*!< Sentinel records for buffer
-					pool watches. Protected by
-					buf_pool->mutex. */
+					pool watches.  */
 
 #if BUF_BUDDY_LOW > UNIV_ZIP_SIZE_MIN
 # error "BUF_BUDDY_LOW > UNIV_ZIP_SIZE_MIN"
@@ -2335,31 +2356,6 @@ Use these instead of accessing buf_pool->mutex directly. */
 # define buf_block_hash_lock_held_s_or_x(b, p)	(TRUE)
 #endif /* UNIV_DEBUG */
 
-#if defined UNIV_DEBUG || defined UNIV_BUF_DEBUG
-/** Forbid the release of the buffer pool mutex. */
-# define buf_pool_mutex_exit_forbid(b) do {	\
-	ut_ad(buf_pool_mutex_own(b));		\
-	b->mutex_exit_forbidden++;		\
-} while (0)
-/** Allow the release of the buffer pool mutex. */
-# define buf_pool_mutex_exit_allow(b) do {	\
-	ut_ad(buf_pool_mutex_own(b));		\
-	ut_a(b->mutex_exit_forbidden);	\
-	b->mutex_exit_forbidden--;		\
-} while (0)
-/** Release the buffer pool mutex. */
-# define buf_pool_mutex_exit(b) do {		\
-	ut_a(!b->mutex_exit_forbidden);		\
-	mutex_exit(&b->mutex);			\
-} while (0)
-#else
-/** Forbid the release of the buffer pool mutex. */
-# define buf_pool_mutex_exit_forbid(b) ((void) 0)
-/** Allow the release of the buffer pool mutex. */
-# define buf_pool_mutex_exit_allow(b) ((void) 0)
-/** Release the buffer pool mutex. */
-# define buf_pool_mutex_exit(b) mutex_exit(&b->mutex)
-#endif
 #endif /* !UNIV_HOTBACKUP */
 /* @} */
 
