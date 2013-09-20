@@ -2917,13 +2917,17 @@ static lsn_t srv_shutdown_log() {
   /* At this point only page_cleaner should be active. We wait
   here to let it complete the flushing of the buffer pools
   before proceeding further. */
+  ut_ad(buf_lru_manager_running_threads == srv_buf_pool_instances ||
+        buf_lru_manager_running_threads == 0);
+
   srv_shutdown_state = SRV_SHUTDOWN_FLUSH_PHASE;
 
-  for (uint32_t count = 0; buf_page_cleaner_is_active; ++count) {
-    if (count >= 600) {
+  for (uint32_t count = 0;
+       buf_page_cleaner_is_active || buf_lru_manager_running_threads > 0;
+       ++count) {
+    if (count % 600 == 0) {
       ib::info(ER_IB_MSG_1251) << "Waiting for page_cleaner to"
                                << " finish flushing of buffer pool.";
-      count = 0;
     }
     os_thread_sleep(100000);
   }
