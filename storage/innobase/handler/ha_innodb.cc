@@ -21969,6 +21969,21 @@ static MYSQL_SYSVAR_ULONG(page_hash_locks, srv_n_page_hash_locks,
                           "page_hash. Rounded up to the next power of 2",
                           nullptr, nullptr, 16, 1, MAX_PAGE_HASH_LOCKS, 0);
 
+#ifdef UNIV_LINUX
+
+static MYSQL_SYSVAR_BOOL(
+    priority_purge, srv_purge_thread_priority, PLUGIN_VAR_OPCMDARG,
+    "Make purge coordinator and worker threads acquire shared resources with "
+    "priority",
+    NULL, NULL, FALSE);
+
+static MYSQL_SYSVAR_BOOL(
+    priority_master, srv_master_thread_priority, PLUGIN_VAR_OPCMDARG,
+    "Make buffer pool cleaner thread acquire shared resources with priority",
+    NULL, NULL, FALSE);
+
+#endif /* UNIV_LINUX */
+
 // TODO: the option is here, but currently a no-op
 static MYSQL_SYSVAR_ULONG(
     cleaner_max_lru_time, srv_cleaner_max_lru_time, PLUGIN_VAR_RQCMDARG,
@@ -23108,6 +23123,10 @@ static SYS_VAR *innobase_system_variables[] = {
 #endif /* UNIV_DEBUG */
 #if defined UNIV_DEBUG || defined UNIV_PERF_DEBUG
     MYSQL_SYSVAR(page_hash_locks),
+#ifdef UNIV_LINUX
+    MYSQL_SYSVAR(priority_purge),
+    MYSQL_SYSVAR(priority_master),
+#endif /* UNIV_LINUX */
     MYSQL_SYSVAR(cleaner_max_lru_time),
     MYSQL_SYSVAR(cleaner_max_flush_time),
 #endif /* defined UNIV_DEBUG || defined UNIV_PERF_DEBUG */
