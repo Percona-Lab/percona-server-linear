@@ -589,10 +589,20 @@ buf_flush_ready_for_flush(
 				buf_page_in_file(bpage) */
 	buf_flush_t	flush_type)/*!< in: type of flush */
 {
-	ut_ad(flush_type < BUF_FLUSH_N_TYPES);
+#ifdef UNIV_DEBUG
+	buf_pool_t*	buf_pool = buf_pool_from_bpage(bpage);
+#endif
+
+	ut_a(buf_page_in_file(bpage)
+	     || (buf_page_get_state(bpage) == BUF_BLOCK_REMOVE_HASH
+#ifdef UNIV_DEBUG
+		 && !mutex_own(&buf_pool->LRU_list_mutex)
+#endif
+		     ));
 	ut_ad(mutex_own(buf_page_get_mutex(bpage))
-	      || flush_type == BUF_FLUSH_LIST);
-	ut_a(buf_page_in_file(bpage));
+	      || (flush_type == BUF_FLUSH_LIST
+		  && buf_flush_list_mutex_own(buf_pool)));
+	ut_ad(flush_type < BUF_FLUSH_N_TYPES);
 
 	if (bpage->oldest_modification == 0
 	    || buf_page_get_io_fix_unlocked(bpage) != BUF_IO_NONE) {
@@ -603,6 +613,7 @@ buf_flush_ready_for_flush(
 
 	switch (flush_type) {
 	case BUF_FLUSH_LIST:
+		return(buf_page_get_state(bpage) != BUF_BLOCK_REMOVE_HASH);
 	case BUF_FLUSH_LRU:
 	case BUF_FLUSH_SINGLE_PAGE:
 		return(true);
@@ -1475,7 +1486,8 @@ buf_flush_try_neighbors(
 
 /** Check if the block is modified and ready for flushing.
 If the the block is ready to flush then flush the page and try o flush
-its neighbors.
+its neighbors. The caller must hold the buffer pool list mutex corresponding to
+the type of flush.
 @param[in]	bpage		buffer control block,
 must be buf_page_in_file(bpage)
 @param[in]	flush_type	BUF_FLUSH_LRU or BUF_FLUSH_LIST
@@ -1494,26 +1506,40 @@ buf_flush_page_and_try_neighbors(
 {
 #ifdef UNIV_DEBUG
 	buf_pool_t*	buf_pool = buf_pool_from_bpage(bpage);
-
-	ut_ad(buf_pool_mutex_own(buf_pool));
 #endif /* UNIV_DEBUG */
 
 	bool		flushed;
-	BPageMutex*	block_mutex = buf_page_get_mutex(bpage);
+	BPageMutex*	block_mutex = NULL;
 
-	mutex_enter(block_mutex);
+	ut_ad((flush_type == BUF_FLUSH_LRU
+	       && mutex_own(&buf_pool->LRU_list_mutex))
+	      || (flush_type == BUF_FLUSH_LIST
+		  && buf_flush_list_mutex_own(buf_pool)));
 
-	ut_a(buf_page_in_file(bpage));
+	if (flush_type == BUF_FLUSH_LRU) {
+		block_mutex = buf_page_get_mutex(bpage);
+		mutex_enter(block_mutex);
+	}
+
+	ut_a(buf_page_in_file(bpage)
+	     || (buf_page_get_state(bpage) == BUF_BLOCK_REMOVE_HASH
+#ifdef UNIV_DEBUG
+		 && !mutex_own(&buf_pool->LRU_list_mutex)
+#endif
+		 ));
 
 	if (buf_flush_ready_for_flush(bpage, flush_type)) {
 		buf_pool_t*	buf_pool;
 
 		buf_pool = buf_pool_from_bpage(bpage);
 
+		if (flush_type == BUF_FLUSH_LRU) {
+			mutex_exit(&buf_pool->LRU_list_mutex);
+		}
+
 		const page_id_t	page_id = bpage->id;
 
 		if (flush_type == BUF_FLUSH_LRU) {
-			mutex_exit(&buf_pool->LRU_list_mutex);
 			mutex_exit(block_mutex);
 		} else {
 			buf_flush_list_mutex_exit(buf_pool);
@@ -1529,11 +1555,12 @@ buf_flush_page_and_try_neighbors(
 			buf_flush_list_mutex_enter(buf_pool);
 		}
 		flushed = true;
-	} else {
-		if (flush_type == BUF_FLUSH_LRU) {
-			mutex_exit(block_mutex);
-		}
 
+	} else if (flush_type == BUF_FLUSH_LRU) {
+		mutex_exit(block_mutex);
+
+		flushed = false;
+	} else {
 		flushed = false;
 	}
 
@@ -3544,7 +3571,8 @@ buf_pool_get_dirty_pages_count(
 	     bpage != 0;
 	     bpage = UT_LIST_GET_NEXT(list, bpage)) {
 
-		ut_ad(buf_page_in_file(bpage));
+		ut_ad(buf_page_in_file(bpage)
+		      || buf_page_get_state(bpage) == BUF_BLOCK_REMOVE_HASH);
 		ut_ad(bpage->in_flush_list);
 		ut_ad(bpage->oldest_modification > 0);
 

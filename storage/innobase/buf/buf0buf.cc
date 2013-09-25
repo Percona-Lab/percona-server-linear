@@ -3125,7 +3125,8 @@ HazardPointer::set(buf_page_t* bpage)
 {
 	ut_ad(mutex_own(m_mutex));
 	ut_ad(!bpage || buf_pool_from_bpage(bpage) == m_buf_pool);
-	ut_ad(!bpage || buf_page_in_file(bpage));
+	ut_ad(!bpage || buf_page_in_file(bpage)
+	      || buf_page_get_state(bpage) == BUF_BLOCK_REMOVE_HASH);
 
 	m_hp = bpage;
 }
@@ -6513,22 +6514,22 @@ buf_get_latched_pages_number_instance(
 				fixed_pages_number++;
 			}
 			break;
+			break;
 		case BUF_BLOCK_FILE_PAGE:
 			/* uncompressed page */
+		case BUF_BLOCK_REMOVE_HASH:
+			/* We hold flush list but not LRU list mutex here.
+			Thus encountering BUF_BLOCK_REMOVE_HASH pages is
+			possible.  */
 			break;
-			case BUF_BLOCK_REMOVE_HASH:
-				/* We hold flush list but not LRU list mutex here.
-				Thus encountering BUF_BLOCK_REMOVE_HASH pages is
-				possible.  */
-				break;
-			case BUF_BLOCK_POOL_WATCH:
-			case BUF_BLOCK_ZIP_PAGE:
-			case BUF_BLOCK_NOT_USED:
-			case BUF_BLOCK_READY_FOR_USE:
-			case BUF_BLOCK_MEMORY:
-				ut_error;
-				break;
-	}
+		case BUF_BLOCK_POOL_WATCH:
+		case BUF_BLOCK_ZIP_PAGE:
+		case BUF_BLOCK_NOT_USED:
+		case BUF_BLOCK_READY_FOR_USE:
+		case BUF_BLOCK_MEMORY:
+			ut_error;
+			break;
+		}
 	}
 
 	buf_flush_list_mutex_exit(buf_pool);
