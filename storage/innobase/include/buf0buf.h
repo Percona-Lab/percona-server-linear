@@ -1273,7 +1273,7 @@ buf_page_hash_get_locked(
 	buf_pool_t*	buf_pool,	/*!< buffer pool instance */
 	ulint		space,		/*!< in: space id */
 	ulint		offset,		/*!< in: page number */
-	rw_lock_t**	lock,		/*!< in/out: lock of the page
+	prio_rw_lock_t**	lock,	/*!< in/out: lock of the page
 					hash acquired if bpage is
 					found. NULL otherwise. If NULL
 					is passed then the hash_lock
@@ -1299,7 +1299,7 @@ buf_block_hash_get_locked(
 	buf_pool_t*	buf_pool,	/*!< buffer pool instance */
 	ulint		space,		/*!< in: space id */
 	ulint		offset,		/*!< in: page number */
-	rw_lock_t**	lock,		/*!< in/out: lock of the page
+	prio_rw_lock_t**	lock,	/*!< in/out: lock of the page
 					hash acquired if bpage is
 					found. NULL otherwise. If NULL
 					is passed then the hash_lock
