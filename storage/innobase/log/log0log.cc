@@ -969,12 +969,14 @@ log_io_complete(
 		switch (srv_unix_file_flush_method) {
 		case SRV_UNIX_O_DSYNC:
 		case SRV_UNIX_NOSYNC:
+		case SRV_UNIX_ALL_O_DIRECT:
 			break;
 		case SRV_UNIX_FSYNC:
 		case SRV_UNIX_LITTLESYNC:
 		case SRV_UNIX_O_DIRECT:
 		case SRV_UNIX_O_DIRECT_NO_FSYNC:
-			fil_flush(group->space_id);
+			if (thd_flush_log_at_trx_commit(NULL) != 2)
+				fil_flush(group->space_id);
 		}
 #endif /* _WIN32 */
 
@@ -1394,9 +1396,11 @@ loop:
 	log_sys_write_completion();
 
 #ifndef _WIN32
-	if (srv_unix_file_flush_method == SRV_UNIX_O_DSYNC) {
-		/* O_SYNC means the OS did not buffer the log file at all:
-		so we have also flushed to disk what we have written */
+	if (srv_unix_file_flush_method == SRV_UNIX_O_DSYNC
+	    || srv_unix_file_flush_method == SRV_UNIX_ALL_O_DIRECT) {
+		/* O_SYNC and ALL_O_DIRECT mean the OS did not buffer the log
+		file at all: so we have also flushed to disk what we have
+		written */
 		log_sys->flushed_to_disk_lsn = log_sys->write_lsn;
 	}
 #endif /* !_WIN32 */
@@ -1784,6 +1788,7 @@ log_checkpoint(
 #ifndef _WIN32
 	switch (srv_unix_file_flush_method) {
 	case SRV_UNIX_NOSYNC:
+	case SRV_UNIX_ALL_O_DIRECT:
 		break;
 	case SRV_UNIX_O_DSYNC:
 	case SRV_UNIX_FSYNC:
