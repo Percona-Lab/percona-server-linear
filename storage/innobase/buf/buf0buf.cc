@@ -1663,7 +1663,7 @@ buf_pool_watch_set(
 	buf_page_t*	bpage;
 	ulint		i;
 	buf_pool_t*	buf_pool = buf_pool_get(space, offset);
-	rw_lock_t*	hash_lock;
+	prio_rw_lock_t*	hash_lock;
 
 	hash_lock = buf_page_hash_lock_get(buf_pool, fold);
 
@@ -1782,7 +1782,7 @@ buf_pool_watch_remove(
 {
 #ifdef UNIV_SYNC_DEBUG
 	/* We must also own the appropriate hash_bucket mutex. */
-	rw_lock_t* hash_lock = buf_page_hash_lock_get(buf_pool, fold);
+	prio_rw_lock_t* hash_lock = buf_page_hash_lock_get(buf_pool, fold);
 	ut_ad(rw_lock_own(hash_lock, RW_LOCK_EX));
 #endif /* UNIV_SYNC_DEBUG */
 
@@ -1808,7 +1808,8 @@ buf_pool_watch_unset(
 	buf_page_t*	bpage;
 	buf_pool_t*	buf_pool = buf_pool_get(space, offset);
 	ulint		fold = buf_page_address_fold(space, offset);
-	rw_lock_t*	hash_lock = buf_page_hash_lock_get(buf_pool, fold);
+	prio_rw_lock_t*	hash_lock = buf_page_hash_lock_get(buf_pool,
+							     fold);
 
 	rw_lock_x_lock(hash_lock);
 
@@ -1854,7 +1855,7 @@ buf_pool_watch_occurred(
 	buf_page_t*	bpage;
 	buf_pool_t*	buf_pool = buf_pool_get(space, offset);
 	ulint		fold	= buf_page_address_fold(space, offset);
-	rw_lock_t*	hash_lock = buf_page_hash_lock_get(buf_pool,
+	prio_rw_lock_t*	hash_lock = buf_page_hash_lock_get(buf_pool,
 							     fold);
 
 	rw_lock_s_lock(hash_lock);
@@ -1945,7 +1946,7 @@ buf_page_set_file_page_was_freed(
 {
 	buf_page_t*	bpage;
 	buf_pool_t*	buf_pool = buf_pool_get(space, offset);
-	rw_lock_t*	hash_lock;
+	prio_rw_lock_t*	hash_lock;
 
 	bpage = buf_page_hash_get_s_locked(buf_pool, space, offset,
 					   &hash_lock);
@@ -1979,7 +1980,7 @@ buf_page_reset_file_page_was_freed(
 {
 	buf_page_t*	bpage;
 	buf_pool_t*	buf_pool = buf_pool_get(space, offset);
-	rw_lock_t*	hash_lock;
+	prio_rw_lock_t*	hash_lock;
 
 	bpage = buf_page_hash_get_s_locked(buf_pool, space, offset,
 					   &hash_lock);
@@ -2057,7 +2058,7 @@ buf_page_get_zip(
 {
 	buf_page_t*	bpage;
 	ib_mutex_t*	block_mutex;
-	rw_lock_t*	hash_lock;
+	prio_rw_lock_t*	hash_lock;
 	ibool		discard_attempted = FALSE;
 	ibool		must_read;
 	trx_t*		trx = NULL;
@@ -2576,7 +2577,9 @@ buf_page_get_gen(
 	ulint		fold;
 	unsigned	access_time;
 	ulint		fix_type;
-	rw_lock_t*	hash_lock;
+	ibool		must_read;
+	prio_rw_lock_t*	hash_lock;
+	ib_mutex_t*	block_mutex;
 	ulint		retries = 0;
 	trx_t*		trx = NULL;
 	ulint		sec;
@@ -3423,7 +3426,7 @@ buf_page_try_get_func(
 	ibool		success;
 	ulint		fix_type;
 	buf_pool_t*	buf_pool = buf_pool_get(space_id, page_no);
-	rw_lock_t*	hash_lock;
+	prio_rw_lock_t*	hash_lock;
 
 	ut_ad(mtr);
 	ut_ad(mtr->state == MTR_ACTIVE);
@@ -3638,7 +3641,7 @@ buf_page_init_for_read(
 	buf_block_t*	block;
 	buf_page_t*	bpage	= NULL;
 	buf_page_t*	watch_page;
-	rw_lock_t*	hash_lock;
+	prio_rw_lock_t*	hash_lock;
 	mtr_t		mtr;
 	ulint		fold;
 	ibool		lru	= FALSE;
@@ -3912,7 +3915,7 @@ buf_page_create(
 	ulint		fold;
 	buf_block_t*	free_block	= NULL;
 	buf_pool_t*	buf_pool	= buf_pool_get(space, offset);
-	rw_lock_t*	hash_lock;
+	prio_rw_lock_t*	hash_lock;
 
 	ut_ad(mtr);
 	ut_ad(mtr->state == MTR_ACTIVE);
@@ -4167,7 +4170,7 @@ buf_mark_space_corrupt(
 	ibool		ret = TRUE;
 	const ulint	fold = buf_page_address_fold(bpage->space,
 						     bpage->offset);
-	rw_lock_t*	hash_lock = buf_page_hash_lock_get(buf_pool, fold);
+	prio_rw_lock_t*	hash_lock = buf_page_hash_lock_get(buf_pool, fold);
 
 	/* First unfix and release lock on the bpage */
 	mutex_enter(&buf_pool->LRU_list_mutex);
