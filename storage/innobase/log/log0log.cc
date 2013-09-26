@@ -1214,6 +1214,7 @@ log_io_complete(
 		group = (log_group_t*)((ulint) group - 1);
 
 		if (srv_unix_file_flush_method != SRV_UNIX_O_DSYNC
+		    && srv_unix_file_flush_method != SRV_UNIX_ALL_O_DIRECT
 		    && srv_unix_file_flush_method != SRV_UNIX_NOSYNC) {
 
 			fil_flush(group->space_id);
@@ -1235,6 +1236,7 @@ log_io_complete(
 			logs and cannot end up here! */
 
 	if (srv_unix_file_flush_method != SRV_UNIX_O_DSYNC
+	    && srv_unix_file_flush_method != SRV_UNIX_ALL_O_DIRECT
 	    && srv_unix_file_flush_method != SRV_UNIX_NOSYNC
 	    && thd_flush_log_at_trx_commit(NULL) != 2) {
 
@@ -1634,9 +1636,11 @@ loop:
 
 	mutex_exit(&(log_sys->mutex));
 
-	if (srv_unix_file_flush_method == SRV_UNIX_O_DSYNC) {
-		/* O_DSYNC means the OS did not buffer the log file at all:
-		so we have also flushed to disk what we have written */
+	if (srv_unix_file_flush_method == SRV_UNIX_O_DSYNC
+	    || srv_unix_file_flush_method == SRV_UNIX_ALL_O_DIRECT) {
+		/* O_DSYNC or ALL_O_DIRECT means the OS did not buffer the log
+		file at all: so we have also flushed to disk what we have
+		written */
 
 		log_sys->flushed_to_disk_lsn = log_sys->write_lsn;
 
@@ -2119,7 +2123,8 @@ log_checkpoint(
 		recv_apply_hashed_log_recs(TRUE);
 	}
 
-	if (srv_unix_file_flush_method != SRV_UNIX_NOSYNC) {
+	if (srv_unix_file_flush_method != SRV_UNIX_NOSYNC &&
+	    srv_unix_file_flush_method != SRV_UNIX_ALL_O_DIRECT) {
 		fil_flush_file_spaces(FIL_TABLESPACE);
 	}
 
