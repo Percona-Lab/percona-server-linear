@@ -3463,6 +3463,10 @@ os_file_create_func(
 		|| srv_unix_file_flush_method == SRV_UNIX_O_DIRECT_NO_FSYNC)) {
 
 		os_file_set_nocache(file, name, mode_str);
+	} else if (!srv_read_only_mode
+		   && *success
+		   && srv_unix_file_flush_method == SRV_UNIX_ALL_O_DIRECT) {
+		os_file_set_nocache(file, name, mode_str);
 	}
 
 #ifdef USE_FILE_LOCK
