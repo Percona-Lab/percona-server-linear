@@ -9014,12 +9014,6 @@ PSI_memory_key key_memory_test_quick_select_exec;
 PSI_memory_key key_memory_prune_partitions_exec;
 PSI_memory_key key_memory_binlog_recover_exec;
 PSI_memory_key key_memory_blob_mem_storage;
-PSI_memory_key key_memory_userstat_table_stats;
-PSI_memory_key key_memory_userstat_index_stats;
-PSI_memory_key key_memory_userstat_user_stats;
-PSI_memory_key key_memory_userstat_thread_stats;
-PSI_memory_key key_memory_userstat_client_stats;
-PSI_memory_key key_memory_thread_pool_connection;
 PSI_memory_key key_memory_NAMED_ILINK_name;
 PSI_memory_key key_memory_Sys_var_charptr_value;
 PSI_memory_key key_memory_queue_item;
@@ -9116,6 +9110,16 @@ PSI_memory_key key_memory_fill_schema_schemata;
 PSI_memory_key key_memory_native_functions;
 PSI_memory_key key_memory_JSON;
 
+PSI_memory_key key_memory_userstat_table_stats;
+PSI_memory_key key_memory_userstat_index_stats;
+PSI_memory_key key_memory_userstat_user_stats;
+PSI_memory_key key_memory_userstat_thread_stats;
+PSI_memory_key key_memory_userstat_client_stats;
+
+PSI_memory_key key_memory_per_query_vars;
+
+PSI_memory_key key_memory_thread_pool_connection;
+
 #ifdef HAVE_PSI_INTERFACE
 static PSI_memory_info all_server_memory[]=
 {
@@ -9151,12 +9155,6 @@ static PSI_memory_info all_server_memory[]=
   { &key_memory_prune_partitions_exec, "prune_partitions::exec", 0},
   { &key_memory_binlog_recover_exec, "MYSQL_BIN_LOG::recover", 0},
   { &key_memory_blob_mem_storage, "Blob_mem_storage::storage", 0},
-  { &key_memory_userstat_table_stats, "userstat_table_stats", 0},
-  { &key_memory_userstat_index_stats, "userstat_index_stats", 0},
-  { &key_memory_userstat_user_stats, "userstat_user_stats", 0},
-  { &key_memory_userstat_thread_stats, "userstat_thread_stats", 0},
-  { &key_memory_userstat_client_stats, "userstat_client_stats", 0},
-  { &key_memory_thread_pool_connection, "thread_pool_connection", 0},
 
   { &key_memory_NAMED_ILINK_name, "NAMED_ILINK::name", 0},
   { &key_memory_String_value, "String::value", 0},
@@ -9175,6 +9173,16 @@ static PSI_memory_info all_server_memory[]=
   { &key_memory_log_event, "Log_event", 0},
   { &key_memory_Incident_log_event_message, "Incident_log_event::message", 0},
   { &key_memory_Rows_query_log_event_rows_query, "Rows_query_log_event::rows_query", 0},
+
+  { &key_memory_userstat_table_stats, "userstat_table_stats", 0},
+  { &key_memory_userstat_index_stats, "userstat_index_stats", 0},
+  { &key_memory_userstat_user_stats, "userstat_user_stats", 0},
+  { &key_memory_userstat_thread_stats, "userstat_thread_stats", 0},
+  { &key_memory_userstat_client_stats, "userstat_client_stats", 0},
+
+  { &key_memory_per_query_vars, "per_query_variables", 0},
+
+  { &key_memory_thread_pool_connection, "thread_pool_connection", 0},
 
   { &key_memory_Sort_param_tmp_buffer, "Sort_param::tmp_buffer", 0},
   { &key_memory_Filesort_info_merge, "Filesort_info::merge", 0},

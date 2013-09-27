@@ -542,6 +542,7 @@ void LEX::reset()
   exchange= NULL;
   is_set_password_sql= false;
   mark_broken(false);
+  set_statement= false;
   max_execution_time= 0;
   parse_gcol_expr= false;
   opt_hints_global= NULL;
@@ -4901,4 +4902,8 @@ void binlog_unsafe_map_init()
   UNSAFE(LEX::STMT_WRITES_TEMP_NON_TRANS_TABLE, LEX::STMT_READS_NON_TRANS_TABLE,
      BINLOG_DIRECT_OFF & TRX_CACHE_NOT_EMPTY);
 }
+#endif
+
+#ifdef HAVE_EXPLICIT_TEMPLATE_INSTANTIATION
+template class Mem_root_array<ORDER*, true>;
 #endif
