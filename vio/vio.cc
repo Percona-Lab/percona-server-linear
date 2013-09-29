@@ -275,6 +275,7 @@ static bool vio_init(Vio *vio, enum enum_vio_type type, my_socket sd,
       vio->should_retry = vio_should_retry;
       vio->was_timeout = vio_was_timeout;
       vio->vioshutdown = vio_ssl_shutdown;
+      vio->viocancel = vio_cancel;
       vio->peer_addr = vio_peer_addr;
       vio->io_wait = vio_io_wait;
       vio->is_connected = vio_is_connected;
@@ -296,6 +297,7 @@ static bool vio_init(Vio *vio, enum enum_vio_type type, my_socket sd,
       vio->should_retry = vio_should_retry;
       vio->was_timeout = vio_was_timeout;
       vio->vioshutdown = vio_shutdown;
+      vio->viocancel = vio_cancel;
       vio->peer_addr = vio_peer_addr;
       vio->io_wait = vio_io_wait;
       vio->is_connected = vio_is_connected;
