@@ -1383,7 +1383,7 @@ void tp_post_kill_notification(THD *thd)
 
   Vio* vio= thd->get_protocol_classic()->get_vio();
   if (vio)
-    vio_shutdown(vio, SHUT_RD);
+    vio_cancel(vio, SHUT_RD);
   DBUG_VOID_RETURN;
 }
 
