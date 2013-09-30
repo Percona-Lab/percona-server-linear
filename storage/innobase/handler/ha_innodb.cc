@@ -19435,6 +19435,18 @@ static MYSQL_SYSVAR_BOOL(priority_master, srv_master_thread_priority,
 
 #endif /* UNIV_LINUX */
 
+static MYSQL_SYSVAR_ULONG(cleaner_max_lru_time, srv_cleaner_max_lru_time,
+  PLUGIN_VAR_RQCMDARG,
+  "The maximum time limit for a single LRU tail flush iteration by the page "
+  "cleaner thread in miliseconds",
+  NULL, NULL, 1000, 0, ~0UL, 0);
+
+static MYSQL_SYSVAR_ULONG(cleaner_max_flush_time, srv_cleaner_max_flush_time,
+  PLUGIN_VAR_RQCMDARG,
+  "The maximum time limit for a single flush list flush iteration by the page "
+  "cleaner thread in miliseconds",
+  NULL, NULL, 1000, 0, ~0UL, 0);
+
 #endif /* defined UNIV_DEBUG || defined UNIV_PERF_DEBUG */
 
 static MYSQL_SYSVAR_ULONG(buffer_pool_instances, srv_buf_pool_instances,
@@ -20167,6 +20179,8 @@ static struct st_mysql_sys_var* innobase_system_variables[]= {
   MYSQL_SYSVAR(priority_purge),
   MYSQL_SYSVAR(priority_master),
 #endif /* UNIV_LINUX */
+  MYSQL_SYSVAR(cleaner_max_lru_time),
+  MYSQL_SYSVAR(cleaner_max_flush_time),
 #endif /* defined UNIV_DEBUG || defined UNIV_PERF_DEBUG */
   MYSQL_SYSVAR(status_output),
   MYSQL_SYSVAR(status_output_locks),
