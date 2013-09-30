@@ -460,6 +460,7 @@ if ( ! $print_defaults )
 -x $print_defaults or -f "$print_defaults.exe"
   or cannot_find_file($print_defaults);
 
+<<'CONFIGFILE_BUG1225189';
 my $config_file;
 my $copy_cfg_file;
 
@@ -502,6 +503,13 @@ if ( ! $keep_my_cnf ) {
   }
   close TEMPL;
 }
+else
+{
+  warning($opt,"Could not write to config file $copy_cfg_file: $!");
+  $failed_write_cfg= 1;
+}
+close TEMPL;
+CONFIGFILE_BUG1225189
 
 # ----------------------------------------------------------------------
 # Now we can get arguments from the groups [mysqld] and [mysql_install_db]
@@ -521,6 +529,9 @@ else
   $cmd = quote_options($print_defaults, "mysqld", "mysql_install_db");
 }
 
+my @default_options;
+my $cmd = quote_options($print_defaults, $print_def_file,
+                        "mysqld","mysql_install_db");
 open(PIPE, "$cmd |") or error($opt,"can't run $cmd: $!");
 while ( <PIPE> )
 {
