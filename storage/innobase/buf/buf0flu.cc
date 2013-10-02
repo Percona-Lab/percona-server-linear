@@ -1505,7 +1505,7 @@ to this function there will be 'max' blocks in the free list.
 @return number of blocks for which the write request was queued. */
 __attribute__((nonnull))
 static
-ulint
+void
 buf_flush_LRU_list_batch(
 /*=====================*/
 	buf_pool_t*	buf_pool,	/*!< in: buffer pool instance */
@@ -1588,7 +1588,9 @@ buf_flush_LRU_list_batch(
 			ulint		offset;
 			buf_page_t*	prev_bpage;
 
-			prev_bpage = UT_LIST_GET_PREV(LRU, bpage);
+			if (buf_flush_page_and_try_neighbors(
+				bpage,
+				BUF_FLUSH_LRU, max, &n->flushed)) {
 
 			/* Save the previous bpage */
 
@@ -1632,7 +1634,7 @@ buf_flush_LRU_list_batch(
 	/* We keep track of all flushes happening as part of LRU
 	flush. When estimating the desired rate at which flush_list
 	should be flushed, we factor in this value. */
-	buf_pool->stat.buf_lru_flush_page_count += count;
+	buf_pool->stat.buf_lru_flush_page_count += n->flushed;
 
 	if (scanned) {
 		MONITOR_INC_VALUE_CUMULATIVE(
@@ -1641,8 +1643,6 @@ buf_flush_LRU_list_batch(
 			MONITOR_LRU_BATCH_SCANNED_PER_CALL,
 			scanned);
 	}
-
-	return(count);
 }
 
 /*******************************************************************//**
