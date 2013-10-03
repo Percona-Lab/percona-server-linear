@@ -227,9 +227,21 @@ or other policy for timed out wait is applied. */
 static constexpr uint32_t SHUTDOWN_SLEEP_ROUNDS =
     60 * 1000 * 1000 / SHUTDOWN_SLEEP_TIME_US;
 
+static std::atomic<ulint> io_tid_i(0);
+
 /** I/o-handler thread function.
 @param[in]      segment         The AIO segment the thread will work on */
 static void io_handler_thread(ulint segment) {
+  const auto tid_i = io_tid_i.fetch_add(1, std::memory_order_relaxed);
+  ut_ad(tid_i < srv_n_file_io_threads);
+  srv_io_tids[tid_i] = os_thread_get_tid();
+  const auto actual_priority =
+      os_thread_set_priority(srv_io_tids[tid_i], srv_sched_priority_io);
+  if (UNIV_UNLIKELY(actual_priority != srv_sched_priority_purge))
+    ib::warn() << "Failed to set I/O thread priority to "
+               << srv_sched_priority_master << " the current priority is "
+               << actual_priority;
+
   while (srv_shutdown_state.load() != SRV_SHUTDOWN_EXIT_THREADS ||
          buf_flush_page_cleaner_is_active() || !os_aio_all_slots_free() ||
          buf_flush_active_lru_managers() > 0) {
