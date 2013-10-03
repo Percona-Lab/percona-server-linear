@@ -2965,9 +2965,7 @@ static void pc_request(ulint min_n, lsn_t lsn_limit) {
 Do flush for one slot.
 @return	the number of the slots which has not been treated yet. */
 static ulint pc_flush_slot(void) {
-  ib_time_monotonic_ms_t lru_tm = 0;
   ib_time_monotonic_ms_t list_tm = 0;
-  int lru_pass = 0;
   int list_pass = 0;
 
   mutex_enter(&page_cleaner->mutex);
@@ -2999,25 +2997,11 @@ static ulint pc_flush_slot(void) {
     }
 
     if (!page_cleaner->is_running) {
-      slot->n_flushed_lru = 0;
       slot->n_flushed_list = 0;
       goto finish_mutex;
     }
 
     mutex_exit(&page_cleaner->mutex);
-
-    lru_tm = ut_time_monotonic_ms();
-
-    /* Flush pages from end of LRU if required */
-    slot->n_flushed_lru = buf_flush_LRU_list(buf_pool);
-
-    lru_tm = ut_time_monotonic_ms() - lru_tm;
-    lru_pass++;
-
-    if (!page_cleaner->is_running) {
-      slot->n_flushed_list = 0;
-      goto finish;
-    }
 
     /* Flush pages from flush_list if required */
     if (page_cleaner->requested) {
@@ -3033,16 +3017,13 @@ static ulint pc_flush_slot(void) {
       slot->n_flushed_list = 0;
       slot->succeeded_list = true;
     }
-  finish:
     mutex_enter(&page_cleaner->mutex);
   finish_mutex:
     page_cleaner->n_slots_flushing--;
     page_cleaner->n_slots_finished++;
     slot->state = PAGE_CLEANER_STATE_FINISHED;
 
-    slot->flush_lru_time += lru_tm;
     slot->flush_list_time += list_tm;
-    slot->flush_lru_pass += lru_pass;
     slot->flush_list_pass += list_pass;
 
     if (page_cleaner->n_slots_requested == 0 &&
