@@ -129,8 +129,8 @@ struct page_cleaner_slot_t {
                               protected by page_cleaner_t::mutex
                               if the worker thread got the slot and
                               set to PAGE_CLEANER_STATE_FLUSHING,
-                              n_flushed_lru and n_flushed_list can be
-                              updated only by the worker thread */
+                              n_flushed_list can be updated only by
+                              the worker thread */
   /* This value is set during state==PAGE_CLEANER_STATE_NONE */
   ulint n_pages_requested;
   /*!< number of requested pages
@@ -138,22 +138,15 @@ struct page_cleaner_slot_t {
   /* These values are updated during state==PAGE_CLEANER_STATE_FLUSHING,
   and commited with state==PAGE_CLEANER_STATE_FINISHED.
   The consistency is protected by the 'state' */
-  ulint n_flushed_lru;
-  /*!< number of flushed pages
-  by LRU scan flushing */
   ulint n_flushed_list;
   /*!< number of flushed pages
   by flush_list flushing */
   bool succeeded_list;
   /*!< true if flush_list flushing
   succeeded. */
-  ulint flush_lru_time;
-  /*!< elapsed time for LRU flushing */
   ulint flush_list_time;
   /*!< elapsed time for flush_list
   flushing */
-  ulint flush_lru_pass;
-  /*!< count to attempt LRU flushing */
   ulint flush_list_pass;
   /*!< count to attempt flush_list
   flushing */
@@ -2410,9 +2403,7 @@ static ulint page_cleaner_flush_pages_recommendation(lsn_t *lsn_limit,
     page_cleaner->flush_time = 0;
     page_cleaner->flush_pass = 0;
 
-    ulint lru_tm = 0;
     ulint list_tm = 0;
-    ulint lru_pass = 0;
     ulint list_pass = 0;
 
     for (ulint i = 0; i < page_cleaner->n_slots; i++) {
@@ -2420,13 +2411,9 @@ static ulint page_cleaner_flush_pages_recommendation(lsn_t *lsn_limit,
 
       slot = &page_cleaner->slots[i];
 
-      lru_tm += slot->flush_lru_time;
-      lru_pass += slot->flush_lru_pass;
       list_tm += slot->flush_list_time;
       list_pass += slot->flush_list_pass;
 
-      slot->flush_lru_time = 0;
-      slot->flush_lru_pass = 0;
       slot->flush_list_time = 0;
       slot->flush_list_pass = 0;
     }
@@ -2434,9 +2421,6 @@ static ulint page_cleaner_flush_pages_recommendation(lsn_t *lsn_limit,
     mutex_exit(&page_cleaner->mutex);
 
     /* minimum values are 1, to avoid dividing by zero. */
-    if (lru_tm < 1) {
-      lru_tm = 1;
-    }
     if (list_tm < 1) {
       list_tm = 1;
     }
@@ -2444,9 +2428,6 @@ static ulint page_cleaner_flush_pages_recommendation(lsn_t *lsn_limit,
       flush_tm = 1;
     }
 
-    if (lru_pass < 1) {
-      lru_pass = 1;
-    }
     if (list_pass < 1) {
       list_pass = 1;
     }
@@ -2455,22 +2436,14 @@ static ulint page_cleaner_flush_pages_recommendation(lsn_t *lsn_limit,
     }
 
     MONITOR_SET(MONITOR_FLUSH_ADAPTIVE_AVG_TIME_SLOT, list_tm / list_pass);
-    MONITOR_SET(MONITOR_LRU_BATCH_FLUSH_AVG_TIME_SLOT, lru_tm / lru_pass);
 
     MONITOR_SET(MONITOR_FLUSH_ADAPTIVE_AVG_TIME_THREAD,
                 list_tm / (srv_n_page_cleaners * flush_pass));
-    MONITOR_SET(MONITOR_LRU_BATCH_FLUSH_AVG_TIME_THREAD,
-                lru_tm / (srv_n_page_cleaners * flush_pass));
-    MONITOR_SET(MONITOR_FLUSH_ADAPTIVE_AVG_TIME_EST,
-                flush_tm * list_tm / flush_pass / (list_tm + lru_tm));
-    MONITOR_SET(MONITOR_LRU_BATCH_FLUSH_AVG_TIME_EST,
-                flush_tm * lru_tm / flush_pass / (list_tm + lru_tm));
+    MONITOR_SET(MONITOR_FLUSH_ADAPTIVE_AVG_TIME_EST, flush_tm / flush_pass);
     MONITOR_SET(MONITOR_FLUSH_AVG_TIME, flush_tm / flush_pass);
 
     MONITOR_SET(MONITOR_FLUSH_ADAPTIVE_AVG_PASS,
                 list_pass / page_cleaner->n_slots);
-    MONITOR_SET(MONITOR_LRU_BATCH_FLUSH_AVG_PASS,
-                lru_pass / page_cleaner->n_slots);
     MONITOR_SET(MONITOR_FLUSH_AVG_PASS, flush_pass);
 
     prev_lsn = cur_lsn;
@@ -2702,9 +2675,7 @@ static void pc_request(ulint min_n, lsn_t lsn_limit) {
 Do flush for one slot.
 @return	the number of the slots which has not been treated yet. */
 static ulint pc_flush_slot(void) {
-  ulint lru_tm = 0;
   ulint list_tm = 0;
-  int lru_pass = 0;
   int list_pass = 0;
 
   mutex_enter(&page_cleaner->mutex);
@@ -2736,25 +2707,11 @@ static ulint pc_flush_slot(void) {
     }
 
     if (!page_cleaner->is_running) {
-      slot->n_flushed_lru = 0;
       slot->n_flushed_list = 0;
       goto finish_mutex;
     }
 
     mutex_exit(&page_cleaner->mutex);
-
-    lru_tm = ut_time_ms();
-
-    /* Flush pages from end of LRU if required */
-    slot->n_flushed_lru = buf_flush_LRU_list(buf_pool);
-
-    lru_tm = ut_time_ms() - lru_tm;
-    lru_pass++;
-
-    if (!page_cleaner->is_running) {
-      slot->n_flushed_list = 0;
-      goto finish;
-    }
 
     /* Flush pages from flush_list if required */
     if (page_cleaner->requested) {
@@ -2770,16 +2727,13 @@ static ulint pc_flush_slot(void) {
       slot->n_flushed_list = 0;
       slot->succeeded_list = true;
     }
-  finish:
     mutex_enter(&page_cleaner->mutex);
   finish_mutex:
     page_cleaner->n_slots_flushing--;
     page_cleaner->n_slots_finished++;
     slot->state = PAGE_CLEANER_STATE_FINISHED;
 
-    slot->flush_lru_time += lru_tm;
     slot->flush_list_time += list_tm;
-    slot->flush_lru_pass += lru_pass;
     slot->flush_list_pass += list_pass;
 
     if (page_cleaner->n_slots_requested == 0 &&
