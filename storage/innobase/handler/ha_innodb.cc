@@ -647,7 +647,6 @@ static PSI_mutex_info all_innodb_mutexes[] = {
     PSI_MUTEX_KEY(page_cleaner_mutex, 0, 0, PSI_DOCUMENT_ME),
     PSI_MUTEX_KEY(purge_sys_pq_mutex, 0, 0, PSI_DOCUMENT_ME),
     PSI_MUTEX_KEY(recv_sys_mutex, 0, 0, PSI_DOCUMENT_ME),
-    PSI_MUTEX_KEY(recv_writer_mutex, 0, 0, PSI_DOCUMENT_ME),
     PSI_MUTEX_KEY(temp_space_rseg_mutex, 0, 0, PSI_DOCUMENT_ME),
     PSI_MUTEX_KEY(undo_space_rseg_mutex, 0, 0, PSI_DOCUMENT_ME),
     PSI_MUTEX_KEY(trx_sys_rseg_mutex, 0, 0, PSI_DOCUMENT_ME),
@@ -4475,7 +4474,6 @@ static int innodb_init_params() {
                       + 1   /* buf_dump_thread */
                       + 1   /* dict_stats_thread */
                       + 1   /* fts_optimize_thread */
-                      + 1   /* recv_writer_thread */
                       + 1   /* trx_rollback_or_clean_all_recovered */
                       + 128 /* added as margin, for use of
                             InnoDB Memcached etc. */
