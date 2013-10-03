@@ -203,28 +203,9 @@ is bigger than the lsn we are able to scan up to, that is an indication that
 the recovery failed and the database may be corrupt. */
 static lsn_t recv_max_page_lsn;
 
-#ifndef UNIV_HOTBACKUP
-#ifdef UNIV_PFS_THREAD
-mysql_pfs_key_t recv_writer_thread_key;
-#endif /* UNIV_PFS_THREAD */
-
-static bool recv_writer_is_active() {
-  return (srv_thread_is_active(srv_threads.m_recv_writer));
-}
-
-#endif /* !UNIV_HOTBACKUP */
-
 /* prototypes */
 
 #ifndef UNIV_HOTBACKUP
-
-/** Reads a specified log segment to a buffer.
-@param[in,out]	log		redo log
-@param[in,out]	buf		buffer where to read
-@param[in]	start_lsn	read area start
-@param[in]	end_lsn		read area end */
-void recv_read_log_seg(log_t &log, byte *buf, lsn_t start_lsn, lsn_t end_lsn,
-                       bool online);
 
 /** Initialize crash recovery environment. Can be called iff
 recv_needed_recovery == false. */
@@ -399,7 +380,6 @@ void recv_sys_create() {
   recv_sys = static_cast<recv_sys_t *>(ut_zalloc_nokey(sizeof(*recv_sys)));
 
   mutex_create(LATCH_ID_RECV_SYS, &recv_sys->mutex);
-  mutex_create(LATCH_ID_RECV_WRITER, &recv_sys->writer_mutex);
 
   recv_sys->spaces = nullptr;
 }
@@ -499,9 +479,6 @@ void recv_sys_close() {
   if (recv_sys->flush_end != nullptr) {
     os_event_destroy(recv_sys->flush_end);
   }
-
-  ut_ad(!recv_writer_is_active());
-  mutex_free(&recv_sys->writer_mutex);
 #endif /* !UNIV_HOTBACKUP */
 
   call_destructor(&recv_sys->dblwr);
@@ -790,103 +767,6 @@ void MetadataRecover::store() {
   mutex_exit(&dict_persist->mutex);
 }
 
-/** recv_writer thread tasked with flushing dirty pages from the buffer
-pools. */
-static void recv_writer_thread() {
-  ut_ad(!srv_read_only_mode);
-
-  /* The code flow is as follows:
-  Step 1: In recv_recovery_from_checkpoint_start().
-  Step 2: This recv_writer thread is started.
-  Step 3: In recv_recovery_from_checkpoint_finish().
-  Step 4: Wait for recv_writer thread to complete.
-  Step 5: Assert that recv_writer thread is not active anymore.
-
-  It is possible that the thread that is started in step 2,
-  becomes active only after step 4 and hence the assert in
-  step 5 fails.  So mark this thread active only if necessary. */
-  mutex_enter(&recv_sys->writer_mutex);
-
-  if (!recv_recovery_on) {
-    mutex_exit(&recv_sys->writer_mutex);
-    return;
-  }
-  mutex_exit(&recv_sys->writer_mutex);
-
-  while (srv_shutdown_state.load() == SRV_SHUTDOWN_NONE) {
-    os_thread_sleep(100000);
-
-    mutex_enter(&recv_sys->writer_mutex);
-
-    if (!recv_recovery_on) {
-      mutex_exit(&recv_sys->writer_mutex);
-      break;
-    }
-
-    if (log_test != nullptr) {
-      mutex_exit(&recv_sys->writer_mutex);
-      continue;
-    }
-
-    /* Flush pages from end of LRU if required */
-    os_event_reset(recv_sys->flush_end);
-    recv_sys->flush_type = BUF_FLUSH_LRU;
-    os_event_set(recv_sys->flush_start);
-    os_event_wait(recv_sys->flush_end);
-
-    mutex_exit(&recv_sys->writer_mutex);
-  }
-}
-
-#if 0
-/** recv_writer thread tasked with flushing dirty pages from the buffer
-pools. */
-static
-void
-recv_writer_thread()
-{
-	ut_ad(!srv_read_only_mode);
-
-	/* The code flow is as follows:
-	Step 1: In recv_recovery_from_checkpoint_start().
-	Step 2: This recv_writer thread is started.
-	Step 3: In recv_recovery_from_checkpoint_finish().
-	Step 4: Wait for recv_writer thread to complete.
-	Step 5: Assert that recv_writer thread is not active anymore.
-
-	It is possible that the thread that is started in step 2,
-	becomes active only after step 4 and hence the assert in
-	step 5 fails.  So mark this thread active only if necessary. */
-	mutex_enter(&recv_sys->writer_mutex);
-
-	if (!recv_recovery_on) {
-		mutex_exit(&recv_sys->writer_mutex);
-		return;
-	}
-	mutex_exit(&recv_sys->writer_mutex);
-
-	while (srv_shutdown_state.load() == SRV_SHUTDOWN_NONE) {
-
-		os_thread_sleep(100000);
-
-		mutex_enter(&recv_sys->writer_mutex);
-
-		if (!recv_recovery_on) {
-			mutex_exit(&recv_sys->writer_mutex);
-			break;
-		}
-
-		/* Flush pages from end of LRU if required */
-		os_event_reset(recv_sys->flush_end);
-		recv_sys->flush_type = BUF_FLUSH_LRU;
-		os_event_set(recv_sys->flush_start);
-		os_event_wait(recv_sys->flush_end);
-
-		mutex_exit(&recv_sys->writer_mutex);
-	}
-}
-#endif
-
 /** Frees the recovery system. */
 void recv_sys_free() {
   mutex_enter(&recv_sys->mutex);
@@ -896,7 +776,6 @@ void recv_sys_free() {
   /* wake page cleaner up to progress */
   if (!srv_read_only_mode) {
     ut_ad(!recv_recovery_on);
-    ut_ad(!recv_writer_is_active());
     if (buf_flush_event != nullptr) {
       os_event_reset(buf_flush_event);
     }
@@ -1338,25 +1217,13 @@ void recv_apply_hashed_log_recs(log_t &log, bool allow_ibuf) {
 
     mutex_exit(&recv_sys->mutex);
 
-    /* Stop the recv_writer thread from issuing any LRU
-    flush batches. */
-    mutex_enter(&recv_sys->writer_mutex);
-
-    /* Wait for any currently run batch to end. */
-    buf_flush_wait_LRU_batch_end();
-
     os_event_reset(recv_sys->flush_end);
-
-    recv_sys->flush_type = BUF_FLUSH_LIST;
 
     os_event_set(recv_sys->flush_start);
 
     os_event_wait(recv_sys->flush_end);
 
     buf_pool_invalidate();
-
-    /* Allow batches from recv_writer thread. */
-    mutex_exit(&recv_sys->writer_mutex);
 
     ut_d(log.disable_redo_writes = false);
 
@@ -3656,16 +3523,6 @@ static void recv_init_crash_recovery() {
   ib::info(ER_IB_MSG_727);
 
   buf_dblwr_process();
-
-  if (srv_force_recovery < SRV_FORCE_NO_LOG_REDO) {
-    /* Spawn the background thread to flush dirty pages
-    from the buffer pools. */
-
-    srv_threads.m_recv_writer =
-        os_thread_create(recv_writer_thread_key, recv_writer_thread);
-
-    srv_threads.m_recv_writer.start();
-  }
 }
 #endif /* !UNIV_HOTBACKUP */
 
@@ -3951,34 +3808,11 @@ dberr_t recv_recovery_from_checkpoint_start(log_t &log, lsn_t flush_lsn) {
 @return recovered persistent metadata or nullptr if aborting*/
 MetadataRecover *recv_recovery_from_checkpoint_finish(log_t &log,
                                                       bool aborting) {
-  /* Make sure that the recv_writer thread is done. This is
-  required because it grabs various mutexes and we want to
-  ensure that when we enable sync_order_checks there is no
-  mutex currently held by any thread. */
-  mutex_enter(&recv_sys->writer_mutex);
-
   /* Free the resources of the recovery system */
   recv_recovery_on = false;
 
-  /* By acquiring the mutex we ensure that the recv_writer thread
-  won't trigger any more LRU batches. Now wait for currently
-  in progress batches to finish. */
+  /* Now wait for currently in progress batches to finish. */
   buf_flush_wait_LRU_batch_end();
-
-  mutex_exit(&recv_sys->writer_mutex);
-
-  ulint count = 0;
-
-  while (recv_writer_is_active()) {
-    ++count;
-
-    os_thread_sleep(100000);
-
-    if (count >= 600) {
-      ib::info(ER_IB_MSG_738);
-      count = 0;
-    }
-  }
 
   MetadataRecover *metadata;
 
