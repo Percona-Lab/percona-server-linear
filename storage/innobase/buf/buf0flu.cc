@@ -2905,9 +2905,7 @@ static void pc_request(ulint min_n, lsn_t lsn_limit) {
 Do flush for one slot.
 @return the number of the slots which has not been treated yet. */
 static ulint pc_flush_slot(void) {
-  std::chrono::steady_clock::duration lru_time;
   std::chrono::steady_clock::duration flush_list_time{};
-  int lru_pass = 0;
   int list_pass = 0;
 
   mutex_enter(&page_cleaner->mutex);
@@ -2939,22 +2937,10 @@ static ulint pc_flush_slot(void) {
     }
 
     if (!page_cleaner->is_running) {
-      slot->n_flushed_lru = 0;
       slot->n_flushed_list = 0;
     } else {
       mutex_exit(&page_cleaner->mutex);
-
-      const auto lru_start = std::chrono::steady_clock::now();
-
-      /* Flush pages from end of LRU if required */
-      slot->n_flushed_lru = buf_flush_LRU_list(buf_pool);
-
-      lru_time = std::chrono::steady_clock::now() - lru_start;
-      lru_pass = 1;
-
-      if (!page_cleaner->is_running) {
-        slot->n_flushed_list = 0;
-      } else {
+      {
         /* Flush pages from flush_list if required */
         if (page_cleaner->requested) {
           const auto flush_list_start = std::chrono::steady_clock::now();
@@ -2976,11 +2962,8 @@ static ulint pc_flush_slot(void) {
     page_cleaner->n_slots_finished++;
     slot->state = PAGE_CLEANER_STATE_FINISHED;
 
-    slot->flush_lru_time +=
-        std::chrono::duration_cast<std::chrono::milliseconds>(lru_time);
     slot->flush_list_time +=
         std::chrono::duration_cast<std::chrono::milliseconds>(flush_list_time);
-    slot->flush_lru_pass += lru_pass;
     slot->flush_list_pass += list_pass;
 
     if (page_cleaner->n_slots_requested == 0 &&
