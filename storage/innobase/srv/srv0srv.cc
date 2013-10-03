@@ -280,6 +280,10 @@ ulint	srv_cleaner_max_lru_time = 1000;
 cleaner thread */
 ulint	srv_cleaner_max_flush_time = 1000;
 
+/** Page cleaner LSN age factor formula option */
+ulong	srv_cleaner_lsn_age_factor
+	= SRV_CLEANER_LSN_AGE_FACTOR_HIGH_CHECKPOINT;
+
 /* This parameter is deprecated. Use srv_n_io_[read|write]_threads
 instead. */
 ulint	srv_n_read_io_threads	= ULINT_MAX;

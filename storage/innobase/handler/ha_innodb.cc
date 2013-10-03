@@ -229,6 +229,23 @@ get_row_format(
 
 static ulong	innodb_default_row_format = DEFAULT_ROW_FORMAT_DYNAMIC;
 
+/** Possible values for system variable "innodb_default_row_format". */
+static const char* innodb_default_row_format_names[] = {
+	"redundant",
+	"compact",
+	"dynamic",
+	NullS
+};
+
+/** Used to define an enumerate type of the system variable
+innodb_default_row_format. */
+static TYPELIB innodb_default_row_format_typelib = {
+	array_elements(innodb_default_row_format_names) - 1,
+	"innodb_default_row_format_typelib",
+	innodb_default_row_format_names,
+	NULL
+};
+
 #ifdef UNIV_DEBUG
 /** Values for --innodb-debug-compress names. */
 static const char* innodb_debug_compress_names[] = {
@@ -287,20 +304,18 @@ static TYPELIB innodb_checksum_algorithm_typelib = {
 	NULL
 };
 
-/** Possible values for system variable "innodb_default_row_format". */
-static const char* innodb_default_row_format_names[] = {
-	"redundant",
-	"compact",
-	"dynamic",
+/** Possible values for system variable "innodb_cleaner_lsn_age_factor".  */
+static const char* innodb_cleaner_lsn_age_factor_names[] = {
+	"legacy",
+	"high_checkpoint",
 	NullS
 };
 
-/** Used to define an enumerate type of the system variable
-innodb_default_row_format. */
-static TYPELIB innodb_default_row_format_typelib = {
-	array_elements(innodb_default_row_format_names) - 1,
-	"innodb_default_row_format_typelib",
-	innodb_default_row_format_names,
+/** Enumeration for innodb_cleaner_lsn_age_factor.  */
+static TYPELIB innodb_cleaner_lsn_age_factor_typelib = {
+	array_elements(innodb_cleaner_lsn_age_factor_names) - 1,
+	"innodb_cleaner_lsn_age_factor_typelib",
+	innodb_cleaner_lsn_age_factor_names,
 	NULL
 };
 
@@ -19587,6 +19602,15 @@ static MYSQL_SYSVAR_ULONG(cleaner_max_flush_time, srv_cleaner_max_flush_time,
 
 #endif /* defined UNIV_DEBUG || defined UNIV_PERF_DEBUG */
 
+static MYSQL_SYSVAR_ENUM(cleaner_lsn_age_factor,
+  srv_cleaner_lsn_age_factor,
+  PLUGIN_VAR_OPCMDARG,
+  "The formula for LSN age factor for page cleaner adaptive flushing. "
+  "LEGACY: Original Oracle MySQL 5.6 formula. "
+  "HIGH_CHECKPOINT: (the default) Percona Server 5.6 formula.",
+  NULL, NULL, SRV_CLEANER_LSN_AGE_FACTOR_HIGH_CHECKPOINT,
+  &innodb_cleaner_lsn_age_factor_typelib);
+
 static MYSQL_SYSVAR_ULONG(buffer_pool_instances, srv_buf_pool_instances,
   PLUGIN_VAR_RQCMDARG | PLUGIN_VAR_READONLY,
   "Number of buffer pool instances, set to higher value on high-end machines to increase scalability",
@@ -20322,6 +20346,7 @@ static struct st_mysql_sys_var* innobase_system_variables[]= {
 #endif /* UNIV_LINUX */
   MYSQL_SYSVAR(cleaner_max_lru_time),
   MYSQL_SYSVAR(cleaner_max_flush_time),
+  MYSQL_SYSVAR(cleaner_lsn_age_factor),
 #endif /* defined UNIV_DEBUG || defined UNIV_PERF_DEBUG */
   MYSQL_SYSVAR(status_output),
   MYSQL_SYSVAR(status_output_locks),
