@@ -289,6 +289,9 @@ ulint	srv_cleaner_max_flush_time = 1000;
 ulong	srv_cleaner_lsn_age_factor
 	= SRV_CLEANER_LSN_AGE_FACTOR_HIGH_CHECKPOINT;
 
+/** Empty free list for a query thread handling algorithm option  */
+ulong	srv_empty_free_list_algorithm = SRV_EMPTY_FREE_LIST_BACKOFF;
+
 /* This parameter is deprecated. Use srv_n_io_[read|write]_threads
 instead. */
 ulint	srv_n_read_io_threads	= ULINT_MAX;

@@ -69,8 +69,10 @@ Created 11/5/1995 Heikki Tuuri
 #include "sync0sync.h"
 #include "buf0dump.h"
 #include "ut0new.h"
+#ifndef UNIV_INNOCHECKSUM
 #include "trx0trx.h"
 #include "srv0start.h"
+#endif /* !UNIV_INNOCHECKSUM */
 
 #include <new>
 #include <map>
