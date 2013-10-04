@@ -19905,6 +19905,19 @@ static MYSQL_SYSVAR_ENUM(cleaner_lsn_age_factor,
   NULL, NULL, SRV_CLEANER_LSN_AGE_FACTOR_HIGH_CHECKPOINT,
   &innodb_cleaner_lsn_age_factor_typelib);
 
+static MYSQL_SYSVAR_ENUM(empty_free_list_algorithm,
+  srv_empty_free_list_algorithm,
+  PLUGIN_VAR_OPCMDARG,
+  "The algorithm to use for empty free list handling.  Allowed values: "
+  "LEGACY: (default) Original Oracle MySQL 5.6 handling with single page flushes; "
+  "BACKOFF: Wait until cleaner produces a free page.",
+  NULL, NULL, SRV_EMPTY_FREE_LIST_LEGACY,
+  // Default changed until separate LRU flusher is merged. With a single page
+  // cleaner otherwise it is possible to loop forever in a query
+  // thread while the cleaner is waiting for the page latch held by that
+  // thread. See sys_vars.log_slow_admin_statements_func in 5.7.5.
+  &innodb_empty_free_list_algorithm_typelib);
+
 static MYSQL_SYSVAR_ULONG(buffer_pool_instances, srv_buf_pool_instances,
   PLUGIN_VAR_RQCMDARG | PLUGIN_VAR_READONLY,
   "Number of buffer pool instances, set to higher value on high-end machines to increase scalability",
@@ -20658,6 +20671,7 @@ static struct st_mysql_sys_var* innobase_system_variables[]= {
   MYSQL_SYSVAR(status_output),
   MYSQL_SYSVAR(status_output_locks),
   MYSQL_SYSVAR(cleaner_lsn_age_factor),
+  MYSQL_SYSVAR(empty_free_list_algorithm),
   MYSQL_SYSVAR(print_all_deadlocks),
   MYSQL_SYSVAR(cmp_per_index_enabled),
   MYSQL_SYSVAR(undo_logs),
