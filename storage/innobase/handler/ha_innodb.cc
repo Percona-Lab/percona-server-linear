@@ -596,6 +596,15 @@ innobase_is_fake_change(
 				  whom the transaction is being committed */
 
 
+/******************************************************************//**
+Maps a MySQL trx isolation level code to the InnoDB isolation level code
+@return	InnoDB isolation level */
+static inline
+ulint
+innobase_map_isolation_level(
+/*=========================*/
+	enum_tx_isolation	iso);	/*!< in: MySQL isolation level code */
+
 static const char innobase_hton_name[]= "InnoDB";
 
 static MYSQL_THDVAR_BOOL(support_xa, PLUGIN_VAR_OPCMDARG,
