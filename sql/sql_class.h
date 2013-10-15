@@ -2389,6 +2389,9 @@ public:
   /* <> 0 if we are inside of trigger or stored function. */
   uint in_sub_stmt;
 
+  /* Do not set socket timeouts for wait_timeout (used with threadpool) */
+  bool skip_wait_timeout;
+
   /** 
     Used by fill_status() to avoid acquiring LOCK_status mutex twice
     when this function is called recursively (e.g. queries 
