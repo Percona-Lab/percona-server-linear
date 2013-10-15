@@ -1,4 +1,5 @@
 /* Copyright (c) 2000, 2013 Oracle and/or its affiliates. All rights reserved.
+   Copyright (C) 2012 Percona Inc.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -1069,7 +1070,9 @@ bool LOGGER::slow_log_print(THD *thd, const char *query, uint query_length)
     /* fill in user_host value: the format is "%s[%s] @ %s [%s]" */
     user_host_len= (strxnmov(user_host_buff, MAX_USER_HOST_SIZE,
                              sctx->priv_user ? sctx->priv_user : "", "[",
-                             sctx->user ? sctx->user : "", "] @ ",
+                             sctx->user ? sctx->user : (thd->slave_thread ?
+                                                        "SQL_SLAVE" : ""),
+                             "] @ ",
                              sctx->get_host()->length() ?
                              sctx->get_host()->ptr() : "", " [",
                              sctx->get_ip()->length() ? sctx->get_ip()->ptr() :

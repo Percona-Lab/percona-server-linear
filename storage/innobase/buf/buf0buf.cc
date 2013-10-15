@@ -2755,17 +2755,7 @@ wait_until_unfixed:
 			rw_lock_x_unlock(hash_lock);
 			mutex_exit(&block->mutex);
 
-			if (bpage != hash_bpage) {
-				/* The buf_pool->page_hash was modified
-				while buf_pool->LRU_list_mutex was not held
-				by this thread. */
-				goto loop;
-			} else {
-				/* The block was buffer-fixed or
-				I/O-fixed while buf_pool->LRU_list_mutex was
-				not held by this thread. */
-				goto wait_until_unfixed;
-			}
+			goto wait_until_unfixed;
 		}
 
 		/* Move the compressed page from bpage to block,
