@@ -954,6 +954,7 @@ THD::THD(bool enable_plugins)
    rli_fake(0), rli_slave(NULL),
    in_sub_stmt(0),
    fill_status_recursion_level(0),
+   order_deterministic(false),
    binlog_row_event_extra_data(NULL),
    binlog_unsafe_warning_flags(0),
    binlog_table_maps(0),
@@ -2494,7 +2495,8 @@ char *THD::get_client_host_port(THD *client)
   Security_context *client_sctx= client->security_ctx;
   char *client_host= NULL;
 
-  if (client->peer_port && (client_sctx->host || client_sctx->ip) &&
+  if (client->peer_port && (client_sctx->get_host()->length()
+                            || client_sctx->get_ip()->length()) &&
       security_ctx->host_or_ip[0])
   {
     if ((client_host= (char *) this->alloc(LIST_PROCESS_HOST_LEN+1)))
@@ -2504,7 +2506,8 @@ char *THD::get_client_host_port(THD *client)
   else
     client_host= this->strdup(client_sctx->host_or_ip[0] ?
                               client_sctx->host_or_ip :
-                              client_sctx->host ? client_sctx->host : "");
+                              client_sctx->get_host()->length() ?
+                              client_sctx->get_host()->ptr() : "");
 
   return client_host;
 }
@@ -2513,7 +2516,8 @@ const char *get_client_host(THD *client)
 {
   return client->security_ctx->host_or_ip[0] ?
       client->security_ctx->host_or_ip :
-      client->security_ctx->host ? client->security_ctx->host : "";
+      client->security_ctx->get_host()->length() ?
+      client->security_ctx->get_host()->ptr() : "";
 }
 
 /*
