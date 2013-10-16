@@ -2852,7 +2852,6 @@ got_block:
 
 			buf_LRU_block_free_non_file_page(block);
 			mutex_exit(&buf_pool->LRU_list_mutex);
-			mutex_exit(&buf_pool->zip_mutex);
 			rw_lock_x_unlock(hash_lock);
 			buf_block_mutex_exit(block);
 
