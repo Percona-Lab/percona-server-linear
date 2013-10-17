@@ -1561,7 +1561,7 @@ my_bool
 ha_innobase::is_fake_change_enabled(THD* thd)
 {
 	trx_t*	trx	= thd_to_trx(thd);
-	return(trx && trx->fake_changes);
+	return(trx && UNIV_UNLIKELY(trx->fake_changes));
 }
 
 /********************************************************************//**
@@ -3800,7 +3800,7 @@ innobase_is_fake_change(
 				whom the transaction is being committed */
 {
 	trx_t*	trx = check_trx_exists(thd);
-	return trx->fake_changes;
+	return UNIV_UNLIKELY(trx->fake_changes);
 }
 
 /*****************************************************************//**
@@ -3908,9 +3908,11 @@ innobase_commit(
 	/* No-op in XtraDB */
 	trx_search_latch_release_if_reserved(trx);
 
-	if (trx->fake_changes &&
+	if (UNIV_UNLIKELY(trx->fake_changes &&
 	    (commit_trx ||
-	     (!thd_test_options(thd, OPTION_NOT_AUTOCOMMIT | OPTION_BEGIN)))) {
+	     (!thd_test_options(thd,
+				OPTION_NOT_AUTOCOMMIT | OPTION_BEGIN))))) {
+
 		/* rollback implicitly */
 		innobase_rollback(hton, thd, commit_trx);
 		/* because debug assertion code complains, if something left */
@@ -10116,7 +10118,7 @@ ha_innobase::create(
 
 	trx = innobase_trx_allocate(thd);
 
-	if (trx->fake_changes) {
+	if (UNIV_UNLIKELY(trx->fake_changes)) {
 		innobase_commit_low(trx);
 		trx_free_for_mysql(trx);
 		DBUG_RETURN(HA_ERR_WRONG_COMMAND);
@@ -10488,7 +10490,7 @@ ha_innobase::truncate()
 		DBUG_RETURN(HA_ERR_CRASHED);
 	}
 
-	if (prebuilt->trx->fake_changes) {
+	if (UNIV_UNLIKELY(prebuilt->trx->fake_changes)) {
 		DBUG_RETURN(HA_ERR_WRONG_COMMAND);
 	}
 
@@ -10577,7 +10579,7 @@ ha_innobase::delete_table(
 
 	trx = innobase_trx_allocate(thd);
 
-	if (trx->fake_changes) {
+	if (UNIV_UNLIKELY(trx->fake_changes)) {
 		innobase_commit_low(trx);
 		trx_free_for_mysql(trx);
 		DBUG_RETURN(HA_ERR_WRONG_COMMAND);
@@ -10702,7 +10704,7 @@ innobase_drop_database(
 #endif
 	trx = innobase_trx_allocate(thd);
 
-	if (trx->fake_changes) {
+	if (UNIV_UNLIKELY(trx->fake_changes)) {
 		my_free(namebuf);
 		innobase_commit_low(trx);
 		trx_free_for_mysql(trx);
@@ -10867,7 +10869,7 @@ ha_innobase::rename_table(
 	trx_search_latch_release_if_reserved(parent_trx);
 
 	trx = innobase_trx_allocate(thd);
-	if (trx->fake_changes) {
+	if (UNIV_UNLIKELY(trx->fake_changes)) {
 		innobase_commit_low(trx);
 		trx_free_for_mysql(trx);
 		DBUG_RETURN(HA_ERR_WRONG_COMMAND);
