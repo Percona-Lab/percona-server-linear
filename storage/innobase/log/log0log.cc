@@ -338,6 +338,10 @@ log_reserve_and_open(
 	ulint	len)
 {
 	ulint	len_upper_limit;
+#if 0 // TODO laurynas: log archiving broken by WL#8845
+	ulint	archived_lsn_age;
+	ulint	dummy;
+#endif
 	ulint	count			= 0;
 	ulint	tcount			= 0;
 
@@ -380,8 +384,32 @@ loop:
 		goto loop;
 	}
 
-	if (log_check_tracking_margin(len_upper_limit)
-	    && (++tcount + count < 50)) {
+#if 0 // TODO laurynas: log archiving broken by WL#8845
+	if (log_sys->archiving_state != LOG_ARCH_OFF) {
+
+		archived_lsn_age = log_sys->lsn - log_sys->archived_lsn;
+		if (archived_lsn_age + len_upper_limit
+		    > log_sys->max_archived_lsn_age) {
+			/* Not enough free archived space in log groups: do a
+			synchronous archive write batch: */
+
+			log_mutex_exit();
+
+			ut_ad(len_upper_limit
+			      <= log_sys->max_archived_lsn_age);
+
+			log_archive_do(true, &dummy);
+
+			ut_ad(++count < 50);
+
+			log_mutex_enter();
+			goto loop;
+		}
+	}
+#endif
+
+	if (log_check_tracking_margin(len_upper_limit) &&
+		(++tcount + count < 50)) {
 
 		/* This log write would violate the untracked LSN free space
 		margin.  Limit this to 50 retries as there might be situations
@@ -390,8 +418,8 @@ loop:
 		log_mutex_exit();
 
 		os_thread_sleep(10000);
-
 		log_mutex_enter();
+
 		goto loop;
 	}
 
