@@ -65,11 +65,12 @@ buf_buddy_free(
 					up to UNIV_PAGE_SIZE */
 	__attribute__((nonnull));
 
-/** Reallocate a block.
+/** Try to reallocate a block.
 @param[in]	buf_pool	buffer pool instance
 @param[in]	buf		block to be reallocated, must be pointed
 to by the buffer pool
 @param[in]	size		block size, up to UNIV_PAGE_SIZE
+@retval true	if succeeded or if failed because the block was fixed
 @retval false	if failed because of no free blocks. */
 bool
 buf_buddy_realloc(

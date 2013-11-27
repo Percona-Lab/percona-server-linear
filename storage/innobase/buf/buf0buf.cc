@@ -4055,22 +4055,25 @@ buf_wait_for_read(
 	access the block (and check for IO state) after the block has been
 	added to the page hashtable. */
 
-	if (buf_block_get_io_fix(block) == BUF_IO_READ) {
+	if (buf_block_get_io_fix_unlocked(block) == BUF_IO_READ) {
+
+		ib_uint64_t	start_time;
+		ulint		sec;
+		ulint		ms;
 
 		/* Wait until the read operation completes */
 
-		BPageMutex*	mutex = buf_page_get_mutex(&block->page);
+		if (UNIV_UNLIKELY(trx && trx->take_stats))
+		{
+			ut_usectime(&sec, &ms);
+			start_time = (ib_uint64_t)sec * 1000000 + ms;
+		} else {
+			start_time = 0;
+		}
 
 		for (;;) {
-			buf_io_fix	io_fix;
-
-			mutex_enter(mutex);
-
-			io_fix = buf_block_get_io_fix(block);
-
-			mutex_exit(mutex);
-
-			if (io_fix == BUF_IO_READ) {
+			if (buf_block_get_io_fix_unlocked(block)
+			    == BUF_IO_READ) {
 				/* Wait by temporaly s-latch */
 				rw_lock_s_lock(&block->lock);
 				rw_lock_s_unlock(&block->lock);
@@ -4078,6 +4081,16 @@ buf_wait_for_read(
 				break;
 			}
 		}
+
+		if (UNIV_UNLIKELY(start_time != 0))
+		{
+			ut_usectime(&sec, &ms);
+			ib_uint64_t finish_time
+				= (ib_uint64_t)sec * 1000000 + ms;
+			trx->io_reads_wait_timer
+				+= (ulint)(finish_time - start_time);
+		}
+
 	}
 }
 
@@ -4595,6 +4608,8 @@ got_block:
 			goto loop;
 		}
 
+		mutex_exit(&buf_pool->LRU_list_mutex);
+
 		buf_page_mutex_exit(fix_block);
 
 		buf_block_fix(fix_block);
@@ -4655,7 +4670,7 @@ got_block:
 	/* We have to wait here because the IO_READ state was set
 	under the protection of the hash_lock and not the block->mutex
 	and block->lock. */
-	buf_wait_for_read(fix_block, NULL);
+	buf_wait_for_read(fix_block, trx);
 
 	/* Mark block as dirty if requested by caller. If not requested (false)
 	then we avoid updating the dirty state of the block and retain the
