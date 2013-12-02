@@ -1111,9 +1111,10 @@ buf_flush_write_block_low(
 Writes a flushable page asynchronously from the buffer pool to a file.
 NOTE: in simulated aio we must call
 os_aio_simulated_wake_handler_threads after we have posted a batch of
-writes! NOTE: buf_pool->mutex and buf_page_get_mutex(bpage) must be
-held upon entering this function, and they will be released by this
-function if it returns true.
+writes! NOTE: buf_page_get_mutex(bpage) must be held upon entering this
+function, and it will be released by this function if it returns true.
+LRU_list_mutex must be held iff performing a single page flush and will be
+released by the function if it returns true.
 @return TRUE if the page was flushed */
 ibool
 buf_flush_page(
@@ -3031,6 +3032,7 @@ DECLARE_THREAD(buf_flush_page_cleaner_coordinator)(
 	ulint	n_flushed = 0;
 	ulint	last_activity = srv_get_activity_count();
 	ulint	last_pages = 0;
+	ulint	last_activity_time = ut_time_ms();
 
 #ifdef UNIV_PFS_THREAD
 	pfs_register_thread(page_cleaner_thread_key);
@@ -3107,6 +3109,8 @@ DECLARE_THREAD(buf_flush_page_cleaner_coordinator)(
 	int64_t		sig_count = os_event_reset(buf_flush_event);
 
 	while (srv_shutdown_state == SRV_SHUTDOWN_NONE) {
+
+		bool	server_active;
 
 		/* The page_cleaner skips sleep if the server is
 		idle and there are no pending IOs in the buffer pool
@@ -3203,13 +3207,18 @@ DECLARE_THREAD(buf_flush_page_cleaner_coordinator)(
 
 			n_flushed = n_flushed_lru + n_flushed_list;
 
-		} else if (srv_check_activity(last_activity)) {
+		} else if ((server_active = srv_check_activity(last_activity))
+			   || ut_time_ms() - last_activity_time < 1000) {
 			ulint	n_to_flush;
 			lsn_t	lsn_limit = 0;
 
 			/* Estimate pages from flush_list to be flushed */
 			if (ret_sleep == OS_SYNC_TIME_EXCEEDED) {
-				last_activity = srv_get_activity_count();
+				if (server_active) {
+					last_activity = srv_get_activity_count();
+					last_activity_time = ut_time_ms();
+				}
+
 				n_to_flush =
 					page_cleaner_flush_pages_recommendation(
 						&lsn_limit, last_pages);
