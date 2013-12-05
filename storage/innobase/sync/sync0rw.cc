@@ -500,7 +500,9 @@ lock_loop:
 		rw_lock_stats.rw_s_spin_round_count.add(counter_index, i);
 
 		sync_arr = sync_array_get_and_reserve_cell(lock,
-							   RW_LOCK_SHARED,
+							   high_priority
+							   ? PRIO_RW_LOCK_SHARED
+							   : RW_LOCK_SHARED,
 							   file_name,
 							   line, &index);
 
@@ -839,12 +841,11 @@ lock_loop:
 		}
 	}
 
-	sync_arr = sync_array_get();
-
-	sync_array_reserve_cell(
-		sync_arr, lock,
-		high_priority ? PRIO_RW_LOCK_EX : RW_LOCK_EX,
-		file_name, line, &index);
+	sync_arr = sync_array_get_and_reserve_cell(lock,
+						   high_priority
+						   ? PRIO_RW_LOCK_EX
+						   : RW_LOCK_EX,
+						   file_name, line, &index);
 
 	/* Waiters must be set before checking lock_word, to ensure signal
 	is sent. This could lead to a few unnecessary wake-up signals. */

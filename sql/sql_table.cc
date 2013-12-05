@@ -9611,7 +9611,7 @@ static bool check_engine(THD *thd, const char *db_name,
   handlerton *enf_engine= NULL;
 
   bool no_substitution=
-        test(thd->variables.sql_mode & MODE_NO_ENGINE_SUBSTITUTION);
+        MY_TEST(thd->variables.sql_mode & MODE_NO_ENGINE_SUBSTITUTION);
 
   if (!in_bootstrap && !opt_noacl)
     enf_engine= ha_enforce_handlerton(thd);

@@ -42,7 +42,9 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include <my_base.h>	// HA_OPTION_*
 #include <mysys_err.h>
 #include <mysql/innodb_priv.h>
+#include <mysql/thread_pool_priv.h>
 #include <my_check_opt.h>
+
 /** @file ha_innodb.cc */
 
 /* Include necessary InnoDB headers */
