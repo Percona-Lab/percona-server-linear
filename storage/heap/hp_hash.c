@@ -722,7 +722,8 @@ void hp_make_key(HP_KEYDEF *keydef, uchar *key, const uchar *rec)
     const uchar *pos= rec + seg->start;
     if (seg->null_bit)
       *key++= MY_TEST(rec[seg->null_pos] & seg->null_bit);
-    if (cs->mbmaxlen > 1)
+
+    if (seg->flag & HA_BLOB_PART)
     {
       uint tmp_length= hp_calc_blob_length(seg->bit_start, pos);
       uint length= MY_MIN(seg->length, tmp_length);
