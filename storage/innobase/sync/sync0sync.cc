@@ -614,7 +614,10 @@ spin_loop:
 		goto spin_loop;
 	}
 
-	sync_arr = sync_array_get_and_reserve_cell(mutex, SYNC_MUTEX,
+	sync_arr = sync_array_get_and_reserve_cell(mutex,
+						   high_priority
+						   ? SYNC_PRIO_MUTEX
+						   : SYNC_MUTEX,
 						   file_name, line, &index);
 
 	/* The memory order of the array reservation and the change in the

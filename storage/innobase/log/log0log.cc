@@ -188,6 +188,54 @@ log_buf_pool_get_oldest_modification(void)
 	return(lsn);
 }
 
+/****************************************************************//**
+Safely reads the log_sys->tracked_lsn value.  Uses atomic operations
+if available, otherwise this field is protected with the log system
+mutex.  The writer counterpart function is log_set_tracked_lsn() in
+log0online.c.
+
+@return log_sys->tracked_lsn value. */
+UNIV_INLINE
+lsn_t
+log_get_tracked_lsn()
+{
+#ifdef HAVE_ATOMIC_BUILTINS_64
+	return os_atomic_increment_uint64(&log_sys->tracked_lsn, 0);
+#else
+	ut_ad(mutex_own(&(log_sys->mutex)));
+	return log_sys->tracked_lsn;
+#endif
+}
+
+/****************************************************************//**
+Checks if the log groups have a big enough margin of free space in
+so that a new log entry can be written without overwriting log data
+that is not read by the changed page bitmap thread.
+@return TRUE if there is not enough free space. */
+static
+ibool
+log_check_tracking_margin(
+	ulint	lsn_advance)	/*!< in: an upper limit on how much log data we
+				plan to write.  If zero, the margin will be
+				checked for the already-written log. */
+{
+	lsn_t	tracked_lsn;
+	lsn_t	tracked_lsn_age;
+
+	if (!srv_track_changed_pages) {
+		return FALSE;
+	}
+
+	ut_ad(mutex_own(&(log_sys->mutex)));
+
+	tracked_lsn = log_get_tracked_lsn();
+	tracked_lsn_age = log_sys->lsn - tracked_lsn;
+
+	/* The overwrite would happen when log_sys->log_group_capacity is
+	exceeded, but we use max_checkpoint_age for an extra safety margin. */
+	return tracked_lsn_age + lsn_advance > log_sys->max_checkpoint_age;
+}
+
 /** Extends the log buffer.
 @param[in] len	requested minimum size in bytes */
 static
