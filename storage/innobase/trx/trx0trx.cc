@@ -1080,11 +1080,14 @@ trx_start_low(
 		ut_ad(!trx_is_autocommit_non_locking(trx));
 		UT_LIST_ADD_FIRST(trx_list, trx_sys->rw_trx_list, trx);
 		ut_d(trx->in_rw_trx_list = TRUE);
+
 #ifdef UNIV_DEBUG
 		if (trx->id > trx_sys->rw_max_trx_id) {
 			trx_sys->rw_max_trx_id = trx->id;
 		}
 #endif /* UNIV_DEBUG */
+
+		trx_reserve_descriptor(trx);
 	}
 
 	ut_ad(trx_sys_validate_trx_list());

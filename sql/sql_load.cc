@@ -771,11 +771,6 @@ static bool write_execute_load_query_log_event(THD *thd, sql_exchange* ex,
                         strlen(item->item_name.ptr()));
       query_str.append(val->item_name.ptr());
     }
-    /*
-      Clear the SET string list once the SET command is reconstructed
-      as we donot require the list anymore.
-    */
-    thd->lex->load_set_str_list.empty();
   }
 
   if (!(load_data_query= (char *)thd->strmake(query_str.ptr(), query_str.length())))
