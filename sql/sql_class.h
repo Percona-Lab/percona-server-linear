@@ -613,8 +613,7 @@ typedef struct system_variables
 
   my_bool expand_fast_index_creation;
 
-  uint  threadpool_high_prio_tickets;
-  ulong threadpool_high_prio_mode;
+  uint threadpool_high_prio_tickets;
 } SV;
 
 
@@ -3486,6 +3485,7 @@ public:
   }
 
   virtual int is_killed() { return killed; }
+  virtual bool is_timedout() const { return killed == KILL_TIMEOUT; }
   virtual THD* get_thd() { return this; }
 
   /**
