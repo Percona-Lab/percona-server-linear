@@ -310,11 +310,11 @@ static inline void log_execute_line(THD *thd)
 
   if (thd->rewritten_query.length())
     general_log_write(thd, COM_STMT_EXECUTE,
-                             thd->rewritten_query.c_ptr_safe(),
-                             thd->rewritten_query.length());
+                      thd->rewritten_query.c_ptr_safe(),
+                      thd->rewritten_query.length());
   else
     general_log_write(thd, COM_STMT_EXECUTE,
-                             thd->query(), thd->query_length());
+                      thd->query(), thd->query_length());
 }
 
 
@@ -3863,11 +3863,11 @@ bool Prepared_statement::prepare(const char *packet, uint packet_len)
     {
       if (thd->rewritten_query.length())
         general_log_write(thd, COM_STMT_PREPARE,
-                                 thd->rewritten_query.c_ptr_safe(),
-                                 thd->rewritten_query.length());
+                          thd->rewritten_query.c_ptr_safe(),
+                          thd->rewritten_query.length());
       else
         general_log_write(thd, COM_STMT_PREPARE,
-                                 query(), query_length());
+                          query(), query_length());
 
       /* audit plugins can return an error */
       error |= thd->is_error();
