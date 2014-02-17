@@ -642,7 +642,6 @@ buf_page_set_accessed(
 	buf_page_t*	bpage)		/*!< in/out: control block */
 {
 	ut_ad(mutex_own(buf_page_get_mutex(bpage)));
-#endif /* UNIV_DEBUG */
 
 	ut_a(buf_page_in_file(bpage));
 
@@ -1021,6 +1020,7 @@ buf_block_fix(
 /*===========*/
 	buf_block_t*	block)	/*!< in/out: block to bufferfix */
 {
+	ut_ad(!mutex_own(buf_page_get_mutex(&block->page)));
 #ifdef PAGE_ATOMIC_REF_COUNT
 	os_atomic_increment_uint32(&block->page.buf_fix_count, 1);
 #else
@@ -1069,6 +1069,7 @@ buf_block_unfix(
 	buf_block_t*	block)	/*!< in/out: block to bufferunfix */
 {
 	ut_ad(block->page.buf_fix_count > 0);
+	ut_ad(!mutex_own(buf_page_get_mutex(&block->page)));
 
 #ifdef PAGE_ATOMIC_REF_COUNT
 	os_atomic_decrement_uint32(&block->page.buf_fix_count, 1);
