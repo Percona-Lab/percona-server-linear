@@ -5522,9 +5522,7 @@ CREATE PROCEDURE sp1()
 unlock:BEGIN
 SELECT @x;
 END//
-ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near ':BEGIN
-SELECT @x;
-END' at line 2
+ERROR 0A000: UNLOCK is not allowed in stored procedures
 DROP PROCEDURE IF EXISTS sp1;
 CREATE PROCEDURE sp1()
 unsigned:BEGIN

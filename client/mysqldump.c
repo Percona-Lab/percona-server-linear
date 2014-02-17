@@ -143,7 +143,6 @@ static uint my_end_arg;
 static char * opt_mysql_unix_port=0;
 static char *opt_bind_addr = NULL;
 static int   first_error=0;
-static uint opt_lock_for_backup= 0;
 static DYNAMIC_STRING extended_row;
 #include <sslopt-vars.h>
 FILE *md_result_file= 0;
@@ -248,11 +247,6 @@ static struct my_option my_long_options[] =
    "Adds 'STOP SLAVE' prior to 'CHANGE MASTER' and 'START SLAVE' to bottom of dump.",
    &opt_slave_apply, &opt_slave_apply, 0, GET_BOOL, NO_ARG,
    0, 0, 0, 0, 0, 0},
-  {"lock-for-backup", OPT_LOCK_FOR_BACKUP, "Use lightweight metadata locks "
-   "to block updates to non-transactional tables and DDL to all tables. "
-   "This works only with --single-transaction, otherwise this option is "
-   "automatically converted to --lock-all-tables.", &opt_lock_for_backup,
-   &opt_lock_for_backup, 0, GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0},
   {"bind-address", 0, "IP address to bind to.",
    (uchar**) &opt_bind_addr, (uchar**) &opt_bind_addr, 0, GET_STR,
    REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
@@ -498,7 +492,8 @@ static struct my_option my_long_options[] =
     "are not enabled on the server, an error is generated. If OFF is "
     "used, this option does nothing. If AUTO is used and GTIDs are enabled "
     "on the server, 'SET @@GLOBAL.GTID_PURGED' is added to the output. "
-    "If GTIDs are disabled, AUTO does nothing. Default is AUTO.",
+    "If GTIDs are disabled, AUTO does nothing. If no value is supplied "
+    "then the default (AUTO) value will be considered.",
     0, 0, 0, GET_STR, OPT_ARG,
     0, 0, 0, 0, 0, 0},
 #ifdef HAVE_SMEM
@@ -942,9 +937,10 @@ get_one_option(int optid, const struct my_option *opt __attribute__((unused)),
     break;
   case (int) OPT_SET_GTID_PURGED:
     {
-      opt_set_gtid_purged_mode= find_type_or_exit(argument,
-                                                  &set_gtid_purged_mode_typelib,
-                                                  opt->name)-1;
+      if (argument)
+        opt_set_gtid_purged_mode= find_type_or_exit(argument,
+                                                    &set_gtid_purged_mode_typelib,
+                                                    opt->name)-1;
       break;
     }
   }
@@ -999,23 +995,6 @@ static int get_options(int *argc, char ***argv)
     fprintf(stderr,
             "%s: You must use option --tab with --fields-...\n", my_progname);
     return(EX_USAGE);
-  }
-
-  if (opt_lock_for_backup && opt_lock_all_tables)
-  {
-    fprintf(stderr, "%s: You can't use --lock-for-backup and "
-            "--lock-all-tables at the same time.\n", my_progname);
-    return(EX_USAGE);
-  }
-
-  /*
-     Convert --lock-for-backup to --lock-all-tables if --single-transaction is
-     not specified.
-  */
-  if (!opt_single_transaction && opt_lock_for_backup)
-  {
-    opt_lock_all_tables= 1;
-    opt_lock_for_backup= 0;
   }
 
   /* We don't delete master logs if slave data option */
@@ -4902,6 +4881,12 @@ static int dump_all_tables_in_db(char *database)
     else
       verbose_msg("-- dump_all_tables_in_db : logs flushed successfully!\n");
   }
+  if (opt_single_transaction && mysql_get_server_version(mysql) >= 50500)
+  {
+    verbose_msg("-- Setting savepoint...\n");
+    if (mysql_query_with_error_report(mysql, 0, "SAVEPOINT sp"))
+      DBUG_RETURN(1);
+  }
   while ((table= getTableName(0)))
   {
     char *end= strmov(afterdot, table);
@@ -4918,6 +4903,23 @@ static int dump_all_tables_in_db(char *database)
             my_fclose(md_result_file, MYF(MY_WME));
           maybe_exit(EX_MYSQLERR);
         }
+      }
+
+      /**
+        ROLLBACK TO SAVEPOINT in --single-transaction mode to release metadata
+        lock on table which was already dumped. This allows to avoid blocking
+        concurrent DDL on this table without sacrificing correctness, as we
+        won't access table second time and dumps created by --single-transaction
+        mode have validity point at the start of transaction anyway.
+        Note that this doesn't make --single-transaction mode with concurrent
+        DDL safe in general case. It just improves situation for people for whom
+        it might be working.
+      */
+      if (opt_single_transaction && mysql_get_server_version(mysql) >= 50500)
+      {
+        verbose_msg("-- Rolling back to savepoint sp...\n");
+        if (mysql_query_with_error_report(mysql, 0, "ROLLBACK TO SAVEPOINT sp"))
+          maybe_exit(EX_MYSQLERR);
       }
     }
     else
@@ -4941,6 +4943,14 @@ static int dump_all_tables_in_db(char *database)
       }
     }
   }
+
+  if (opt_single_transaction && mysql_get_server_version(mysql) >= 50500)
+  {
+    verbose_msg("-- Releasing savepoint...\n");
+    if (mysql_query_with_error_report(mysql, 0, "RELEASE SAVEPOINT sp"))
+      DBUG_RETURN(1);
+  }
+
   if (opt_events && mysql_get_server_version(mysql) >= 50106)
   {
     DBUG_PRINT("info", ("Dumping events for database %s", database));
@@ -5183,6 +5193,13 @@ static int dump_selected_tables(char *db, char **table_names, int tables)
   if (opt_xml)
     print_xml_tag(md_result_file, "", "\n", "database", "name=", db, NullS);
 
+  if (opt_single_transaction && mysql_get_server_version(mysql) >= 50500)
+  {
+    verbose_msg("-- Setting savepoint...\n");
+    if (mysql_query_with_error_report(mysql, 0, "SAVEPOINT sp"))
+      DBUG_RETURN(1);
+  }
+
   /* Dump each selected table */
   for (pos= dump_tables; pos < end; pos++)
   {
@@ -5198,6 +5215,31 @@ static int dump_selected_tables(char *db, char **table_names, int tables)
         maybe_exit(EX_MYSQLERR);
       }
     }
+
+    /**
+      ROLLBACK TO SAVEPOINT in --single-transaction mode to release metadata
+      lock on table which was already dumped. This allows to avoid blocking
+      concurrent DDL on this table without sacrificing correctness, as we
+      won't access table second time and dumps created by --single-transaction
+      mode have validity point at the start of transaction anyway.
+      Note that this doesn't make --single-transaction mode with concurrent
+      DDL safe in general case. It just improves situation for people for whom
+      it might be working.
+    */
+    if (opt_single_transaction && mysql_get_server_version(mysql) >= 50500)
+    {
+      verbose_msg("-- Rolling back to savepoint sp...\n");
+      if (mysql_query_with_error_report(mysql, 0, "ROLLBACK TO SAVEPOINT sp"))
+        maybe_exit(EX_MYSQLERR);
+    }
+  }
+
+  if (opt_single_transaction && mysql_get_server_version(mysql) >= 50500)
+  {
+    verbose_msg("-- Releasing savepoint...\n");
+    if (mysql_query_with_error_report(mysql, 0, "RELEASE SAVEPOINT sp"))
+      DBUG_RETURN(1);
+
   }
 
   /* Dump each selected view */
@@ -5413,20 +5455,6 @@ static int do_flush_tables_read_lock(MYSQL *mysql_con)
                                     "FLUSH TABLES WITH READ LOCK") );
 }
 
-/**
-   Execute LOCK TABLES FOR BACKUP if supported by the server.
-
-   @note If LOCK TABLES FOR BACKUP is not supported by the server, then nothing
-         is done and no error condition is returned.
-
-   @returns  whether there was an error or not
-*/
-
-static int do_lock_tables_for_backup(MYSQL *mysql_con)
-{
-  return mysql_query_with_error_report(mysql_con, 0,
-                                       "LOCK TABLES FOR BACKUP");
-}
 
 static int do_unlock_tables(MYSQL *mysql_con)
 {
@@ -6190,35 +6218,6 @@ static void dynstr_realloc_checked(DYNAMIC_STRING *str, ulong additional_size)
     die(EX_MYSQLERR, DYNAMIC_STR_ERROR_MSG);
 }
 
-/**
-   Check if the server supports LOCK TABLES FOR BACKUP.
-
-   @returns  TRUE if there is support, FALSE otherwise.
-*/
-
-static my_bool server_supports_backup_locks(void)
-{
-  MYSQL_RES *res;
-  MYSQL_ROW row;
-  my_bool rc;
-
-  if (mysql_query_with_error_report(mysql, &res,
-                                    "SHOW VARIABLES LIKE 'have_backup_locks'"))
-    return FALSE;
-
-  if ((row= mysql_fetch_row(res)) == NULL)
-  {
-    mysql_free_result(res);
-    return FALSE;
-  }
-
-  rc= mysql_num_fields(res) > 1 && !strcmp(row[1], "YES");
-
-  mysql_free_result(res);
-
-  return rc;
-}
-
 
 int main(int argc, char **argv)
 {
@@ -6260,25 +6259,12 @@ int main(int argc, char **argv)
   if (!path)
     write_header(md_result_file, *argv);
 
-  if (opt_lock_for_backup && !server_supports_backup_locks())
-  {
-    fprintf(stderr, "%s: Error: --lock-for-backup was specified with "
-            "--single-transaction, but the server does not support "
-            "LOCK TABLES FOR BACKUP.\n",
-            my_progname);
-    goto err;
-  }
-
   if (opt_slave_data && do_stop_slave_sql(mysql))
     goto err;
 
   if ((opt_lock_all_tables || opt_master_data ||
-       (opt_single_transaction && flush_logs)))
-  {
-    if (do_flush_tables_read_lock(mysql))
-      goto err;
-  }
-  else if (opt_lock_for_backup && do_lock_tables_for_backup(mysql))
+       (opt_single_transaction && flush_logs)) &&
+      do_flush_tables_read_lock(mysql))
     goto err;
 
   /*
@@ -6323,8 +6309,7 @@ int main(int argc, char **argv)
     goto err;
   if (opt_slave_data && do_show_slave_status(mysql))
     goto err;
-  if (opt_single_transaction && (!opt_lock_for_backup || opt_master_data) &&
-      do_unlock_tables(mysql))                  /* unlock but no commit! */
+  if (opt_single_transaction && do_unlock_tables(mysql)) /* unlock but no commit! */
     goto err;
 
   if (opt_alltspcs)
