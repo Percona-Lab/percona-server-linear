@@ -18,6 +18,7 @@
 #ifdef MYSQL_CLIENT
 
 #include "sql_priv.h"
+#include "../client/sql_string.h"
 #include "mysqld_error.h"
 
 #else

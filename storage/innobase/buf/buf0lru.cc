@@ -505,18 +505,13 @@ buf_flush_or_remove_page(
 		return(false);
 	}
 
-	/* We have to release the flush_list_mutex to obey the
-	latching order. We are however guaranteed that the page
-	will stay in the flush_list and won't be relocated because
-	buf_flush_remove() and buf_flush_relocate_on_flush_list()
-	need buf_pool->mutex as well. */
-
 	buf_flush_list_mutex_exit(buf_pool);
 
 	/* We don't have to worry about bpage becoming a dangling
 	pointer by a compressed page flush list relocation because
 	buf_page_get_gen() won't be called for pages from this
 	tablespace.  */
+	bool		processed;
 
 	mutex_enter(block_mutex);
 
@@ -532,37 +527,40 @@ buf_flush_or_remove_page(
 		mutex_exit(block_mutex);
 
 		*must_restart = TRUE;
+		processed = false;
 
 	} else if (!flush) {
 
 		buf_flush_remove(bpage);
+
+		mutex_exit(block_mutex);
+
 		processed = true;
 
-	} else if (buf_flush_ready_for_flush(bpage,
-					     BUF_FLUSH_SINGLE_PAGE)) {
+	} else if (buf_flush_ready_for_flush(bpage, BUF_FLUSH_SINGLE_PAGE)) {
 
-		mutex_exit(&buf_pool->LRU_list_mutex);
+		if (buf_flush_page(
+			    buf_pool, bpage, BUF_FLUSH_SINGLE_PAGE, false)) {
 
-		/* The following call will release the buf_page_get_mutex()
-		mutex. */
-		buf_flush_page(buf_pool, bpage, BUF_FLUSH_SINGLE_PAGE, false);
-		ut_ad(!mutex_own(block_mutex));
+			/* Wake possible simulated aio thread to actually
+			post the writes to the operating system */
+			os_aio_simulated_wake_handler_threads();
 
-		/* Wake possible simulated aio thread to actually
-		post the writes to the operating system */
-		os_aio_simulated_wake_handler_threads();
+			mutex_enter(&buf_pool->LRU_list_mutex);
 
-		mutex_enter(&buf_pool->LRU_list_mutex);
+			processed = true;
 
-		buf_flush_list_mutex_enter(buf_pool);
+		} else {
+			mutex_exit(block_mutex);
 
-		return(true);
+			processed = false;
+		}
 
 	} else {
+		mutex_exit(block_mutex);
+
 		processed = false;
 	}
-
-	mutex_exit(block_mutex);
 
 	buf_flush_list_mutex_enter(buf_pool);
 
@@ -1833,8 +1831,6 @@ buf_LRU_add_block_low(
 {
 	buf_pool_t*	buf_pool = buf_pool_from_bpage(bpage);
 
-	ut_ad(buf_pool);
-	ut_ad(bpage);
 	ut_ad(mutex_own(&buf_pool->LRU_list_mutex));
 
 	ut_a(buf_page_in_file(bpage));
@@ -1981,7 +1977,7 @@ buf_LRU_free_page(
 	if (!buf_page_can_relocate(bpage)) {
 
 		/* Do not free buffer fixed or I/O-fixed blocks. */
-		goto func_exit;
+		return(false);
 	}
 
 #ifdef UNIV_IBUF_COUNT_DEBUG
