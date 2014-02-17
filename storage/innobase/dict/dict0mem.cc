@@ -71,7 +71,10 @@ dict_mem_table_create(
 				the table is placed */
 	ulint		n_cols,	/*!< in: number of columns */
 	ulint		flags,	/*!< in: table flags */
-	ulint		flags2)	/*!< in: table flags2 */
+	ulint		flags2,	/*!< in: table flags2 */
+	bool		nonshared)/*!< in: whether the table object is a dummy
+				one that does not need the initialization of
+				locking-related fields. */
 {
 	dict_table_t*	table;
 	mem_heap_t*	heap;
@@ -106,11 +109,18 @@ dict_mem_table_create(
 	dict_table_stats_latch_create(table, true);
 
 #ifndef UNIV_HOTBACKUP
-	table->autoinc_lock = static_cast<ib_lock_t*>(
-		mem_heap_alloc(heap, lock_get_size()));
 
-	mutex_create(autoinc_mutex_key,
-		     &table->autoinc_mutex, SYNC_DICT_AUTOINC_MUTEX);
+	if (!nonshared) {
+
+		table->autoinc_lock = static_cast<ib_lock_t*>(
+			mem_heap_alloc(heap, lock_get_size()));
+
+		mutex_create(autoinc_mutex_key,
+			     &table->autoinc_mutex, SYNC_DICT_AUTOINC_MUTEX);
+	} else {
+
+		table->autoinc_lock = NULL;
+	}
 
 	table->autoinc = 0;
 
@@ -163,7 +173,10 @@ dict_mem_table_free(
 		}
 	}
 #ifndef UNIV_HOTBACKUP
-	mutex_free(&(table->autoinc_mutex));
+	if (table->stats_latch) {
+
+		mutex_free(&(table->autoinc_mutex));
+	}
 #endif /* UNIV_HOTBACKUP */
 
 	dict_table_stats_latch_destroy(table);
