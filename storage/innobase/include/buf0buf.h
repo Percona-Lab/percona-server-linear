@@ -1465,16 +1465,18 @@ struct buf_page_t{
 	machine word.  */
 	/* @{ */
 
-	ib_uint32_t	space;		/*!< tablespace id; also protected
-					by buf_pool->mutex. */
-	ib_uint32_t	offset;		/*!< page number; also protected
-					by buf_pool->mutex. */
+	ib_uint32_t	space;		/*!< tablespace id. */
+	ib_uint32_t	offset;		/*!< page number. */
 	/** count of how manyfold this block is currently bufferfixed */
 #ifdef PAGE_ATOMIC_REF_COUNT
 	ib_uint32_t	buf_fix_count;
 
-	/** type of pending I/O operation; also protected by
-	buf_pool->mutex for writes only @see enum buf_io_fix */
+	/** type of pending I/O operation; Transitions from BUF_IO_NONE to
+	BUF_IO_WRITE and back are protected by the buf_page_get_mutex() mutex
+	and the corresponding flush state mutex. The flush state mutex
+	protection for io_fix and flush_type is not strictly required, but it
+	ensures consistent buffer pool instance state snapshots in
+	buf_pool_validate_instance(). @see enum buf_io_fix */
 	byte		io_fix;
 
 	byte		state;
@@ -1485,7 +1487,7 @@ struct buf_page_t{
 	buf_pool->mutex for writes only @see enum buf_io_fix */
 	unsigned	io_fix:2;
 
-	/*!< state of the control block; also protected by buf_pool->mutex.
+	/*!< state of the control block.
 	State transitions from BUF_BLOCK_READY_FOR_USE to BUF_BLOCK_MEMORY
 	need not be protected by buf_page_get_mutex(). @see enum buf_page_state.
 	State changes that are relevant to page_hash are additionally protected
@@ -1659,8 +1661,7 @@ struct buf_block_t{
 					used in debugging */
 #endif /* UNIV_DEBUG */
 	ib_mutex_t	mutex;		/*!< mutex protecting this block:
-					state (also protected by the buffer
-					pool mutex), io_fix, buf_fix_count,
+					state, io_fix, buf_fix_count,
 					and accessed; we introduce this new
 					mutex in InnoDB-5.1 to relieve
 					contention on the buffer pool mutex */
@@ -1845,8 +1846,6 @@ struct buf_pool_t{
 
 	/** @name General fields */
 	/* @{ */
-	ib_mutex_t	mutex;		/*!< Buffer pool mutex of this
-					instance */
 	ib_mutex_t	zip_mutex;	/*!< Zip mutex of this buffer
 					pool instance, protects compressed
 					only pages (of type buf_page_t, not
@@ -2020,14 +2019,6 @@ struct buf_pool_t{
 /** @name Accessors for buffer pool mutexes
 Use these instead of accessing buffer pool mutexes directly. */
 /* @{ */
-
-/** Test if a buffer pool mutex is owned. */
-#define buf_pool_mutex_own(b) mutex_own(&b->mutex)
-/** Acquire a buffer pool mutex. */
-#define buf_pool_mutex_enter(b) do {			\
-	ut_ad(!mutex_own(&b->zip_mutex));		\
-	mutex_enter(&b->mutex);				\
-} while (0)
 
 /** Test if flush list mutex is owned. */
 #define buf_flush_list_mutex_own(b) mutex_own(&b->flush_list_mutex)

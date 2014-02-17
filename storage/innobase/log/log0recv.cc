@@ -1385,7 +1385,8 @@ recv_parse_or_apply_log_rec_body(
 		IO completion from a page read. */
 		if (page == NULL) {
 			ptr = fil_op_log_parse_or_replay(ptr, end_ptr, type,
-							 space_id, 0);
+							 (recv_recovery_is_on()
+							  ? space_id : 0), 0);
 		}
 		break;
 	case MLOG_FILE_CREATE:
