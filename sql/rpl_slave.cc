@@ -2487,7 +2487,9 @@ static int get_master_uuid(MYSQL *mysql, Master_info *mi)
 
   DBUG_EXECUTE_IF("dbug.before_get_MASTER_UUID",
                   {
-                    const char act[]= "now wait_for signal.get_master_uuid";
+                    const char act[]
+                        = "now signal in_get_master_version_and_clock "
+                        "wait_for signal.get_master_uuid";
                     DBUG_ASSERT(opt_debug_sync_timeout > 0);
                     DBUG_ASSERT(!debug_sync_set_action(current_thd,
                                                        STRING_WITH_LEN(act)));
@@ -2752,7 +2754,7 @@ static int get_master_version_and_clock(MYSQL* mysql, Master_info* mi)
   DBUG_EXECUTE_IF("dbug.before_get_UNIX_TIMESTAMP",
                   {
                     const char act[]=
-                      "now "
+                      "now signal in_get_master_version_and_clock "
                       "wait_for signal.get_unix_timestamp";
                     DBUG_ASSERT(opt_debug_sync_timeout > 0);
                     DBUG_ASSERT(!debug_sync_set_action(current_thd,
@@ -2760,6 +2762,12 @@ static int get_master_version_and_clock(MYSQL* mysql, Master_info* mi)
                   };);
 
   master_res= NULL;
+  DBUG_EXECUTE_IF("get_master_version.timestamp.ER_NET_READ_INTERRUPTED",
+                   {
+                     DBUG_SET("+d,inject_ER_NET_READ_INTERRUPTED");
+                     DBUG_SET("-d,get_master_version.timestamp."
+                             "ER_NET_READ_INTERRUPTED");
+                   });
   if (!mysql_real_query(mysql, STRING_WITH_LEN("SELECT UNIX_TIMESTAMP()")) &&
       (master_res= mysql_store_result(mysql)) &&
       (master_row= mysql_fetch_row(master_res)))
@@ -2805,7 +2813,7 @@ static int get_master_version_and_clock(MYSQL* mysql, Master_info* mi)
   DBUG_EXECUTE_IF("dbug.before_get_SERVER_ID",
                   {
                     const char act[]=
-                      "now "
+                      "now signal in_get_master_version_and_clock "
                       "wait_for signal.get_server_id";
                     DBUG_ASSERT(opt_debug_sync_timeout > 0);
                     DBUG_ASSERT(!debug_sync_set_action(current_thd, 
@@ -3008,6 +3016,12 @@ when it try to get the value of TIME_ZONE global variable from master.";
     llstr((ulonglong) (mi->heartbeat_period*1000000000UL), llbuf);
     sprintf(query, query_format, llbuf);
 
+    DBUG_EXECUTE_IF("get_master_version.heartbeat.ER_NET_READ_INTERRUPTED",
+                    {
+                      DBUG_SET("+d,inject_ER_NET_READ_INTERRUPTED");
+                      DBUG_SET("-d,get_master_version.heartbeat."
+                               "ER_NET_READ_INTERRUPTED");
+                    });
     if (mysql_real_query(mysql, query, static_cast<ulong>(strlen(query))))
     {
       if (check_io_slave_killed(mi->info_thd, mi, NULL))
