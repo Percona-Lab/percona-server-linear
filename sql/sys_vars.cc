@@ -5066,8 +5066,9 @@ static bool update_slow_query_log_use_global_control(sys_var */*self*/, THD */*t
   if(opt_slow_query_log_use_global_control & (1ULL << SLOG_UG_ALL))
   {
     opt_slow_query_log_use_global_control=
-      SLOG_UG_LOG_SLOW_FILTER | SLOG_UG_LOG_SLOW_RATE_LIMIT | SLOG_UG_LOG_SLOW_VERBOSITY |
-      SLOG_UG_LONG_QUERY_TIME | SLOG_UG_MIN_EXAMINED_ROW_LIMIT;
+      (1ULL << SLOG_UG_LOG_SLOW_FILTER) | (1ULL << SLOG_UG_LOG_SLOW_RATE_LIMIT)
+      | (1ULL << SLOG_UG_LOG_SLOW_VERBOSITY) | (1ULL << SLOG_UG_LONG_QUERY_TIME)
+      | (1ULL << SLOG_UG_MIN_EXAMINED_ROW_LIMIT);
   }
   return false;
 }
