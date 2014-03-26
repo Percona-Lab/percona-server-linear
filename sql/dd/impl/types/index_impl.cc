@@ -66,7 +66,7 @@ class Table;
 
 static const std::set<String_type> default_valid_option_keys = {
     "block_size", "flags", "parser_name",
-    "gipk" /* generated implicit primary key */};
+    "gipk" /* generated implicit primary key */, "clustering_key"};
 
 ///////////////////////////////////////////////////////////////////////////
 // Index_impl implementation.
