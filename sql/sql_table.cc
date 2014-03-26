@@ -5277,7 +5277,7 @@ static bool prepare_key_column(THD *thd, HA_CREATE_INFO *create_info,
             min(file->max_key_length(), file->max_key_part_length(create_info));
         if (max_field_size)
           key_part_length = min(key_part_length, max_field_size);
-        if (key->type == KEYTYPE_MULTIPLE) {
+        if (key->type & KEYTYPE_MULTIPLE) {
           /* not a critical problem */
           push_warning_printf(thd, Sql_condition::SL_WARNING, ER_TOO_LONG_KEY,
                               ER_THD(thd, ER_TOO_LONG_KEY),
@@ -5335,7 +5335,7 @@ static bool prepare_key_column(THD *thd, HA_CREATE_INFO *create_info,
   if (key_part_length > file->max_key_part_length(create_info) &&
       key->type != KEYTYPE_FULLTEXT) {
     key_part_length = file->max_key_part_length(create_info);
-    if (key->type == KEYTYPE_MULTIPLE) {
+    if (key->type & KEYTYPE_MULTIPLE) {
       /* not a critical problem */
       push_warning_printf(thd, Sql_condition::SL_WARNING, ER_TOO_LONG_KEY,
                           ER_THD(thd, ER_TOO_LONG_KEY),
@@ -7547,7 +7547,7 @@ static bool prepare_key(
 #ifndef NDEBUG
   const decltype(key_info->flags) flags_before_switch = key_info->flags;
 #endif /* NDEBUG */
-  switch (key->type) {
+  switch (static_cast<int>(key->type)) {
     case KEYTYPE_MULTIPLE:
       break;
     case KEYTYPE_FULLTEXT:
@@ -7577,6 +7577,51 @@ static bool prepare_key(
     case KEYTYPE_UNIQUE:
       key_info->flags |= HA_NOSAME;
       break;
+    case KEYTYPE_CLUSTERING | KEYTYPE_UNIQUE:
+    case KEYTYPE_CLUSTERING | KEYTYPE_MULTIPLE:
+      if (thd->work_part_info) {
+        partition_info *part_info = thd->work_part_info;
+        List_iterator<partition_element> part_it(part_info->partitions);
+        partition_element *part_elem;
+
+        while ((part_elem = part_it++)) {
+          if (part_elem->subpartitions.elements) {
+            List_iterator<partition_element> sub_it(part_elem->subpartitions);
+            partition_element *subpart_elem;
+            while ((subpart_elem = sub_it++)) {
+              if (unlikely(!ha_check_storage_engine_flag(
+                      subpart_elem->engine_type,
+                      HTON_SUPPORTS_CLUSTERED_KEYS))) {
+                my_error(
+                    ER_ILLEGAL_HA_CREATE_OPTION, MYF(0),
+                    ha_resolve_storage_engine_name(subpart_elem->engine_type),
+                    "CLUSTERING");
+                return true;
+              }
+            }
+          } else if (unlikely(!ha_check_storage_engine_flag(
+                         part_elem->engine_type,
+                         HTON_SUPPORTS_CLUSTERED_KEYS))) {
+            my_error(ER_ILLEGAL_HA_CREATE_OPTION, MYF(0),
+                     ha_resolve_storage_engine_name(part_elem->engine_type),
+                     "CLUSTERING");
+            return true;
+          }
+        }
+      } else if (unlikely(!ha_check_storage_engine_flag(
+                     file->ht, HTON_SUPPORTS_CLUSTERED_KEYS))) {
+        my_error(ER_ILLEGAL_HA_CREATE_OPTION, MYF(0),
+                 ha_resolve_storage_engine_name(file->ht), "CLUSTERING");
+        return true;
+      }
+      if (key->type & KEYTYPE_UNIQUE)
+        key_info->flags = HA_NOSAME;
+      else
+        key_info->flags = 0;
+      key_info->flags |= HA_CLUSTERING;
+      break;
+    case KEYTYPE_CLUSTERING:
+      assert(0);
     default:
       assert(false);
       return true;
@@ -15441,6 +15486,8 @@ bool prepare_fields_and_keys(THD *thd, const dd::Table *src_table, TABLE *table,
         key_type = KEYTYPE_FULLTEXT;
       else
         key_type = KEYTYPE_MULTIPLE;
+      if (key_info->flags & HA_CLUSTERING)
+        key_type = static_cast<enum keytype>(key_type | KEYTYPE_CLUSTERING);
 
       /*
         If we have dropped a column associated with an index,
