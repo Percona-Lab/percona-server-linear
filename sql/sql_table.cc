@@ -3941,7 +3941,7 @@ mysql_prepare_create_table(THD *thd, HA_CREATE_INFO *create_info,
 	break;
     }
 
-    switch (key->type) {
+    switch ((int)key->type) {
     case KEYTYPE_MULTIPLE:
 	key_info->flags= 0;
 	break;
@@ -3958,6 +3958,23 @@ mysql_prepare_create_table(THD *thd, HA_CREATE_INFO *create_info,
     case KEYTYPE_FOREIGN:
       key_number--;				// Skip this key
       continue;
+    case KEYTYPE_CLUSTERING | KEYTYPE_UNIQUE:
+    case KEYTYPE_CLUSTERING | KEYTYPE_MULTIPLE:
+      if (unlikely(!ha_check_storage_engine_flag(
+                     file->ht, HTON_SUPPORTS_CLUSTERED_KEYS)))
+      {
+        my_error(ER_ILLEGAL_HA_CREATE_OPTION, MYF(0),
+                 ha_resolve_storage_engine_name(file->ht), "CLUSTERING");
+        DBUG_RETURN(TRUE);
+      }
+      if (key->type & KEYTYPE_UNIQUE)
+        key_info->flags= HA_NOSAME;
+      else
+        key_info->flags= 0;
+      key_info->flags|= HA_CLUSTERING;
+      break;
+    case KEYTYPE_CLUSTERING:
+      DBUG_ASSERT(0);
     default:
       key_info->flags = HA_NOSAME;
       break;
@@ -4274,7 +4291,7 @@ mysql_prepare_create_table(THD *thd, HA_CREATE_INFO *create_info,
 	    key_part_length= min(max_key_length, file->max_key_part_length());
 	    if (max_field_size)
               key_part_length= min(key_part_length, max_field_size);
-	    if (key->type == KEYTYPE_MULTIPLE)
+	    if (key->type & KEYTYPE_MULTIPLE)
 	    {
 	      /* not a critical problem */
 	      push_warning_printf(thd, Sql_condition::SL_WARNING,
@@ -4326,7 +4343,7 @@ mysql_prepare_create_table(THD *thd, HA_CREATE_INFO *create_info,
           key->type != KEYTYPE_FULLTEXT)
       {
         key_part_length= file->max_key_part_length();
-	if (key->type == KEYTYPE_MULTIPLE)
+	if (key->type & KEYTYPE_MULTIPLE)
 	{
 	  /* not a critical problem */
 	  push_warning_printf(thd, Sql_condition::SL_WARNING,
@@ -8140,7 +8157,9 @@ mysql_prepare_alter_table(THD *thd, TABLE *table,
         key_type= KEYTYPE_FULLTEXT;
       else
         key_type= KEYTYPE_MULTIPLE;
-      
+      if (key_info->flags & HA_CLUSTERING)
+        key_type= (enum keytype)(key_type | KEYTYPE_CLUSTERING);
+
       if (index_column_dropped)
       {
         /*
