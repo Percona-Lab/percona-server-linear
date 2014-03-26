@@ -5074,15 +5074,23 @@ bool Alter_info::add_field(THD *thd, const LEX_STRING *field_name,
                  &default_key_create_info, false, true, key_parts);
     if (key == NULL || key_list.push_back(key)) DBUG_RETURN(true);
   }
-  if (type_modifier & (UNIQUE_FLAG | UNIQUE_KEY_FLAG)) {
+  if (type_modifier & (UNIQUE_FLAG | UNIQUE_KEY_FLAG | CLUSTERING_FLAG)) {
+    enum keytype key_type;
+    if (type_modifier & (UNIQUE_FLAG | UNIQUE_KEY_FLAG))
+      key_type = KEYTYPE_UNIQUE;
+    else
+      key_type = KEYTYPE_MULTIPLE;
+    if (type_modifier & CLUSTERING_FLAG)
+      key_type = static_cast<enum keytype>(key_type | KEYTYPE_CLUSTERING);
+    DBUG_ASSERT(key_type != KEYTYPE_MULTIPLE);
     List<Key_part_spec> key_parts;
     auto key_part_spec =
         new (*THR_MALLOC) Key_part_spec(field_name_cstr, 0, ORDER_ASC);
     if (key_part_spec == NULL || key_parts.push_back(key_part_spec))
       DBUG_RETURN(true);
     Key_spec *key = new (*THR_MALLOC)
-        Key_spec(thd->mem_root, KEYTYPE_UNIQUE, NULL_CSTR,
-                 &default_key_create_info, false, true, key_parts);
+        Key_spec(thd->mem_root, key_type, NULL_CSTR, &default_key_create_info,
+                 false, true, key_parts);
     if (key == NULL || key_list.push_back(key)) DBUG_RETURN(true);
   }
 

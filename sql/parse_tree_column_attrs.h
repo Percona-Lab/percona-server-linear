@@ -107,15 +107,22 @@ class PT_not_null_column_attr : public PT_column_attr_base {
 
   @ingroup ptn_column_attrs
 */
-class PT_unique_key_column_attr : public PT_column_attr_base {
+class PT_unique_combo_clustering_key_column_attr : public PT_column_attr_base {
  public:
-  virtual void apply_type_flags(ulong *type_flags) const {
-    *type_flags |= UNIQUE_FLAG;
+  PT_unique_combo_clustering_key_column_attr(enum keytype key_type) noexcept
+      : m_key_type(key_type) {}
+
+  virtual void apply_type_flags(ulong *type_flags) const noexcept {
+    if (m_key_type & KEYTYPE_UNIQUE) *type_flags |= UNIQUE_FLAG;
+    if (m_key_type & KEYTYPE_CLUSTERING) *type_flags |= CLUSTERING_FLAG;
   }
 
   virtual void apply_alter_info_flags(uint *flags) const {
     *flags |= Alter_info::ALTER_ADD_INDEX;
   }
+
+ private:
+  const enum keytype m_key_type;
 };
 
 /**
