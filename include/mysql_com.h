@@ -185,6 +185,8 @@
 /** Field will not be loaded in secondary engine. */
 #define NOT_SECONDARY_FLAG (1 << 29)
 
+#define CLUSTERING_FLAG (1U << 30)
+
 /** @}*/
 
 /**

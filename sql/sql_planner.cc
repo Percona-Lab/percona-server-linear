@@ -450,7 +450,8 @@ Key_use *Optimize_table_order::find_best_ref(
           // Limit the number of matched rows
           const double tmp_fanout =
               min(cur_fanout, (double)thd->variables.max_seeks_for_key);
-          if (table->covering_keys.is_set(key)) {
+          if (table->covering_keys.is_set(key) ||
+              (table->file->index_flags(key, 0, 0) & HA_CLUSTERED_INDEX)) {
             // We can use only index tree
             const Cost_estimate index_read_cost =
                 table->file->index_scan_cost(key, 1, tmp_fanout);
@@ -632,7 +633,8 @@ Key_use *Optimize_table_order::find_best_ref(
         // Limit the number of matched rows
         tmp_fanout =
             std::min(tmp_fanout, double(thd->variables.max_seeks_for_key));
-        if (table->covering_keys.is_set(key)) {
+        if (table->covering_keys.is_set(key) ||
+            (table->file->index_flags(key, 0, 0) & HA_CLUSTERED_INDEX)) {
           // We can use only index tree
           const Cost_estimate index_read_cost =
               table->file->index_scan_cost(key, 1, tmp_fanout);
