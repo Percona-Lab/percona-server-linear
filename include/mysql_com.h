@@ -187,6 +187,8 @@
 /** Field is explicitly marked as invisible by the user. */
 #define FIELD_IS_INVISIBLE (1 << 30)
 
+#define CLUSTERING_FLAG (1 << 31)
+
 /** @}*/
 
 /**
