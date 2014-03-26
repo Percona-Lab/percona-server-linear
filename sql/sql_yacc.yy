@@ -564,7 +564,7 @@ void warn_on_deprecated_user_defined_collation(
   2. We should not introduce new shift/reduce conflicts any more.
 */
 
-%expect 37
+%expect 40
 
 /*
    MAINTAINER:
@@ -1488,6 +1488,11 @@ void warn_on_deprecated_user_defined_collation(
 
 
 /*
+   Tokens from Percona Server 5.7 and older
+*/
+%token CLUSTERING_SYM 1302
+
+/*
   Resolve column attribute ambiguity -- force precedence of "UNIQUE KEY" against
   simple "UNIQUE" and "KEY" attributes:
 */
@@ -1686,7 +1691,7 @@ void warn_on_deprecated_user_defined_collation(
         opt_set_var_ident_type install_option_type
 
 %type <key_type>
-        opt_unique constraint_key_type
+        constraint_key_type opt_unique_combo_clustering unique_combo_clustering
 
 %type <key_alg>
         index_type
@@ -3482,7 +3487,7 @@ default_role_clause:
         ;
 
 create_index_stmt:
-          CREATE opt_unique INDEX_SYM ident opt_index_type_clause
+          CREATE opt_unique_combo_clustering INDEX_SYM ident opt_index_type_clause
           ON_SYM table_ident '(' key_list_with_expression ')' opt_index_options
           opt_index_lock_and_algorithm
           {
@@ -6894,6 +6899,13 @@ table_constraint_def:
         | opt_constraint_name constraint_key_type opt_index_name_and_type
           '(' key_list_with_expression ')' opt_index_options
           {
+            if (($1.length != 0)
+                 && ($2 == (KEYTYPE_CLUSTERING | KEYTYPE_MULTIPLE)))
+            {
+              /* Forbid "CONSTRAINT c CLUSTERING" */
+              my_error(ER_SYNTAX_ERROR, MYF(0));
+              MYSQL_YYABORT;
+            }
             /*
               Constraint-implementing indexes are named by the constraint type
               by default.
@@ -7415,11 +7427,19 @@ column_attribute:
           }
         | UNIQUE_SYM
           {
-            $$= NEW_PTN PT_unique_key_column_attr(@$);
+            $$= NEW_PTN PT_unique_combo_clustering_key_column_attr(@$, KEYTYPE_UNIQUE);
           }
         | UNIQUE_SYM KEY_SYM
           {
-            $$= NEW_PTN PT_unique_key_column_attr(@$);
+            $$= NEW_PTN PT_unique_combo_clustering_key_column_attr(@$, KEYTYPE_UNIQUE);
+          }
+        | CLUSTERING_SYM
+          {
+            $$= NEW_PTN PT_unique_combo_clustering_key_column_attr(@$, KEYTYPE_CLUSTERING);
+          }
+        | CLUSTERING_SYM KEY_SYM
+          {
+            $$= NEW_PTN PT_unique_combo_clustering_key_column_attr(@$, KEYTYPE_CLUSTERING);
           }
         | COMMENT_SYM TEXT_STRING_sys
           {
@@ -7763,7 +7783,8 @@ delete_option:
 
 constraint_key_type:
           PRIMARY_SYM KEY_SYM { $$= KEYTYPE_PRIMARY; }
-        | UNIQUE_SYM opt_key_or_index { $$= KEYTYPE_UNIQUE; }
+        | unique_combo_clustering opt_key_or_index { $$= $1; }
+
         ;
 
 key_or_index:
@@ -7782,10 +7803,44 @@ keys_or_index:
         | INDEXES {}
         ;
 
-opt_unique:
+opt_unique_combo_clustering:
           %empty { $$= KEYTYPE_MULTIPLE; }
-        | UNIQUE_SYM   { $$= KEYTYPE_UNIQUE; }
+        | unique_combo_clustering
         ;
+
+unique_combo_clustering:
+          UNIQUE_SYM
+          {
+            $$= KEYTYPE_UNIQUE;
+          }
+        | UNIQUE_SYM KEY_SYM
+          {
+            $$= KEYTYPE_UNIQUE;
+          }
+        | CLUSTERING_SYM
+          {
+            $$= static_cast<keytype>(KEYTYPE_MULTIPLE | KEYTYPE_CLUSTERING);
+          }
+        | CLUSTERING_SYM KEY_SYM
+          {
+            $$= static_cast<keytype>(KEYTYPE_MULTIPLE | KEYTYPE_CLUSTERING);
+          }
+        | UNIQUE_SYM CLUSTERING_SYM
+          {
+            $$= static_cast<keytype>(KEYTYPE_UNIQUE | KEYTYPE_CLUSTERING);
+          }
+        | UNIQUE_SYM CLUSTERING_SYM KEY_SYM
+          {
+            $$= static_cast<keytype>(KEYTYPE_UNIQUE | KEYTYPE_CLUSTERING);
+          }
+        | CLUSTERING_SYM UNIQUE_SYM
+          {
+            $$= static_cast<keytype>(KEYTYPE_UNIQUE | KEYTYPE_CLUSTERING);
+          }
+        | CLUSTERING_SYM UNIQUE_SYM KEY_SYM
+          {
+            $$= static_cast<keytype>(KEYTYPE_UNIQUE | KEYTYPE_CLUSTERING);
+          }
 
 opt_fulltext_index_options:
           %empty { $$.init(YYMEM_ROOT); }
