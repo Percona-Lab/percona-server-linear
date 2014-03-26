@@ -187,6 +187,7 @@
 #define FIELD_IS_MARKED                   \
   (1 << 28) /**< Intern: field is marked, \
                  general purpose */
+#define CLUSTERING_FLAG (1U << 29)
 /** @}*/
 
 /**
