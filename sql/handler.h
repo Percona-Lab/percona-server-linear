@@ -963,9 +963,14 @@ struct handlerton
    affected by an active LOCK TABLES FOR BACKUP.
 */
 #define HTON_SUPPORTS_ONLINE_BACKUPS (1 << 11)
+
+/**
+  Engine supports secondary clustered keys.
+*/
+#define HTON_SUPPORTS_CLUSTERED_KEYS (1 << 12)
 // Engine support foreign key constraint.
 
-#define HTON_SUPPORTS_FOREIGN_KEYS   (1 << 12)
+#define HTON_SUPPORTS_FOREIGN_KEYS   (1 << 13)
 
 enum enum_tx_isolation { ISO_READ_UNCOMMITTED, ISO_READ_COMMITTED,
 			 ISO_REPEATABLE_READ, ISO_SERIALIZABLE};
