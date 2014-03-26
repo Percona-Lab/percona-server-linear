@@ -2116,6 +2116,8 @@ bool store_create_info(THD *thd, TABLE_LIST *table_list, String *packet,
       packet->append(STRING_WITH_LEN("FULLTEXT KEY "));
     else if (key_info->flags & HA_SPATIAL)
       packet->append(STRING_WITH_LEN("SPATIAL KEY "));
+    else if (key_info->flags & HA_CLUSTERING)
+      packet->append(STRING_WITH_LEN("CLUSTERING KEY "));
     else
       packet->append(STRING_WITH_LEN("KEY "));
 
@@ -3802,7 +3804,9 @@ static int get_schema_tmp_table_columns_record(THD *thd, TABLE_LIST *tables,
             ? "PRI"
             : field->is_flag_set(UNIQUE_KEY_FLAG)
                   ? "UNI"
-                  : field->is_flag_set(MULTIPLE_KEY_FLAG) ? "MUL" : "");
+                  : (field->is_flag_set(MULTIPLE_KEY_FLAG))
+                        ? "MUL"
+                        : (field->is_flag_set(CLUSTERING_FLAG)) ? "CLU" : "");
     table->field[TMP_TABLE_COLUMNS_COLUMN_KEY]->store(
         (const char *)pos, strlen((const char *)pos), cs);
 
