@@ -4079,7 +4079,9 @@ test_if_cheaper_ordering(const JOIN_TAB *tab, ORDER *order, TABLE *table,
 
       bool is_covering= table->covering_keys.is_set(nr) ||
                         (nr == table->s->primary_key &&
-                        table->file->primary_key_is_clustered());
+                        table->file->primary_key_is_clustered()) ||
+                        (table->file->index_flags(nr, 0, 0)
+                         & HA_CLUSTERED_INDEX);
       
       /* 
         Don't use an index scan with ORDER BY without limit.
