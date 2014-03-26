@@ -133,6 +133,7 @@ static const SYMBOL symbols[] = {
     {SYM("CLIENT", CLIENT_SYM)},
     {SYM("CLONE", CLONE_SYM)},
     {SYM("CLOSE", CLOSE_SYM)},
+    {SYM("CLUSTERING", CLUSTERING_SYM)},
     {SYM("COALESCE", COALESCE)},
     {SYM("CODE", CODE_SYM)},
     {SYM("COLLATE", COLLATE_SYM)},
