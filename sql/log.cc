@@ -1771,7 +1771,6 @@ bool log_slow_applicable(THD *thd)
           || (ulong) query_exec_time < 1000000)) {
     DBUG_RETURN(false);
   }
-
   if (opt_slow_query_log_rate_type == SLOG_RT_SESSION
       && thd->variables.log_slow_rate_limit
       && thd->thread_id() % thd->variables.log_slow_rate_limit
