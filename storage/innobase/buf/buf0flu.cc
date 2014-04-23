@@ -602,10 +602,20 @@ buf_flush_ready_for_flush(
 				buf_page_in_file(bpage) */
 	buf_flush_t	flush_type)/*!< in: type of flush */
 {
-	ut_ad(flush_type < BUF_FLUSH_N_TYPES);
+#ifdef UNIV_DEBUG
+	buf_pool_t*	buf_pool = buf_pool_from_bpage(bpage);
+#endif
+
+	ut_a(buf_page_in_file(bpage)
+	     || (buf_page_get_state(bpage) == BUF_BLOCK_REMOVE_HASH
+#ifdef UNIV_DEBUG
+		 && !mutex_own(&buf_pool->LRU_list_mutex)
+#endif
+		     ));
 	ut_ad(mutex_own(buf_page_get_mutex(bpage))
-	      || flush_type == BUF_FLUSH_LIST);
-	ut_a(buf_page_in_file(bpage));
+	      || (flush_type == BUF_FLUSH_LIST
+		  && buf_flush_list_mutex_own(buf_pool)));
+	ut_ad(flush_type < BUF_FLUSH_N_TYPES);
 
 	if (bpage->oldest_modification == 0
 	    || buf_page_get_io_fix_unlocked(bpage) != BUF_IO_NONE) {
@@ -616,6 +626,7 @@ buf_flush_ready_for_flush(
 
 	switch (flush_type) {
 	case BUF_FLUSH_LIST:
+		return(buf_page_get_state(bpage) != BUF_BLOCK_REMOVE_HASH);
 	case BUF_FLUSH_LRU:
 	case BUF_FLUSH_SINGLE_PAGE:
 		return(true);
