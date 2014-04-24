@@ -907,6 +907,7 @@ if ( open(PIPE, "| $mysqld_install_cmd_line") )
 	      "The new default config file was created as $copy_cfg_file,",
 	      "please compare it with your file and take the changes you need.");
     }
+CONFIGFILE_BUG1225189
     foreach my $cfg ( "/etc/my.$cnfext", "/etc/mysql/my.$cnfext" )
     {
       check_sys_cfg_file ($opt, $cfg);

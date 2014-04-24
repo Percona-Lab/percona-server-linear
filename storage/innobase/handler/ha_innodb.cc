@@ -13307,9 +13307,8 @@ innodb_mutex_show_status(
 		}
 
 		buf1len = (uint) my_snprintf(
-			buf1, sizeof buf1, "%s:%lu",
-			innobase_basename(lock->cfile_name),
-			static_cast<ulong>(lock->cline));
+			buf1, sizeof buf1, "%s",
+			lock->lock_name);
 		buf2len = (uint) my_snprintf(
 			buf2, sizeof buf2, "os_waits=%lu",
 			static_cast<ulong>(lock->count_os_wait));
