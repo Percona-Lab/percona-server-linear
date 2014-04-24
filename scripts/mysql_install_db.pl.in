@@ -460,6 +460,10 @@ if ( ! $print_defaults )
 -x $print_defaults or -f "$print_defaults.exe"
   or cannot_find_file($print_defaults);
 
+# fix for: https://bugs.launchpad.net/percona-server/+bug/1314596
+# should be removed later
+my $cnfext = ( $^O =~ m/^(MSWin32|cygwin)$/ ) ? "ini" : "cnf";
+
 <<'CONFIGFILE_BUG1225189';
 my $config_file;
 my $copy_cfg_file;
@@ -934,6 +938,7 @@ if ( open(PIPE, "| $mysqld_install_cmd_line") )
 	      "The new default config file was created as $copy_cfg_file,",
 	      "please compare it with your file and take the changes you need.");
     }
+CONFIGFILE_BUG1225189
     foreach my $cfg ( "/etc/my.$cnfext", "/etc/mysql/my.$cnfext" )
     {
       check_sys_cfg_file ($opt, $cfg);
