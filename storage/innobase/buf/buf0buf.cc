@@ -2925,10 +2925,9 @@ got_block:
 
 		rw_lock_x_unlock(hash_lock);
 
-		++buf_pool->n_pend_unzip;
+		os_atomic_increment_ulint(&buf_pool->n_pend_unzip, 1);
 
 		mutex_exit(&buf_pool->zip_mutex);
-		buf_pool_mutex_exit(buf_pool);
 
 		access_time = buf_page_is_accessed(&block->page);
 

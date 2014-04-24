@@ -188,7 +188,7 @@ if ( $^O eq "MSWin32" )
 }
 else
 {
-  my $linkpath   = "-L$pkglibdir";
+  my $linkpath   = "-L$pkglibdir @RPATH_OPTION@";
   @lib_opts   = ($linkpath,"-lperconaserverclient");
   @lib_r_opts = ($linkpath,"-lperconaserverclient_r");
   @lib_e_opts = ($linkpath,"-lmysqld");
