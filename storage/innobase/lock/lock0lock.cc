@@ -1483,7 +1483,7 @@ lock_rec_has_expl(
 	const buf_block_t*	block,	/*!< in: buffer block containing
 					the record */
 	ulint			heap_no,/*!< in: heap number of the record */
-	const trx_t*		trx)	/*!< in: transaction */
+	trx_id_t		trx_id)	/*!< in: transaction id */
 {
 	lock_t*	lock;
 
@@ -1496,7 +1496,7 @@ lock_rec_has_expl(
 	     lock != NULL;
 	     lock = lock_rec_get_next(heap_no, lock)) {
 
-		if (lock->trx == trx
+		if (lock->trx->id == trx_id
 		    && !lock_rec_get_insert_intention(lock)
 		    && lock_mode_stronger_or_eq(
 			    lock_get_mode(lock),
@@ -1521,7 +1521,7 @@ lock_rec_has_expl(
 /*********************************************************************//**
 Checks if some other transaction has a lock request in the queue.
 @return	lock or NULL */
-static
+static __attribute__((nonnull, warn_unused_result))
 const lock_t*
 lock_rec_other_has_expl_req(
 /*========================*/
@@ -1535,9 +1535,7 @@ lock_rec_other_has_expl_req(
 	const buf_block_t*	block,	/*!< in: buffer block containing
 					the record */
 	ulint			heap_no,/*!< in: heap number of the record */
-	const trx_t*		trx)	/*!< in: transaction, or NULL if
-					requests by all transactions
-					are taken into account */
+	trx_id_t		trx_id)	/*!< in: transaction */
 {
 	const lock_t*	lock;
 
@@ -1550,7 +1548,7 @@ lock_rec_other_has_expl_req(
 	     lock != NULL;
 	     lock = lock_rec_get_next_const(heap_no, lock)) {
 
-		if (lock->trx != trx
+		if (lock->trx->id != trx_id
 		    && (gap
 			|| !(lock_rec_get_gap(lock)
 			     || heap_no == PAGE_HEAP_NO_SUPREMUM))
@@ -1708,19 +1706,28 @@ lock_rec_other_trx_holds_expl(
 	trx_t* holds = NULL;
 
 	lock_mutex_enter();
+	mutex_enter(&trx_sys->mutex);
 
-	if (trx_t *impl_trx = trx_rw_is_active(trx_id, NULL)) {
+	trx_id_t* impl_trx_desc = trx_find_descriptor(trx_sys->descriptors,
+						      trx_sys->descr_n_used,
+						      trx_id);
+	if (impl_trx_desc) {
+		ut_ad(trx_id == *impl_trx_desc);
 		ulint heap_no = page_rec_get_heap_no(rec);
-		mutex_enter(&trx_sys->mutex);
+		ulint rw_trx_count = trx_sys->descr_n_used;
+		trx_id_t* rw_trx_snapshot = static_cast<trx_id_t *>
+			(ut_malloc(sizeof(trx_id_t) * rw_trx_count));
+		memcpy(rw_trx_snapshot, trx_sys->descriptors,
+		       sizeof(trx_id_t) * rw_trx_count);
 
-		for (trx_t* t = UT_LIST_GET_FIRST(trx_sys->rw_trx_list);
-		     t != NULL;
-		     t = UT_LIST_GET_NEXT(trx_list, t)) {
+		mutex_exit(&trx_sys->mutex);
 
-			lock_t *expl_lock = lock_rec_has_expl(
-				precise_mode, block, heap_no, t);
+		for (ulint i = 0; i < rw_trx_count; i++) {
 
-			if (expl_lock && expl_lock->trx != impl_trx) {
+			lock_t* expl_lock = lock_rec_has_expl(precise_mode,
+							block, heap_no,
+							rw_trx_snapshot[i]);
+			if (expl_lock && expl_lock->trx->id != trx_id) {
 				/* An explicit lock is held by trx other than
 				the trx holding the implicit lock. */
 				holds = expl_lock->trx;
@@ -1728,8 +1735,11 @@ lock_rec_other_trx_holds_expl(
 			}
 		}
 
+		ut_free(rw_trx_snapshot);
+
+	} else {
 		mutex_exit(&trx_sys->mutex);
-        }
+	}
 
 	lock_mutex_exit();
 
@@ -2056,7 +2066,7 @@ lock_rec_add_to_queue(
 			: LOCK_S;
 		const lock_t*	other_lock
 			= lock_rec_other_has_expl_req(mode, 0, LOCK_WAIT,
-						      block, heap_no, trx);
+						      block, heap_no, trx->id);
 		ut_a(!other_lock);
 	}
 #endif /* UNIV_DEBUG */
@@ -2247,7 +2257,7 @@ lock_rec_lock_slow(
 	trx = thr_get_trx(thr);
 	trx_mutex_enter(trx);
 
-	if (lock_rec_has_expl(mode, block, heap_no, trx)) {
+	if (lock_rec_has_expl(mode, block, heap_no, trx->id)) {
 
 		/* The trx already has a strong enough lock on rec: do
 		nothing */
@@ -5566,7 +5576,6 @@ lock_rec_queue_validate(
 	const dict_index_t*	index,	/*!< in: index, or NULL if not known */
 	const ulint*		offsets)/*!< in: rec_get_offsets(rec, index) */
 {
-	const trx_t*	impl_trx;
 	const lock_t*	lock;
 	ulint		heap_no;
 
@@ -5608,23 +5617,27 @@ lock_rec_queue_validate(
 	if (!index);
 	else if (dict_index_is_clust(index)) {
 		trx_id_t	trx_id;
+		trx_id_t*	trx_desc;
 
 		/* Unlike the non-debug code, this invariant can only succeed
 		if the check and assertion are covered by the lock mutex. */
 
 		trx_id = lock_clust_rec_some_has_impl(rec, index, offsets);
-		impl_trx = trx_rw_get_active_trx_by_id(trx_id, NULL);
+		trx_desc = trx_find_descriptor(trx_sys->descriptors,
+					       trx_sys->descr_n_used,
+					       trx_id);
 
 		ut_ad(lock_mutex_own());
-		/* impl_trx cannot be committed until lock_mutex_exit()
+		/* trx_id cannot be committed until lock_mutex_exit()
 		because lock_trx_release_locks() acquires lock_sys->mutex */
 
-		if (impl_trx != NULL
+		if (trx_desc != NULL
 		    && lock_rec_other_has_expl_req(LOCK_S, 0, LOCK_WAIT,
-						   block, heap_no, impl_trx)) {
+						   block, heap_no, trx_id)) {
 
+			ut_ad(trx_id == *trx_desc);
 			ut_a(lock_rec_has_expl(LOCK_X | LOCK_REC_NOT_GAP,
-					       block, heap_no, impl_trx));
+					       block, heap_no, trx_id));
 		}
 	}
 
@@ -5648,7 +5661,8 @@ lock_rec_queue_validate(
 				mode = LOCK_S;
 			}
 			ut_a(!lock_rec_other_has_expl_req(
-				     mode, 0, 0, block, heap_no, lock->trx));
+				     mode, 0, 0, block, heap_no,
+				     lock->trx->id));
 
 		} else if (lock_get_wait(lock) && !lock_rec_get_gap(lock)) {
 
@@ -6108,8 +6122,8 @@ lock_rec_convert_impl_to_expl(
 	}
 
 	if (trx_id != 0) {
-		trx_t*	impl_trx;
-		ulint	heap_no = page_rec_get_heap_no(rec);
+		trx_id_t*	impl_trx_desc;
+		ulint		heap_no = page_rec_get_heap_no(rec);
 
 		lock_mutex_enter();
 
@@ -6117,17 +6131,25 @@ lock_rec_convert_impl_to_expl(
 		explicit x-lock set on the record, set one for it */
 
 		mutex_enter(&trx_sys->mutex);
-		impl_trx = trx_rw_get_active_trx_by_id(trx_id, NULL);
+		impl_trx_desc = trx_find_descriptor(trx_sys->descriptors,
+						    trx_sys->descr_n_used,
+						    trx_id);
 		mutex_exit(&trx_sys->mutex);
 
-		/* impl_trx cannot be committed until lock_mutex_exit()
+		/* trx_id cannot be committed until lock_mutex_exit()
 		because lock_trx_release_locks() acquires lock_sys->mutex */
 
-		if (impl_trx != NULL
+		if (impl_trx_desc != NULL
 		    && !lock_rec_has_expl(LOCK_X | LOCK_REC_NOT_GAP, block,
-					  heap_no, impl_trx)) {
+					  heap_no, trx_id)) {
 			ulint	type_mode = (LOCK_REC | LOCK_X
 					     | LOCK_REC_NOT_GAP);
+
+			mutex_enter(&trx_sys->mutex);
+			trx_t*	impl_trx = trx_rw_get_active_trx_by_id(trx_id,
+								       NULL);
+			mutex_exit(&trx_sys->mutex);
+			ut_ad(impl_trx != NULL);
 
 			lock_rec_add_to_queue(
 				type_mode, block, heap_no, index,
@@ -7179,7 +7201,7 @@ lock_trx_has_rec_x_lock(
 	if (UNIV_LIKELY(srv_fake_changes_locks)) {
 
 		ut_a(lock_rec_has_expl(rec_lock | LOCK_REC_NOT_GAP,
-				       block, heap_no, trx));
+				       block, heap_no, trx->id));
 	}
 	lock_mutex_exit();
 	return(true);
