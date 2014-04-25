@@ -546,7 +546,7 @@ mkdir debug
            -DWITH_LIBEVENT=bundled \
            -DWITH_FIDO=bundled \
            -DWITH_ENCRYPTION_UDF=ON \
-           -DWITH_KEYRING_VAULT=ON \
+           -DWITH_COMPONENT_KEYRING_VAULT=ON \
            %{?ssl_option} \
            %{?mecab_option} \
            -DCOMPILATION_COMMENT="%{compilation_comment_debug}" %{TOKUDB_FLAGS} %{TOKUDB_DEBUG_OFF} %{ROCKSDB_FLAGS}
@@ -598,7 +598,7 @@ mkdir release
            -DWITH_ZSTD=bundled \
            -DWITH_FIDO=bundled \
            -DWITH_ENCRYPTION_UDF=ON \
-           -DWITH_KEYRING_VAULT=ON \
+           -DWITH_COMPONENT_KEYRING_VAULT=ON \
            %{?ssl_option} \
            %{?mecab_option} \
            -DCOMPILATION_COMMENT="%{compilation_comment_release}" %{TOKUDB_FLAGS} %{TOKUDB_DEBUG_OFF} %{ROCKSDB_FLAGS}
@@ -758,10 +758,8 @@ if [ -d /etc/percona-server.conf.d ]; then
 fi
 
 echo "Percona Server is distributed with several useful UDF (User Defined Function) from Percona Toolkit."
-echo "Run the following commands to create these functions:"
-echo "mysql -e \"CREATE FUNCTION fnv1a_64 RETURNS INTEGER SONAME 'libfnv1a_udf.so'\""
-echo "mysql -e \"CREATE FUNCTION fnv_64 RETURNS INTEGER SONAME 'libfnv_udf.so'\""
-echo "mysql -e \"CREATE FUNCTION murmur_hash RETURNS INTEGER SONAME 'libmurmur_udf.so'\""
+echo "Run the following command to install these functions (fnv_64, fnv1a_64, murmur_hash):"
+echo "mysql -e \"INSTALL COMPONENT 'file://component_percona_udf'\""
 echo "See http://www.percona.com/doc/percona-server/8.0/management/udf_percona_toolkit.html for more details"
 
 %preun -n percona-server-server
@@ -1006,7 +1004,7 @@ fi
 %attr(755, root, root) %{_libdir}/mysql/plugin/component_test_udf_services.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/authentication_ldap_simple.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/component_test_component_deinit.so
-%attr(755, root, root) %{_libdir}/mysql/plugin/binlog_utils_udf.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/component_binlog_utils_udf.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/test_udf_wrappers.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/component_reference_cache.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/component_test_mysql_system_variable_set.so
@@ -1015,7 +1013,7 @@ fi
 %attr(755, root, root) %{_libdir}/mysql/plugin/semisync_source.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/component_test_mysql_thd_store_service.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/component_test_server_telemetry_traces.so
-%attr(755, root, root) %{_libdir}/mysql/plugin/audit_log_filter.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/component_audit_log_filter.so
 
 %dir %{_libdir}/mysql/plugin/debug
 %attr(755, root, root) %{_libdir}/mysql/plugin/debug/data_masking.so
@@ -1057,7 +1055,7 @@ fi
 %attr(755, root, root) %{_libdir}/mysql/plugin/debug/test_services_host_application_signal.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/debug/component_test_udf_services.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/debug/component_test_component_deinit.so
-%attr(755, root, root) %{_libdir}/mysql/plugin/debug/binlog_utils_udf.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/debug/component_binlog_utils_udf.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/debug/test_udf_wrappers.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/debug/component_reference_cache.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/debug/component_test_mysql_system_variable_set.so
@@ -1066,7 +1064,7 @@ fi
 %attr(755, root, root) %{_libdir}/mysql/plugin/debug/semisync_source.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/debug/component_test_mysql_thd_store_service.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/debug/component_test_server_telemetry_traces.so
-%attr(755, root, root) %{_libdir}/mysql/plugin/debug/audit_log_filter.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/debug/component_audit_log_filter.so
 %if 0%{?mecab}
 %{_libdir}/mysql/mecab
 %attr(755, root, root) %{_libdir}/mysql/plugin/libpluginmecab.so
@@ -1092,12 +1090,6 @@ fi
 %attr(755, root, root) %{_libdir}/mysql/plugin/debug/auth_pam.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/auth_pam_compat.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/debug/auth_pam_compat.so
-%attr(755, root, root) %{_libdir}/mysql/plugin/libfnv1a_udf.*
-%attr(755, root, root) %{_libdir}/mysql/plugin/debug/libfnv1a_udf.*
-%attr(755, root, root) %{_libdir}/mysql/plugin/libfnv_udf.*
-%attr(755, root, root) %{_libdir}/mysql/plugin/debug/libfnv_udf.*
-%attr(755, root, root) %{_libdir}/mysql/plugin/libmurmur_udf.*
-%attr(755, root, root) %{_libdir}/mysql/plugin/debug/libmurmur_udf.*
 %attr(755, root, root) %{_libdir}/mysql/plugin/dialog.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/debug/dialog.so
 #%attr(755, root, root) %{_libdir}/mysql/plugin/query_response_time.so
@@ -1119,6 +1111,8 @@ fi
 %attr(755, root, root) %{_libdir}/mysql/plugin/debug/component_keyring_kms.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/component_masking_functions.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/debug/component_masking_functions.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/component_percona_udf.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/debug/component_percona_udf.so
 #
 #%attr(644, root, root) %{_datadir}/percona-server/fill_help_tables.sql
 #%attr(644, root, root) %{_datadir}/percona-server/mysql_sys_schema.sql
