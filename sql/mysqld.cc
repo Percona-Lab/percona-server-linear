@@ -1301,6 +1301,7 @@ mysql_cond_t COND_socket_listener_active;
 mysql_mutex_t LOCK_start_signal_handler;
 mysql_cond_t COND_start_signal_handler;
 #endif
+mysql_rwlock_t LOCK_consistent_snapshot;
 
 /*
   The below lock protects access to global server variable
@@ -2251,12 +2252,12 @@ static void clean_up_mutexes() {
   mysql_mutex_destroy(&LOCK_global_user_client_stats);
   mysql_mutex_destroy(&LOCK_global_table_stats);
   mysql_mutex_destroy(&LOCK_global_index_stats);
+  mysql_rwlock_destroy(&LOCK_consistent_snapshot);
 }
 
 /****************************************************************************
 ** Init IP and UNIX socket
 ****************************************************************************/
-
 
 static void set_ports() {
   char *env;
@@ -10368,7 +10369,7 @@ PSI_rwlock_key key_rwlock_channel_lock;
 PSI_rwlock_key key_rwlock_receiver_sid_lock;
 PSI_rwlock_key key_rwlock_rpl_filter_lock;
 PSI_rwlock_key key_rwlock_channel_to_filter_lock;
-
+PSI_rwlock_key key_rwlock_LOCK_consistent_snapshot;
 PSI_rwlock_key key_rwlock_Trans_delegate_lock;
 PSI_rwlock_key key_rwlock_Server_state_delegate_lock;
 PSI_rwlock_key key_rwlock_Binlog_storage_delegate_lock;
@@ -10395,7 +10396,8 @@ static PSI_rwlock_info all_server_rwlocks[]=
   { &key_rwlock_receiver_sid_lock, "gtid_retrieved", PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME},
   { &key_rwlock_rpl_filter_lock, "rpl_filter_lock", 0, 0, PSI_DOCUMENT_ME},
   { &key_rwlock_channel_to_filter_lock, "channel_to_filter_lock", 0, 0, PSI_DOCUMENT_ME},
-  { &key_rwlock_resource_group_mgr_map_lock, "Resource_group_mgr::m_map_rwlock", 0, 0, PSI_DOCUMENT_ME}
+  { &key_rwlock_resource_group_mgr_map_lock, "Resource_group_mgr::m_map_rwlock", 0, 0, PSI_DOCUMENT_ME},
+  { &key_rwlock_LOCK_consistent_snapshot, "LOCK_consistent_snapshot", PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME}
 };
 /* clang-format on */
 
