@@ -48,15 +48,6 @@
 using std::min;
 using std::max;
 
-#include "sql_plugin.h"
-#include "rpl_handler.h"
-#include "debug_sync.h"
-#include "sql_show.h"
-
-/* max size of the log message */
-#define MAX_LOG_BUFFER_SIZE 1024
-#define MAX_TIME_SIZE 32
-
 #ifndef _WIN32
 static int   log_syslog_facility= 0;
 #endif
