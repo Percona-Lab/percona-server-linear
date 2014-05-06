@@ -464,6 +464,8 @@ class MYSQL_BIN_LOG : public TC_LOG {
   /* The previous gtid set in relay log. */
   Gtid_set *previous_gtid_set_relaylog;
 
+  bool snapshot_lock_acquired;
+
   int open(const char *opt_name) override { return open_binlog(opt_name); }
 
   /**
@@ -652,6 +654,20 @@ class MYSQL_BIN_LOG : public TC_LOG {
   void add_bytes_written(ulonglong inc) { bytes_written += inc; }
   void reset_bytes_written() { bytes_written = 0; }
   void harvest_bytes_written(Relay_log_info *rli, bool need_log_space_lock);
+
+#ifdef MYSQL_SERVER
+  void xlock(void) override;
+  void xunlock(void) override;
+  void slock(void) override { mysql_rwlock_rdlock(&LOCK_consistent_snapshot); }
+  void sunlock(void) override {
+    mysql_rwlock_unlock(&LOCK_consistent_snapshot);
+  }
+#else
+  void xlock(void) override {}
+  void xunlock(void) override {}
+  void slock(void) override {}
+  void sunlock(void) override {}
+#endif /* MYSQL_SERVER */
   void set_max_size(ulong max_size_arg);
   void signal_update() {
     DBUG_TRACE;
@@ -904,6 +920,9 @@ class MYSQL_BIN_LOG : public TC_LOG {
     True while rotating binlog, which is caused by logging Incident_log_event.
   */
   bool is_rotating_caused_by_incident;
+
+ private:
+  void publish_coordinates_for_global_status(void) const;
 };
 
 struct LOAD_FILE_INFO {
