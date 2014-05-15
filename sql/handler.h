@@ -1085,6 +1085,9 @@ typedef int (*rollback_t)(handlerton *hton, THD *thd, bool all);
 
 typedef int (*prepare_t)(handlerton *hton, THD *thd, bool all);
 
+typedef int (*clone_consistent_snapshot_t)(handlerton *hton, THD *thd,
+                                           THD *from_thd);
+
 typedef int (*recover_t)(handlerton *hton, XID *xid_list, uint len);
 
 /** X/Open XA distributed transaction status codes */
@@ -1852,6 +1855,7 @@ struct handlerton {
   drop_database_t drop_database;
   panic_t panic;
   start_consistent_snapshot_t start_consistent_snapshot;
+  clone_consistent_snapshot_t clone_consistent_snapshot;
   flush_logs_t flush_logs;
   show_status_t show_status;
   partition_flags_t partition_flags;
