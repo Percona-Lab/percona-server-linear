@@ -88,6 +88,8 @@ static int binlog_commit(handlerton *hton, THD *thd, bool all);
 static int binlog_rollback(handlerton *hton, THD *thd, bool all);
 static int binlog_prepare(handlerton *hton, THD *thd, bool all);
 static int binlog_start_consistent_snapshot(handlerton *hton, THD *thd);
+static int binlog_clone_consistent_snapshot(handlerton *hton, THD *thd,
+                                            THD *from_thd);
 static int binlog_xa_commit(handlerton *hton,  XID *xid);
 static int binlog_xa_rollback(handlerton *hton,  XID *xid);
 static void exec_binlog_error_action_abort(const char* err_string);
@@ -1060,6 +1062,7 @@ static int binlog_init(void *p)
   binlog_hton->rollback_by_xid= binlog_xa_rollback;
   binlog_hton->prepare= binlog_prepare;
   binlog_hton->start_consistent_snapshot= binlog_start_consistent_snapshot;
+  binlog_hton->clone_consistent_snapshot= binlog_clone_consistent_snapshot;
   binlog_hton->recover=binlog_dummy_recover;
   binlog_hton->flags= HTON_NOT_USER_SELECTABLE | HTON_HIDDEN;
   return 0;
@@ -1619,6 +1622,72 @@ inline int do_binlog_xa_commit_rollback(THD *thd, XID *xid, bool commit)
   return mysql_bin_log.write_event(&qinfo);
 }
 
+static int binlog_start_consistent_snapshot(handlerton *hton, THD *thd)
+{
+  int err= 0;
+  LOG_INFO li;
+  DBUG_ENTER("binlog_start_consistent_snapshot");
+
+  if ((err= thd->binlog_setup_trx_data()))
+    DBUG_RETURN(err);
+
+  binlog_cache_mngr * const cache_mngr= thd_get_cache_mngr(thd);
+
+  /* Server layer calls us with LOCK_log locked, so this is safe. */
+  mysql_bin_log.raw_get_current_log(&cache_mngr->binlog_info);
+
+  trans_register_ha(thd, true, hton, NULL);
+
+  DBUG_RETURN(err);
+}
+
+static int binlog_clone_consistent_snapshot(handlerton *hton, THD *thd,
+                                            THD *from_thd)
+{
+  binlog_cache_mngr *from_cache_mngr;
+  binlog_cache_mngr *cache_mngr;
+  int err= 0;
+  char log_file_name[FN_REFLEN];
+  my_off_t pos;
+
+  DBUG_ENTER("binlog_start_consistent_snapshot");
+
+  from_cache_mngr= opt_bin_log ?
+    (binlog_cache_mngr *) thd_get_cache_mngr(from_thd) : NULL;
+
+  if (from_cache_mngr == NULL)
+  {
+    push_warning_printf(thd, Sql_condition::SL_WARNING,
+                        HA_ERR_UNSUPPORTED,
+                        "WITH CONSISTENT SNAPSHOT FROM SESSION was ignored for "
+                        "binary log, because the specified session does not "
+                        "have a consistent snapshot of binary log "
+                        "coordinates.");
+    DBUG_RETURN(0);
+  }
+
+  if ((err= thd->binlog_setup_trx_data()))
+    DBUG_RETURN(err);
+
+  cache_mngr= thd_get_cache_mngr(thd);
+
+  pos= from_cache_mngr->binlog_info.pos;
+  strmake(log_file_name, from_cache_mngr->binlog_info.log_file_name,
+          sizeof(log_file_name) - 1);
+
+  mysql_mutex_lock(&thd->LOCK_thd_data);
+
+  cache_mngr->binlog_info.pos = pos;
+  strmake(cache_mngr->binlog_info.log_file_name, log_file_name,
+          sizeof(cache_mngr->binlog_info.log_file_name) - 1);
+
+  mysql_mutex_unlock(&thd->LOCK_thd_data);
+
+  trans_register_ha(thd, true, hton, NULL);
+
+  DBUG_RETURN(err);
+}
+
 
 /**
    Logging XA commit/rollback of a prepared transaction in the case
@@ -1724,24 +1793,6 @@ static void exec_binlog_error_action_abort(const char* err_string)
 }
 
 
-
-static int binlog_start_consistent_snapshot(handlerton *hton, THD *thd)
-{
-  int err= 0;
-  DBUG_ENTER("binlog_start_consistent_snapshot");
-
-  if ((err= thd->binlog_setup_trx_data()))
-    DBUG_RETURN(err);
-
-  binlog_cache_mngr * const cache_mngr= thd_get_cache_mngr(thd);
-
-  /* Server layer calls us with LOCK_log locked, so this is safe. */
-  mysql_bin_log.raw_get_current_log(&cache_mngr->binlog_info);
-
-  trans_register_ha(thd, true, hton, NULL);
-
-  DBUG_RETURN(err);
-}
 
 /**
   This function is called once after each statement.

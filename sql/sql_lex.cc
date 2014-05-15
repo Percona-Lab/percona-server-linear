@@ -547,6 +547,8 @@ void LEX::reset()
   parse_gcol_expr= false;
   opt_hints_global= NULL;
   binlog_need_explicit_defaults_ts= false;
+
+  donor_transaction_id= NULL;
 }
 
 
