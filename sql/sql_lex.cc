@@ -471,6 +471,7 @@ void LEX::reset() {
   option_type = OPT_DEFAULT;
 
   clear_privileges();
+  donor_transaction_id = nullptr;
 }
 
 /**
