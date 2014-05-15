@@ -474,6 +474,7 @@ void LEX::reset() {
 
   clear_privileges();
   grant_as.cleanup();
+  donor_transaction_id = nullptr;
 }
 
 /**
