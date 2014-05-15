@@ -144,6 +144,8 @@ static void trx_init(trx_t *trx) {
 
   trx->id = 0;
 
+  trx->preallocated_id = 0;
+
   trx->no = TRX_ID_MAX;
 
   trx->persists_gtid = false;
@@ -1196,6 +1198,26 @@ void trx_assign_rseg_durable(trx_t *trx) {
 
 /** Assign a temp-tablespace bound rollback-segment to a transaction.
 @param[in,out]	trx	transaction that involves write to temp-table. */
+static void trx_assign_id_for_rw(trx_t *trx) {
+  ut_ad(mutex_own(&trx_sys->mutex));
+
+  trx->id =
+      trx->preallocated_id ? trx->preallocated_id : trx_sys_get_new_trx_id();
+
+  if (trx->preallocated_id) {
+    // Maintain ordering in rw_trx_ids
+    trx_sys->rw_trx_ids.insert(
+        std::upper_bound(trx_sys->rw_trx_ids.begin(), trx_sys->rw_trx_ids.end(),
+                         trx->id),
+        trx->id);
+  } else {
+    // The id is known to be greatest
+    trx_sys->rw_trx_ids.push_back(trx->id);
+  }
+}
+
+/** Assign a temp-tablespace bound rollback-segment to a transaction.
+@param[in,out]	trx	transaction that involves write to temp-table. */
 void trx_assign_rseg_temp(trx_t *trx) {
   ut_ad(trx->rsegs.m_noredo.rseg == 0);
   ut_ad(!trx_is_autocommit_non_locking(trx));
@@ -1206,9 +1228,7 @@ void trx_assign_rseg_temp(trx_t *trx) {
   if (trx->id == 0) {
     mutex_enter(&trx_sys->mutex);
 
-    trx->id = trx_sys_get_new_trx_id();
-
-    trx_sys->rw_trx_ids.push_back(trx->id);
+    trx_assign_id_for_rw(trx);
 
     trx_sys->rw_trx_set.insert(TrxTrack(trx->id, trx));
 
@@ -1302,9 +1322,7 @@ static void trx_start_low(
 
     trx_sys_mutex_enter();
 
-    trx->id = trx_sys_get_new_trx_id();
-
-    trx_sys->rw_trx_ids.push_back(trx->id);
+    trx_assign_id_for_rw(trx);
 
     trx_sys_rw_trx_add(trx);
 
@@ -1334,9 +1352,7 @@ static void trx_start_low(
 
         ut_ad(!srv_read_only_mode);
 
-        trx->id = trx_sys_get_new_trx_id();
-
-        trx_sys->rw_trx_ids.push_back(trx->id);
+        trx_assign_id_for_rw(trx);
 
         trx_sys->rw_trx_set.insert(TrxTrack(trx->id, trx));
 
@@ -2176,6 +2192,42 @@ ReadView *trx_assign_read_view(trx_t *trx) /*!< in/out: active transaction */
   } else if (!MVCC::is_view_active(trx->read_view)) {
     trx_sys->mvcc->view_open(trx->read_view, trx);
   }
+
+  return (trx->read_view);
+}
+
+/** Clones the read view from another transaction. All consistent reads within
+the receiver transaction will get the same read view as the donor transaction
+@param[in]	trx		receiver transaction
+@param[in]	from_trx	donor transaction
+@return read view clone */
+ReadView *trx_clone_read_view(trx_t *trx, trx_t *from_trx) {
+  ut_ad(lock_mutex_own());
+  ut_ad(trx_sys_mutex_own());
+  ut_ad(trx_mutex_own(from_trx));
+
+  if (UNIV_UNLIKELY(srv_read_only_mode)) {
+    ut_ad(trx->read_view == nullptr);
+    trx_sys_mutex_exit();
+    trx_mutex_exit(from_trx);
+    return (nullptr);
+  }
+
+  if (from_trx->state != TRX_STATE_ACTIVE || from_trx->read_view == nullptr) {
+    trx_sys_mutex_exit();
+    trx_mutex_exit(from_trx);
+    return (nullptr);
+  }
+
+  const bool needs_adding = (trx->read_view == nullptr);
+
+  from_trx->read_view->clone(trx->read_view, from_trx);
+
+  trx_mutex_exit(from_trx);
+
+  if (needs_adding) trx_sys->mvcc->view_add(trx->read_view);
+
+  trx_sys_mutex_exit();
 
   return (trx->read_view);
 }
@@ -3097,15 +3149,12 @@ void trx_set_rw_mode(trx_t *trx) /*!< in/out: transaction that is RW */
 
   mutex_enter(&trx_sys->mutex);
 
-  ut_ad(trx->id == 0);
-  trx->id = trx_sys_get_new_trx_id();
-
-  trx_sys->rw_trx_ids.push_back(trx->id);
+  trx_assign_id_for_rw(trx);
 
   trx_sys->rw_trx_set.insert(TrxTrack(trx->id, trx));
 
-  /* So that we can see our own changes. */
-  if (MVCC::is_view_active(trx->read_view)) {
+  /* So that we can see our own changes unless our view is a clone */
+  if (MVCC::is_view_active(trx->read_view) && !trx->read_view->is_cloned()) {
     MVCC::set_view_creator_trx_id(trx->read_view, trx->id);
   }
 
