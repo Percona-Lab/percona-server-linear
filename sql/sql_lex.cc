@@ -490,6 +490,7 @@ void LEX::reset() {
 
   clear_privileges();
   grant_as.cleanup();
+  donor_transaction_id = nullptr;
   alter_user_attribute = enum_alter_user_attribute::ALTER_USER_COMMENT_NOT_USED;
   m_is_replication_deprecated_syntax_used = false;
 
