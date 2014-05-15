@@ -3526,6 +3526,7 @@ public:
 
   bool accept(Select_lex_visitor *visitor);
 
+  Item* donor_transaction_id;
 };
 
 
