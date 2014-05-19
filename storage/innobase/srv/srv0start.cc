@@ -3284,6 +3284,13 @@ static lsn_t srv_shutdown_log() {
 
     srv_shutdown_state = SRV_SHUTDOWN_LAST_PHASE;
 
+    /* Wake the log tracking thread which will then immediatelly quit because
+    of srv_shutdown_state value */
+    if (srv_redo_log_thread_started) {
+      os_event_reset(srv_redo_log_tracked_event);
+      os_event_set(srv_checkpoint_completed_event);
+    }
+
     fil_close_all_files();
 
     /* Stop Archiver background thread. */
@@ -3321,6 +3328,13 @@ static lsn_t srv_shutdown_log() {
   }
 
   srv_shutdown_state = SRV_SHUTDOWN_LAST_PHASE;
+
+  /* Wake the log tracking thread which will then immediatelly quit because of
+  srv_shutdown_state value */
+  if (srv_redo_log_thread_started) {
+    os_event_reset(srv_redo_log_tracked_event);
+    os_event_set(srv_checkpoint_completed_event);
+  }
 
   if (srv_downgrade_logs) {
     ut_a(!srv_read_only_mode);

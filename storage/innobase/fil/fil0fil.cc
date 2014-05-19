@@ -1561,6 +1561,9 @@ class Fil_system {
   Fil_system &operator=(const Fil_system &) = delete;
 
   friend class Fil_shard;
+
+  /** Wait for redo log tracker to catch up, if enabled */
+  static void wait_for_changed_page_tracker() noexcept;
 };
 
 /** The tablespace memory cache. This variable is nullptr before the module is
@@ -3404,6 +3407,15 @@ void fil_open_log_and_system_tablespace_files() {
   fil_system->open_all_system_tablespaces();
 }
 
+/** Wait for redo log tracker to catch up, if enabled */
+void Fil_system::wait_for_changed_page_tracker() noexcept {
+  // Must check both flags as it's possible for this to be called during
+  // server startup with srv_track_changed_pages == true but
+  // srv_redo_log_thread_started == false
+  if (srv_track_changed_pages && srv_redo_log_thread_started)
+    os_event_wait(srv_redo_log_tracked_event);
+}
+
 /** Close all open files. */
 void Fil_shard::close_all_files() {
   ut_ad(mutex_owned());
@@ -3437,6 +3449,8 @@ void Fil_shard::close_all_files() {
 
 /** Close all open files. */
 void Fil_system::close_all_files() {
+  Fil_system::wait_for_changed_page_tracker();
+
   for (auto shard : m_shards) {
     shard->mutex_acquire();
 
@@ -3495,6 +3509,7 @@ void Fil_shard::close_log_files(bool free_all) {
 /** Close all log files in all shards.
 @param[in]	free_all	If set then free all instances */
 void Fil_system::close_all_log_files(bool free_all) {
+  Fil_system::wait_for_changed_page_tracker();
   for (auto shard : m_shards) {
     shard->close_log_files(free_all);
   }
@@ -9568,6 +9583,16 @@ byte *fil_tablespace_redo_create(byte *ptr, const byte *end,
 
 #else  /* !UNIV_HOTBACKUP */
 
+  /* The first condition is true during normal server operation, the
+  second one during server startup after
+  recv_recovery_from_checkpoint_start has completed. */
+  if (!recv_recovery_is_on() || recv_lsn_checks_on) {
+    /* We are being called from online log tracking, file name
+    processing is a no-op, and specifically do not cause any DD
+    changes. */
+    return (ptr);
+  }
+
   const auto result = fil_system->get_scanned_files(page_id.space());
 
   if (result.second == nullptr) {
@@ -9784,6 +9809,16 @@ byte *fil_tablespace_redo_delete(byte *ptr, const byte *end,
   meb_tablespace_redo_delete(page_id, name);
 
 #else  /* !UNIV_HOTBACKUP */
+
+  /* The first condition is true during normal server operation, the
+  second one during server startup after
+  recv_recovery_from_checkpoint_start has completed. */
+  if (!recv_recovery_is_on() || recv_lsn_checks_on) {
+    /* We are being called from online log tracking, file name
+    processing is a no-op, and specifically do not cause any DD
+    changes. */
+    return (ptr);
+  }
 
   const auto result = fil_system->get_scanned_files(page_id.space());
 
