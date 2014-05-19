@@ -61,6 +61,7 @@ Created 2/16/1996 Heikki Tuuri
 #include "rem0rec.h"
 #include "mtr0mtr.h"
 #include "log0log.h"
+#include "log0online.h"
 #include "log0recv.h"
 #include "page0page.h"
 #include "page0cur.h"
@@ -2370,6 +2371,24 @@ files_checked:
 
 			RECOVERY_CRASH(4);
 
+			/* If log tracking is enabled, make it catch up with
+			the old logs synchronously. */
+			bool saved_srv_track_changed_pages
+				= srv_track_changed_pages;
+			if (srv_track_changed_pages) {
+				log_mutex_enter();
+				lsn_t checkpoint_lsn
+					= log_sys->last_checkpoint_lsn;
+				log_mutex_exit();
+				ib::info()
+					<< "Tracking redo log synchronously "
+					"until " << checkpoint_lsn;
+				if (!log_online_follow_redo_log()) {
+					return(srv_init_abort(DB_ERROR));
+				}
+				srv_track_changed_pages = false;
+			}
+
 			/* Close and free the redo log files, so that
 			we can replace them. */
 			fil_close_log_files(true);
@@ -2395,6 +2414,10 @@ files_checked:
 			create_log_files_rename(
 				logfilename, dirnamelen, flushed_lsn,
 				logfile0);
+
+			if (saved_srv_track_changed_pages) {
+				srv_track_changed_pages = true;
+			}
 		}
 
 		recv_recovery_rollback_active();
@@ -2423,7 +2446,6 @@ files_checked:
 	}
 
 	/* Open temp-tablespace and keep it open until shutdown. */
-
 	err = srv_open_tmp_tablespace(create_new_db, &srv_tmp_space);
 
 	if (err != DB_SUCCESS) {
@@ -2492,6 +2514,9 @@ files_checked:
 		srv_start_state_set(SRV_START_STATE_MONITOR);
 	}
 
+	/* wake main loop of page cleaner up */
+	os_event_set(buf_flush_event);
+
 	/* Create the SYS_FOREIGN and SYS_FOREIGN_COLS system tables */
 	err = dict_create_or_check_foreign_constraint_tables();
 	if (err != DB_SUCCESS) {
@@ -2550,9 +2575,6 @@ files_checked:
 	} else {
 		purge_sys->state = PURGE_STATE_DISABLED;
 	}
-
-	/* wake main loop of page cleaner up */
-	os_event_set(buf_flush_event);
 
 	sum_of_data_file_sizes = srv_sys_space.get_sum_of_sizes();
 	ut_a(sum_of_new_sizes != ULINT_UNDEFINED);
