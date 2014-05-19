@@ -10236,6 +10236,16 @@ byte *fil_tablespace_redo_create(byte *ptr, const byte *end,
 
 #else  /* !UNIV_HOTBACKUP */
 
+  /* The first condition is true during normal server operation, the
+  second one during server startup after
+  recv_recovery_from_checkpoint_start has completed. */
+  if (!recv_recovery_is_on() || recv_lsn_checks_on) {
+    /* We are being called from online log tracking, file name
+    processing is a no-op, and specifically do not cause any DD
+    changes. */
+    return (ptr);
+  }
+
   const auto result =
       fil_system->get_scanned_filename_by_space_id(page_id.space());
 
@@ -10602,6 +10612,16 @@ byte *fil_tablespace_redo_delete(byte *ptr, const byte *end,
   meb_tablespace_redo_delete(page_id, name);
 
 #else  /* !UNIV_HOTBACKUP */
+
+  /* The first condition is true during normal server operation, the
+  second one during server startup after
+  recv_recovery_from_checkpoint_start has completed. */
+  if (!recv_recovery_is_on() || recv_lsn_checks_on) {
+    /* We are being called from online log tracking, file name
+    processing is a no-op, and specifically do not cause any DD
+    changes. */
+    return (ptr);
+  }
 
   const auto result =
       fil_system->get_scanned_filename_by_space_id(page_id.space());
