@@ -56,6 +56,7 @@ Created 10/8/1995 Heikki Tuuri
 #include "fsp0sysspace.h"
 #include "ibuf0ibuf.h"
 #include "lock0lock.h"
+#include "log0online.h"
 #include "log0recv.h"
 #include "mem0mem.h"
 #include "os0proc.h"
@@ -188,7 +189,6 @@ my_bool	srv_track_changed_pages = FALSE;
 ulonglong	srv_max_bitmap_file_size = 100 * 1024 * 1024;
 
 ulonglong	srv_max_changed_pages = 0;
-
 #ifdef UNIV_DEBUG
 /** Force all user tables to use page compression. */
 ulong	srv_debug_compress;
@@ -218,7 +218,6 @@ ib_uint64_t	srv_log_file_size;
 ib_uint64_t	srv_log_file_size_requested;
 /* size in database pages */
 ulint		srv_log_buffer_size = ULINT_MAX;
-ulong		srv_flush_log_at_trx_commit = 1;
 uint		srv_flush_log_at_timeout = 1;
 ulong		srv_page_size = UNIV_PAGE_SIZE_DEF;
 ulong		srv_page_size_shift = UNIV_PAGE_SIZE_SHIFT_DEF;
@@ -263,11 +262,12 @@ ulong	srv_buf_pool_instances;
 const ulong	srv_buf_pool_instances_default = 0;
 /** Number of locks to protect buf_pool->page_hash */
 ulong	srv_n_page_hash_locks = 16;
+
 /** Scan depth for LRU flush batch i.e.: number of blocks scanned*/
 ulong	srv_LRU_scan_depth	= 1024;
 /** Whether or not to flush neighbors of a block */
 ulong	srv_flush_neighbors	= 1;
-/** Previously requested size */
+/** Previously requested size. Accesses protected by memory barriers. */
 ulint	srv_buf_pool_old_size	= 0;
 /** Current size as scaling factor for the other components */
 ulint	srv_buf_pool_base_size	= 0;
@@ -1116,6 +1116,8 @@ srv_free(void)
 		os_event_destroy(srv_monitor_event);
 		os_event_destroy(srv_buf_dump_event);
 		os_event_destroy(buf_flush_event);
+		os_event_destroy(srv_checkpoint_completed_event);
+		os_event_destroy(srv_redo_log_tracked_event);
 	}
 
 	os_event_destroy(srv_buf_resize_event);
@@ -2114,6 +2116,64 @@ srv_any_background_threads_are_active(void)
 	return(thread_active);
 }
 
+/******************************************************************//**
+A thread which follows the redo log and outputs the changed page bitmap.
+@return a dummy value */
+extern "C"
+os_thread_ret_t
+DECLARE_THREAD(srv_redo_log_follow_thread)(
+/*=======================================*/
+	void*	arg __attribute__((unused)))	/*!< in: a dummy parameter
+						     required by
+						     os_thread_create */
+{
+	ut_ad(!srv_read_only_mode);
+
+#ifdef UNIV_DEBUG_THREAD_CREATION
+	ib::info() << "Redo log follower thread starts, id "
+		   << os_thread_pf(os_thread_get_curr_id());
+#endif
+
+#ifdef UNIV_PFS_THREAD
+	pfs_register_thread(srv_log_tracking_thread_key);
+#endif
+
+	my_thread_init();
+	srv_redo_log_thread_started = true;
+
+	do {
+		os_event_wait(srv_checkpoint_completed_event);
+		os_event_reset(srv_checkpoint_completed_event);
+
+#ifdef UNIV_DEBUG
+		if (!srv_track_changed_pages) {
+			continue;
+		}
+#endif
+
+		if (srv_shutdown_state < SRV_SHUTDOWN_LAST_PHASE) {
+			if (!log_online_follow_redo_log()) {
+				/* TODO: sync with I_S log tracking status? */
+				ib::error() << "Log tracking bitmap write "
+					"failed, stopping log tracking thread!";
+				break;
+			}
+			os_event_set(srv_redo_log_tracked_event);
+		}
+
+	} while (srv_shutdown_state < SRV_SHUTDOWN_LAST_PHASE);
+
+	srv_track_changed_pages = FALSE;
+	log_online_read_shutdown();
+	os_event_set(srv_redo_log_tracked_event);
+	srv_redo_log_thread_started = false; /* Defensive, not required */
+
+	my_thread_end();
+	os_thread_exit(NULL);
+
+	OS_THREAD_DUMMY_RETURN;
+}
+
 /*******************************************************************//**
 Tells the InnoDB server that there has been activity in the database
 and wakes up the master thread if it is suspended (not sleeping). Used
@@ -2511,24 +2571,6 @@ srv_master_do_idle_tasks(void)
 	log_checkpoint(TRUE, FALSE);
 	MONITOR_INC_TIME_IN_MICRO_SECS(MONITOR_SRV_CHECKPOINT_MICROSECOND,
 				       counter_time);
-}
-
-/******************************************************************//**
-Temporary buildable stub for the changed page redo-log follower.
-@return a dummy value */
-extern "C"
-os_thread_ret_t
-DECLARE_THREAD(srv_redo_log_follow_thread)(
-/*=======================================*/
-	void*	arg __attribute__((unused)))	/*!< in: a dummy parameter
-						     required by
-						     os_thread_create */
-{
-#ifdef UNIV_PFS_THREAD
-	pfs_register_thread(srv_log_tracking_thread_key);
-#endif
-
-	OS_THREAD_DUMMY_RETURN;
 }
 
 /*********************************************************************//**
@@ -3239,6 +3281,7 @@ srv_purge_wakeup(void)
 		}
 	}
 }
+
 /** Check if tablespace is being truncated.
 (Ignore system-tablespace as we don't re-create the tablespace
 and so some of the action that are suppressed by this function

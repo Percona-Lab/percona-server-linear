@@ -1304,6 +1304,7 @@ fil_space_create(
 	if (space != NULL) {
 		mutex_exit(&fil_system->mutex);
 
+		ut_ad(space->id != id);
 		ib::warn() << "Tablespace '" << name << "' exists in the"
 			" cache with id " << space->id << " != " << id;
 
@@ -1785,6 +1786,9 @@ fil_close_all_files(void)
 {
 	fil_space_t*	space;
 
+	if (srv_track_changed_pages && srv_redo_log_thread_started)
+		os_event_wait(srv_redo_log_tracked_event);
+
 	/* At shutdown, we should not have any files in this list. */
 	ut_ad(srv_fast_shutdown == 2
 	      || UT_LIST_GET_LEN(fil_system->named_spaces) == 0);
@@ -1825,6 +1829,9 @@ fil_close_log_files(
 	bool	free)	/*!< in: whether to free the memory object */
 {
 	fil_space_t*	space;
+
+	if (srv_track_changed_pages && srv_redo_log_thread_started)
+		os_event_wait(srv_redo_log_tracked_event);
 
 	mutex_enter(&fil_system->mutex);
 
@@ -5449,6 +5456,7 @@ _fil_io(
 	os_offset_t		offset;
 	IORequest		req_type(type);
 
+	ut_ad(!trx || trx->take_stats);
 	ut_ad(req_type.validate());
 
 	ut_ad(len > 0);
