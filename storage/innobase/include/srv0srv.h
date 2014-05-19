@@ -303,7 +303,6 @@ extern ib_uint64_t	srv_log_file_size;
 /** The value of the startup parameter innodb_log_file_size */
 extern ib_uint64_t	srv_log_file_size_requested;
 extern ulint	srv_log_buffer_size;
-extern ulong	srv_flush_log_at_trx_commit;
 extern uint	srv_flush_log_at_timeout;
 
 enum { DEFAULT_SRV_LOG_WRITE_AHEAD_SIZE = 8 * 1024L };
@@ -337,7 +336,7 @@ extern ulong	srv_n_page_hash_locks;
 extern ulong	srv_LRU_scan_depth;
 /** Whether or not to flush neighbors of a block */
 extern ulong	srv_flush_neighbors;
-/** Previously requested size */
+/** Previously requested size. Accesses protected by memory barriers. */
 extern ulint	srv_buf_pool_old_size;
 /** Current size as scaling factor for the other components */
 extern ulint	srv_buf_pool_base_size;
@@ -430,6 +429,7 @@ extern ulong	srv_doublewrite_batch_size;
 extern ulong	srv_checksum_algorithm;
 
 extern double	srv_max_buf_pool_modified_pct;
+
 extern ulong	srv_max_purge_lag;
 extern ulong	srv_max_purge_lag_delay;
 
