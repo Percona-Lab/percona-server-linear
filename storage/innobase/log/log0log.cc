@@ -198,7 +198,7 @@ log_buffer_extend(
 {
 	ulint	move_start;
 	ulint	move_end;
-	byte	tmp_buf[OS_FILE_LOG_BLOCK_SIZE];
+	byte*	tmp_buf[OS_FILE_LOG_BLOCK_SIZE];
 
 	log_mutex_enter_all();
 
@@ -1649,6 +1649,13 @@ log_io_complete_checkpoint(void)
 	}
 
 	log_mutex_exit();
+
+	/* Wake the redo log watching thread to parse the log up to this
+	checkpoint. */
+	if (srv_track_changed_pages) {
+		os_event_reset(srv_redo_log_tracked_event);
+		os_event_set(srv_checkpoint_completed_event);
+	}
 }
 
 /******************************************************//**
@@ -2147,12 +2154,17 @@ objects! */
 void
 log_check_margins(void)
 {
-	bool	check;
+	bool	check	= true;
 
 	do {
 		log_flush_margin();
 		log_checkpoint_margin();
 		log_mutex_enter();
+		if (log_check_tracking_margin(0)) {
+			log_mutex_exit();
+			os_thread_sleep(10000);
+			continue;
+		}
 		ut_ad(!recv_no_log_write);
 		check = log_sys->check_flush_or_checkpoint;
 		log_mutex_exit();
@@ -2169,6 +2181,7 @@ logs_empty_and_mark_files_at_shutdown(void)
 /*=======================================*/
 {
 	lsn_t			lsn;
+	lsn_t			tracked_lsn;
 	ulint			count = 0;
 	ulint			total_trx;
 	ulint			pending_io;
@@ -2346,6 +2359,13 @@ loop:
 
 		srv_shutdown_state = SRV_SHUTDOWN_LAST_PHASE;
 
+		/* Wake the log tracking thread which will then immediatelly
+		quit because of srv_shutdown_state value */
+		if (srv_redo_log_thread_started) {
+			os_event_reset(srv_redo_log_tracked_event);
+			os_event_set(srv_checkpoint_completed_event);
+		}
+
 		fil_close_all_files();
 
 		thread_name = srv_any_background_threads_are_active();
@@ -2361,13 +2381,19 @@ loop:
 
 	log_mutex_enter();
 
+	tracked_lsn = log_get_tracked_lsn();
+
 	lsn = log_sys->lsn;
+
+	const bool	is_last = (lsn == log_sys->last_checkpoint_lsn)
+		&& (!srv_track_changed_pages
+		    || tracked_lsn == log_sys->last_checkpoint_lsn);
 
 	ut_ad(lsn >= log_sys->last_checkpoint_lsn);
 
 	log_mutex_exit();
 
-	if (lsn != log_sys->last_checkpoint_lsn) {
+	if (!is_last) {
 		goto loop;
 	}
 
@@ -2402,6 +2428,12 @@ loop:
 	}
 
 	srv_shutdown_state = SRV_SHUTDOWN_LAST_PHASE;
+
+	/* Signal the log following thread to quit */
+	if (srv_redo_log_thread_started) {
+		os_event_reset(srv_redo_log_tracked_event);
+		os_event_set(srv_checkpoint_completed_event);
+	}
 
 	/* Make some checks that the server really is quiet */
 	srv_thread_type	type = srv_get_active_thread_type();
@@ -2478,6 +2510,16 @@ log_print(
 		log_buf_pool_get_oldest_modification(),
 		log_sys->last_checkpoint_lsn);
 
+	fprintf(file,
+		"Max checkpoint age    " LSN_PF "\n"
+		"Checkpoint age target " LSN_PF "\n"
+		"Modified age          " LSN_PF "\n"
+		"Checkpoint age        " LSN_PF "\n",
+		log_sys->max_checkpoint_age,
+		log_sys->max_checkpoint_age_async,
+		log_sys->lsn -log_buf_pool_get_oldest_modification(),
+		log_sys->lsn - log_sys->last_checkpoint_lsn);
+
 	current_time = time(NULL);
 
 	time_elapsed = difftime(current_time,
@@ -2497,6 +2539,18 @@ log_print(
 		static_cast<double>(
 			log_sys->n_log_ios - log_sys->n_log_ios_old)
 		/ time_elapsed);
+
+	if (srv_track_changed_pages) {
+
+		/* The maximum tracked LSN age is equal to the maximum
+		checkpoint age */
+		fprintf(file,
+			"Log tracking enabled\n"
+			"Log tracked up to   " LSN_PF "\n"
+			"Max tracked LSN age " LSN_PF "\n",
+			log_get_tracked_lsn(),
+			log_sys->max_checkpoint_age);
+	}
 
 	log_sys->n_log_ios_old = log_sys->n_log_ios;
 	log_sys->last_printout_time = current_time;
