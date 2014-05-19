@@ -3448,6 +3448,15 @@ static void srv_shutdown_page_cleaners() {
   }
 }
 
+static void srv_wake_log_tracker_thread() {
+  /* Wake the log tracking thread which will then immediately quit because of
+  srv_shutdown_state value */
+  if (srv_thread_is_active(srv_threads.m_changed_page_tracker)) {
+    os_event_reset(srv_redo_log_tracked_event);
+    os_event_set(srv_checkpoint_completed_event);
+  }
+}
+
 /** Closes redo log. If this is not fast shutdown, it forces to write a
 checkpoint which should be written for logically empty redo log. Note that we
 forced to flush all dirty pages in the last stages of page cleaners activity
@@ -3481,6 +3490,8 @@ static lsn_t srv_shutdown_log() {
 
     srv_shutdown_set_state(SRV_SHUTDOWN_LAST_PHASE);
 
+    srv_wake_log_tracker_thread();
+
     return (log_get_lsn(*log_sys));
   }
 
@@ -3496,6 +3507,8 @@ static lsn_t srv_shutdown_log() {
     }
 
     log_stop_background_threads(*log_sys);
+
+    srv_wake_log_tracker_thread();
   }
 
   /* No redo log might be generated since now. */
@@ -3509,6 +3522,8 @@ static lsn_t srv_shutdown_log() {
   }
 
   srv_shutdown_set_state(SRV_SHUTDOWN_LAST_PHASE);
+
+  srv_wake_log_tracker_thread();
 
   if (srv_downgrade_logs) {
     ut_a(!srv_read_only_mode);
