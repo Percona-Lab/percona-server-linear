@@ -176,7 +176,7 @@ log tracking iteration */
 extern os_event_t	srv_redo_log_tracked_event;
 
 /** srv_redo_log_follow_thread spawn flag */
-extern bool		srv_redo_log_thread_started;
+extern bool srv_redo_log_thread_started;
 
 /* If the last data file is auto-extended, we add this many pages to it
 at a time */

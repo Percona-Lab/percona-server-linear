@@ -2387,10 +2387,10 @@ loop:
 
 		/* Wake the log tracking thread which will then immediatelly
 		quit because of srv_shutdown_state value */
-	if (srv_track_changed_pages) {
-		os_event_reset(srv_redo_log_tracked_event);
-		os_event_set(srv_checkpoint_completed_event);
-	}
+		if (srv_track_changed_pages) {
+			os_event_reset(srv_redo_log_tracked_event);
+			os_event_set(srv_checkpoint_completed_event);
+		}
 
 		fil_close_all_files();
 

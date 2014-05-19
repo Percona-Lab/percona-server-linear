@@ -667,6 +667,12 @@ static const ulint	SRV_PURGE_SLOT	= 1;
 /** Slot index in the srv_sys->sys_threads array for the master thread. */
 static const ulint	SRV_MASTER_SLOT = 0;
 
+os_event_t	srv_checkpoint_completed_event;
+
+os_event_t	srv_redo_log_tracked_event;
+
+bool	srv_redo_log_thread_started = false;
+
 #ifdef HAVE_PSI_STAGE_INTERFACE
 /** Performance schema stage event for monitoring ALTER TABLE progress
 everything after flush log_make_checkpoint_at(). */
@@ -707,12 +713,6 @@ PSI_stage_info	srv_stage_alter_table_read_pk_internal_sort
 PSI_stage_info	srv_stage_buffer_pool_load
 	= {0, "buffer pool load", PSI_FLAG_STAGE_PROGRESS};
 #endif /* HAVE_PSI_STAGE_INTERFACE */
-
-os_event_t	srv_checkpoint_completed_event;
-
-os_event_t	srv_redo_log_tracked_event;
-
-bool	srv_redo_log_thread_started = false;
 
 /*********************************************************************//**
 Prints counters for work done by srv_master_thread. */
