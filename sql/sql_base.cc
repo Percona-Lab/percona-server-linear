@@ -1579,8 +1579,7 @@ bool close_temporary_tables(THD *thd)
       close_temporary(table, 1, 1);
     }
     thd->temporary_tables= 0;
-    if (thd->slave_thread)
-      modify_slave_open_temp_tables(thd, -slave_open_temp_tables);
+    mysql_mutex_unlock(&thd->LOCK_temporary_tables);
 
     DBUG_RETURN(FALSE);
   }
