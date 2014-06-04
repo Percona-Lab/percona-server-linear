@@ -4643,6 +4643,7 @@ int Query_log_event::do_apply_event(Relay_log_info const *rli,
   int query_buf_len;
   int expected_error,actual_error= 0;
   HA_CREATE_INFO db_options;
+  DBUG_ENTER("Query_log_event::do_apply_event");
 
   /*
     We must allocate some extra memory for query cache
