@@ -778,7 +778,7 @@ static bool write_execute_load_query_log_event(THD *thd, sql_exchange* ex,
 
   Execute_load_query_log_event
     e(thd, load_data_query, query_str.length(),
-      (uint) (fname_start - 1), (uint) fname_end,
+      static_cast<uint>(fname_start - 1), static_cast<uint>(fname_end),
       (duplicates == DUP_REPLACE) ? LOAD_DUP_REPLACE :
       (ignore ? LOAD_DUP_IGNORE : LOAD_DUP_ERROR),
       transactional_table, FALSE, FALSE, errcode);
