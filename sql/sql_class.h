@@ -84,6 +84,7 @@ class sp_cache;
 class Parser_state;
 class Rows_log_event;
 class Sroutine_hash_entry;
+class User_level_lock;
 class user_var_entry;
 
 struct st_thd_timer;
@@ -2348,11 +2349,11 @@ public:
 
   HASH		handler_tables_hash;
   /*
-    A thread can hold named user-level locks. This variable
-    contains granted tickets if a lock is present. See item_func.cc and
-    chapter 'Miscellaneous functions', for functions GET_LOCK, RELEASE_LOCK.
+    One thread can hold up to one named user-level lock. This variable
+    points to a lock object if the lock is present. See item_func.cc and
+    chapter 'Miscellaneous functions', for functions GET_LOCK, RELEASE_LOCK. 
   */
-  HASH ull_hash;
+  User_level_lock *ull;
 #ifndef DBUG_OFF
   uint dbug_sentry; // watch out for memory corruption
 #endif
@@ -2368,6 +2369,8 @@ private:
 public:
   uint32     unmasked_server_id;
   uint32     server_id;
+  // Used to save the command, before it is set to COM_SLEEP.
+  enum enum_server_command old_command;
   uint32     file_id;			// for LOAD DATA INFILE
   /* remote (peer) port */
   uint16 peer_port;
@@ -3776,7 +3779,7 @@ public:
 #ifndef EMBEDDED_LIBRARY
   inline bool vio_ok() const { return net.vio != 0; }
   /** Return FALSE if connection to client is broken. */
-  virtual bool is_connected()
+  bool is_connected()
   {
     /*
       All system threads (e.g., the slave IO thread) are connected but
@@ -3787,7 +3790,7 @@ public:
   }
 #else
   inline bool vio_ok() const { return true; }
-  virtual bool is_connected() { return true; }
+  inline bool is_connected() { return true; }
 #endif
   /**
     Mark the current error as fatal. Warning: this does not

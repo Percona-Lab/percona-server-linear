@@ -186,7 +186,7 @@ Hybrid_type_traits_integer::fix_length_and_dec(Item *item, Item *arg) const
 
 void item_init(void)
 {
-  item_func_sleep_init();
+  item_user_lock_init();
   uuid_short_init();
 }
 
