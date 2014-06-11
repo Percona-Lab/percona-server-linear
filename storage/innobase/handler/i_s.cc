@@ -31,6 +31,9 @@ this program; if not, write to the Free Software Foundation, Inc.,
  *******************************************************/
 
 #include "storage/innobase/handler/i_s.h"
+#include <item_func.h>
+#include <item_sum.h>
+#include <item_cmpfunc.h>
 
 #include <field.h>
 #include <sql_acl.h>
@@ -7283,6 +7286,7 @@ static ST_FIELD_INFO i_s_innodb_changed_pages_info[] = {
   Support for other functions (equal, NULL-safe equal, BETWEEN, IN, etc.) will
   be added on demand.
 
+
 @param[in]	table		table
 @param[in]	cond		condition
 @param[out]	start_lsn	minimum LSN
@@ -7413,6 +7417,7 @@ static int i_s_innodb_changed_pages_fill(THD *thd, TABLE_LIST *tables,
     const lsn_t tracked_lsn = log_sys->tracked_lsn.load();
     if (max_lsn > tracked_lsn) max_lsn = tracked_lsn;
   }
+
 
   log_bitmap_iterator_t i;
   if (!log_online_bitmap_iterator_init(&i, min_lsn, max_lsn)) {
