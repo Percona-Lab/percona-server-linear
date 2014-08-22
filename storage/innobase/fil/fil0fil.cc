@@ -5764,7 +5764,7 @@ _fil_io(
 		offset, len, node, message, space_id, trx);
 
 #else
-	/* In ibbackup do normal i/o, not aio */
+	/* In mysqlbackup do normal i/o, not aio */
 	if (type == OS_FILE_READ) {
 		ret = os_file_read(node->handle, buf, offset, len);
 	} else {

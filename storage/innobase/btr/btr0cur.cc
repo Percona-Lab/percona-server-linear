@@ -2728,6 +2728,12 @@ make_external:
 		ut_ad(flags & BTR_KEEP_POS_FLAG);
 	}
 
+	if (UNIV_UNLIKELY(trx->fake_changes)) {
+		/* skip CHANGE, LOG */
+		err = DB_SUCCESS;
+		goto return_after_reservations;
+	}
+
 	if (big_rec_vec) {
 		const ulint redo_10p = srv_log_file_size * UNIV_PAGE_SIZE / 10;
 		ulint total_blob_len = 0;
