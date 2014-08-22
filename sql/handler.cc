@@ -2269,6 +2269,7 @@ static my_bool clone_snapshot_handlerton(THD *thd, plugin_ref plugin,
 
 static int ha_clone_consistent_snapshot(THD *thd)
 {
+  std::set<THD*> global_thread_list_copy;
   THD *from_thd;
   ulong id;
   Item *val;
@@ -2294,10 +2295,11 @@ static int ha_clone_consistent_snapshot(THD *thd)
 
   id= val->val_int();
 
-  mysql_mutex_lock(&LOCK_thread_count);
+  mysql_mutex_lock(&LOCK_thd_remove);
+  copy_global_thread_list(&global_thread_list_copy);
 
-  it= global_thread_list_begin();
-  end= global_thread_list_end();
+  it= global_thread_list_copy.begin();
+  end= global_thread_list_copy.end();
   from_thd= NULL;
 
   for (; it != end; ++it)
@@ -2310,7 +2312,7 @@ static int ha_clone_consistent_snapshot(THD *thd)
     }
   }
 
-  mysql_mutex_unlock(&LOCK_thread_count);
+  mysql_mutex_unlock(&LOCK_thd_remove);
 
   if (!from_thd)
   {

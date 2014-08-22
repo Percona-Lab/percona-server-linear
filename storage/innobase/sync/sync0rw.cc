@@ -454,6 +454,7 @@ lock_loop:
 					       lock)) {
 
 		/* Spin waiting for the writer field to become free */
+		os_rmb;
 		while (i < SYNC_SPIN_ROUNDS && lock->lock_word <= 0) {
 			if (srv_spin_wait_delay) {
 				ut_delay(ut_rnd_interval(0,
@@ -463,7 +464,7 @@ lock_loop:
 			i++;
 		}
 
-		if (i == SYNC_SPIN_ROUNDS) {
+		if (i >= SYNC_SPIN_ROUNDS) {
 			os_thread_yield();
 		}
 
