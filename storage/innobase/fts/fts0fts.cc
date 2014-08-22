@@ -1952,7 +1952,7 @@ fts_create_one_index_table(
 		flags2 = DICT_TF2_USE_TABLESPACE;
 	}
 
-	new_table = dict_mem_table_create(table_name, 0, 5, 1, flags2);
+	new_table = dict_mem_table_create(table_name, 0, 5, 1, flags2, false);
 
 	field = dict_index_get_nth_field(index, 0);
 	charset = innobase_get_fts_charset(

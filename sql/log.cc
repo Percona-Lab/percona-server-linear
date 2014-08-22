@@ -1,4 +1,4 @@
-/* Copyright (c) 2000, 2013, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2000, 2014, Oracle and/or its affiliates. All rights reserved.
    Copyright (c) 2009, 2013, Monty Program Ab
    Copyright (C) 2012 Percona Inc.
 
@@ -1582,7 +1582,7 @@ bool MYSQL_LOG::open(
   }
 
   if (init_and_set_log_file_name(name, new_name,
-                                 log_type_arg, io_cache_type_arg) ||
+                                 log_type_arg, io_cache_type_arg, unique) ||
       DBUG_EVALUATE_IF("fault_injection_init_name", log_type == LOG_BIN, 0))
     goto err;
 

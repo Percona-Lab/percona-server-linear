@@ -7101,17 +7101,19 @@ ER_AES_INVALID_IV
   eng "The initialization vector supplied to %s is too short. Must be at least %d bytes long"
   bg "Инициализационния вектор подаден на %s е прекалено къс. Трябва да е поне %d байта"
 
-ER_QUERY_TIMEOUT 70101
-        eng "Query execution was interrupted, max_statement_time exceeded"
-
 ER_PLUGIN_CANNOT_BE_UNINSTALLED
   eng "Plugin '%s' cannot be uninstalled now. %s"
 
 ER_GTID_UNSAFE_BINLOG_SPLITTABLE_STATEMENT_AND_GTID_GROUP
   eng "Cannot execute statement because it needs to be written to the binary log as multiple statements, and this is not allowed when @@SESSION.GTID_NEXT == 'UUID:NUMBER'."
 
-ER_SLAVE_HAS_MORE_GTIDS_THAN_MASTER
-  eng "Slave has more GTIDs than the master has, using the master's SERVER_UUID. This may indicate that the end of the binary log was truncated or that the last binary log file was lost, e.g., after a power or disk failure when sync_binlog != 1. The master may or may not have rolled back transactions that were already replicated to the slave. Suggest to replicate any transactions that master has rolled back from slave to master, and/or commit empty transactions on master to account for transactions that have been committed on master but are not included in GTID_EXECUTED."
+ER_QUERY_TIMEOUT 70101
+  eng "Query execution was interrupted, max_statement_time exceeded"
+
+ER_CANT_EXECUTE_WITH_BACKUP_LOCK
+  eng "Can’t execute the query because you have a conflicting backup lock"
+  rus "Запрос не может быть выполнен из-за конфликтующей блокировки резервного копирования"
+
 #
 #  End of 5.6 error messages.
 #
