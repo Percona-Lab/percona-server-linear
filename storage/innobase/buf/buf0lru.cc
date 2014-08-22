@@ -1973,9 +1973,6 @@ buf_LRU_free_page(
 	ut_ad(buf_page_in_file(bpage));
 	ut_ad(bpage->in_LRU_list);
 
-	rw_lock_x_lock(hash_lock);
-	mutex_enter(block_mutex);
-
 	if (!buf_page_can_relocate(bpage)) {
 
 		/* Do not free buffer fixed or I/O-fixed blocks. */
