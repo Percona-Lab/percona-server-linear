@@ -2781,6 +2781,12 @@ make_external:
 		ut_ad(flags & BTR_KEEP_POS_FLAG);
 	}
 
+	if (UNIV_UNLIKELY(trx->fake_changes)) {
+		/* skip CHANGE, LOG */
+		err = DB_SUCCESS;
+		goto return_after_reservations;
+	}
+
 	if (big_rec_vec) {
 
 		err = btr_check_blob_limit(big_rec_vec);
