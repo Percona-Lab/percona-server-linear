@@ -1500,6 +1500,7 @@ public:
   }
 
   bool is_acquired() const { return m_lock != NULL; }
+
   bool is_protection_acquired() const { return m_prot_lock != NULL; }
 
 private:
