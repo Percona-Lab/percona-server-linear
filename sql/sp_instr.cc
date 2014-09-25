@@ -28,6 +28,7 @@
 #include "sql_prepare.h"  // reinit_stmt_before_use
 #include "transaction.h"  // trans_commit_stmt
 #include "prealloced_array.h"
+#include "sql_audit.h"
 #include "binlog.h"
 #include "item_cmpfunc.h" // Item_func_eq
 
@@ -842,6 +843,18 @@ bool sp_instr_stmt::execute(THD *thd, uint *nextp)
   {
     rc= validate_lex_and_execute_core(thd, nextp, false);
 
+    /*
+      thd->utime_after_query can be used for counting
+      statement execution time (for example in
+      query_response_time plugin). thd->update_server_status()
+      updates this value but only if function/procedure
+      budy has been already executed, if we want to measure
+      statement execution time inside function/procedure
+      we have to update this value here independent of
+      value returned by thd->get_stmt_da()->is_eof().
+    */
+    thd->update_server_status();
+
     if (thd->get_stmt_da()->is_eof())
     {
       /* Finalize server status flags after executing a statement. */
@@ -851,6 +864,13 @@ bool sp_instr_stmt::execute(THD *thd, uint *nextp)
     }
 
     query_cache.end_of_result(thd);
+
+#ifndef EMBEDDED_LIBRARY
+    mysql_audit_general(thd, MYSQL_AUDIT_GENERAL_STATUS,
+                        thd->get_stmt_da()->is_error() ?
+                            thd->get_stmt_da()->mysql_errno() : 0,
+                        command_name[COM_QUERY].str);
+#endif
 
     if (!rc && unlikely(log_slow_applicable(thd)))
     {
