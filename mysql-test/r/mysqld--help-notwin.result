@@ -177,6 +177,8 @@ The following options may be given as the first argument:
  --console           Write error output on screen; don't remove the console
  window on windows.
  --core-file         Write core on errors.
+ --csv-mode=name     Control CSV parser mode: []: default, ietf_quotes:
+ standards-compatible embedded quote and comma parsing
  --daemonize         Run mysqld as sysv daemon
  -h, --datadir=name  Path to the database root directory
  --date-format=name  The DATE format (ignored)
@@ -581,9 +583,6 @@ The following options may be given as the first argument:
  value are used; the rest are ignored)
  --max-sp-recursion-depth[=#] 
  Maximum stored procedure recursion depth
- --max-statement-time=# 
- Kill any statement that takes over the specified number
- of milliseconds
  --max-tmp-tables=#  Maximum number of temporary tables a client can keep open
  at a time
  --max-user-connections=# 
@@ -897,7 +896,7 @@ The following options may be given as the first argument:
  indexes
  --profiling-history-size=# 
  Limit of query profiling memory
- --query-alloc-block-size=# 
+ --query-alloc-block-size=#
  Allocation block size for query parsing and execution
  --query-cache-limit=# 
  Don't cache results that are bigger than this
@@ -1046,7 +1045,7 @@ The following options may be given as the first argument:
  --secure-auth       Disallow authentication for accounts that have old
  (pre-4.1) passwords. Deprecated. Always TRUE.
  (Defaults to on; use --skip-secure-auth to disable.)
- --secure-file-priv[=name] 
+ --secure-file-priv[=name]
  Limit LOAD DATA, SELECT ... OUTFILE, and LOAD_FILE() to
  files within specified directory. If no argument is
  specified disable loading files.
@@ -1193,12 +1192,6 @@ The following options may be given as the first argument:
  Log slow queries to given log file. Defaults logging to
  hostname-slow.log. Must be enabled to activate other slow
  log options
- --slow-query-log-timestamp-always 
- Timestamp is printed for all records of the slow log even
- if they are same time.
- --slow-query-log-timestamp-precision=name 
- Select the timestamp precision for use in the slow query
- log.  [second, microsecond]
  --slow-query-log-use-global-control=name 
  Choose flags, wich always use the global variables.
  Multiple flags allowed in a comma-separated string.
@@ -1297,29 +1290,18 @@ The following options may be given as the first argument:
  Specifies the privileges that the utility user will have
  in a comma delimited list. See the manual for a complete
  list of privileges.
- --utility-user-schema-access=name 
+ --utility-user-schema-access=name
  Specifies the schemas that the utility user has access to
  in a comma delimited list.
+ --validate-user-plugins
  --validate-user-plugins 
- Turns on additional validation of authentication plugins
+ assigned to user accounts.
  assigned to user accounts. 
- (Defaults to on; use --skip-validate-user-plugins to disable.)
  -v, --verbose       Used with --help option for detailed help.
  -V, --version       Output version information and exit.
  -V, --version       Output version information and exit.
  --wait-timeout=#    The number of seconds the server waits for activity on a
  connection before closing it
- --xtradb-internal-hash-tables[=name] 
- Enable or disable XTRADB_INTERNAL_HASH_TABLES plugin.
- Possible values are ON, OFF, FORCE (don't start if the
- plugin fails to load).
- --xtradb-read-view[=name] 
- Enable or disable XTRADB_READ_VIEW plugin. Possible
- values are ON, OFF, FORCE (don't start if the plugin
- fails to load).
- --xtradb-rseg[=name] 
- Enable or disable XTRADB_RSEG plugin. Possible values are
- ON, OFF, FORCE (don't start if the plugin fails to load).
 
 Variables (--variable-name=value)
 abort-slave-event-count 0
@@ -1359,6 +1341,7 @@ completion-type NO_CHAIN
 concurrent-insert AUTO
 connect-timeout 10
 console FALSE
+csv-mode
 daemonize FALSE
 eq-range-index-dive-limit 200
 date-format %Y-%m-%d
@@ -1645,8 +1628,6 @@ slave-type-conversions
 slow-launch-time 2
 slow-query-log FALSE
 slow-query-log-always-write-time 10
-slow-query-log-timestamp-always FALSE
-slow-query-log-timestamp-precision second
 slow-query-log-use-global-control 
 sort-buffer-size 262144
 sporadic-binlog-dump-fail FALSE
