@@ -5747,6 +5747,22 @@ requesting master dump") ||
       */
       THD_STAGE_INFO(thd, stage_waiting_for_master_to_send_event);
       event_len= read_event(mysql, mi, &suppress_warnings);
+
+      DBUG_EXECUTE_IF("relay_xid_trigger",
+        if (event_len != packet_error)
+        {
+          const char* event_buf= (const char*)mysql->net.read_pos + 1;
+          Log_event_type event_type= (Log_event_type)
+                                        event_buf[EVENT_TYPE_OFFSET];
+          if (event_type == binary_log::XID_EVENT)
+          {
+            const char act[]= "now signal relay_xid_reached wait_for resume";
+            DBUG_ASSERT(!debug_sync_set_action(current_thd,
+                                               STRING_WITH_LEN(act)));
+          }
+        }
+      );
+
       if (check_io_slave_killed(thd, mi, "Slave I/O thread killed while \
 reading event"))
         goto err;
@@ -6852,6 +6868,8 @@ int slave_start_single_worker(Relay_log_info *rli, ulong i)
 err:
   if (error && w)
   {
+    if (w->current_mts_submode)
+      delete w->current_mts_submode;
     delete w;
     /*
       Any failure after array inserted must follow with deletion
@@ -6978,11 +6996,6 @@ void slave_stop_workers(Relay_log_info *rli, bool *mts_inited)
 {
   THD *thd= rli->info_thd;
 
-  if (!*mts_inited)
-    return;
-  else if (rli->slave_parallel_workers == 0)
-    goto end;
-
   /*
     If request for stop slave is received notify worker
     to stop.
@@ -7067,7 +7080,10 @@ void slave_stop_workers(Relay_log_info *rli, bool *mts_inited)
     mysql_mutex_unlock(&w->jobs_lock);
   }
 
-  if (thd->killed == THD::NOT_KILLED)
+  if (!*mts_inited)
+    return;
+
+  if (rli->slave_parallel_workers != 0 && thd->killed == THD::NOT_KILLED)
     (void) mts_checkpoint_routine(rli, 0, false, true/*need_data_lock=true*/); // TODO:consider to propagate an error out of the function
 
   while (!rli->workers.empty())
@@ -7102,7 +7118,6 @@ void slave_stop_workers(Relay_log_info *rli, bool *mts_inited)
   DBUG_ASSERT(rli->pending_jobs == 0);
   DBUG_ASSERT(rli->mts_pending_jobs_size == 0);
 
-end:
   rli->mts_group_status= Relay_log_info::MTS_NOT_IN_GROUP;
   destroy_hash_workers(rli);
   delete rli->gaq;
