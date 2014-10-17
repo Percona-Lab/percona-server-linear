@@ -8283,12 +8283,36 @@ void Rows_log_event::decide_row_lookup_algorithm_and_key() {
   TABLE *table = this->m_table;
   uint event_type = this->get_general_type_code();
   MY_BITMAP *cols = &this->m_cols;
+  bool delete_update_lookup_condition= false;
   this->m_rows_lookup_algorithm = ROW_LOOKUP_NOT_NEEDED;
   this->m_key_index = MAX_KEY;
   this->m_key_info = nullptr;
 
-  if (event_type == binary_log::WRITE_ROWS_EVENT)  // row lookup not needed
-    return;
+  // row lookup not needed
+  if (event_type == binary_log::WRITE_ROWS_EVENT ||
+     (delete_update_lookup_condition= ((event_type == binary_log::DELETE_ROWS_EVENT ||
+                                        event_type == binary_log::UPDATE_ROWS_EVENT) &&
+                                      get_flags(COMPLETE_ROWS_F) &&
+                                      !m_table->file->rpl_lookup_rows())))
+  {
+    if (delete_update_lookup_condition &&
+        table->file->ht->db_type == DB_TYPE_TOKUDB &&
+        table->s->primary_key == MAX_KEY)
+    {
+        if (!table->s->rfr_lookup_warning)
+        {
+          sql_print_warning("Slave: read free replication is disabled "
+                            "for tokudb table `%s.%s` "
+                            "as it does not have implicit primary key, "
+                            "continue with rows lookup",
+                            print_slave_db_safe(table->s->db.str),
+                            m_table->s->table_name.str);
+          table->s->rfr_lookup_warning= true;
+        }
+    }
+    else
+      return;
+  }
 
   if (!(slave_rows_search_algorithms_options & SLAVE_ROWS_INDEX_SCAN))
     goto TABLE_OR_INDEX_HASH_SCAN;
@@ -9929,7 +9953,9 @@ int Rows_log_event::do_apply_event(Relay_log_info const *rli) {
         break;
 
       case ROW_LOOKUP_NOT_NEEDED:
-        assert(get_general_type_code() == binary_log::WRITE_ROWS_EVENT);
+        assert(get_general_type_code() == binary_log::WRITE_ROWS_EVENT ||
+               get_general_type_code() == binary_log::DELETE_ROWS_EVENT ||
+               get_general_type_code() == binary_log::UPDATE_ROWS_EVENT);
 
         /* No need to scan for rows, just apply it */
         do_apply_row_ptr = &Rows_log_event::do_apply_row;
@@ -11720,6 +11746,8 @@ int Write_rows_log_event::do_before_row_operations(
     const Slave_reporting_capability *const) {
   int error = 0;
 
+  m_table->file->rpl_before_write_rows();
+
   /*
     Increment the global status insert count variable
   */
@@ -11844,6 +11872,7 @@ int Write_rows_log_event::do_after_row_operations(
   }
 
   m_rows_lookup_algorithm = ROW_LOOKUP_UNDEFINED;
+  m_table->file->rpl_after_write_rows();
 
   return error ? error : local_error;
 }
@@ -12202,6 +12231,7 @@ int Delete_rows_log_event::do_before_row_operations(
     const Slave_reporting_capability *const) {
   int error = 0;
   DBUG_TRACE;
+  m_table->file->rpl_before_delete_rows();
   /*
     Increment the global status delete count variable
    */
@@ -12225,12 +12255,17 @@ int Delete_rows_log_event::do_after_row_operations(
     const Slave_reporting_capability *const, int error) {
   DBUG_TRACE;
   error = row_operations_scan_and_key_teardown(error);
+  m_table->file->rpl_after_delete_rows();
   return error;
 }
 
-int Delete_rows_log_event::do_exec_row(const Relay_log_info *const) {
+int Delete_rows_log_event::do_exec_row(const Relay_log_info *const rli) {
   int error;
   assert(m_table != nullptr);
+  if (m_rows_lookup_algorithm == ROW_LOOKUP_NOT_NEEDED) {
+    error = unpack_current_row(rli, &m_cols, false, false);
+    if (error) return error;
+  }
   /* m_table->record[0] contains the BI */
   m_table->mark_columns_per_binlog_row_image(thd);
   error = m_table->file->ha_delete_row(m_table->record[0]);
@@ -12331,6 +12366,7 @@ int Update_rows_log_event::do_before_row_operations(
     const Slave_reporting_capability *const) {
   int error = 0;
   DBUG_TRACE;
+  m_table->file->rpl_before_update_rows();
   /*
     Increment the global status update count variable
   */
@@ -12354,12 +12390,18 @@ int Update_rows_log_event::do_after_row_operations(
     const Slave_reporting_capability *const, int error) {
   DBUG_TRACE;
   error = row_operations_scan_and_key_teardown(error);
+  m_table->file->rpl_after_update_rows();
   return error;
 }
 
 int Update_rows_log_event::do_exec_row(const Relay_log_info *const rli) {
   assert(m_table != nullptr);
   int error = 0;
+
+  if (m_rows_lookup_algorithm == ROW_LOOKUP_NOT_NEEDED) {
+    error = unpack_current_row(rli, &m_cols, false, false);
+    if (error) return error;
+  }
 
   /*
     This is the situation after locating BI:
