@@ -7874,6 +7874,7 @@ static int get_options(int *argc_ptr, char ***argv_ptr)
     return 1;
   }
 
+  opt_super_readonly= super_read_only;
   opt_readonly= read_only;
 
   return 0;
