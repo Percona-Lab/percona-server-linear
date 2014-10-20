@@ -235,11 +235,13 @@ public:
   virtual SQL_I_List<Item_trigger_field>* get_instr_trig_field_list()
   { return &m_trig_field_list; }
 
-#ifndef DBUG_OFF
   int get_command() const {
       return m_lex ? m_lex->sql_command : -1;
   }
-#endif //DBUG_OFF
+
+  const LEX_CSTRING *get_prepared_stmt_name() const {
+    return m_lex ? &m_lex->prepared_stmt_name : NULL;
+  }
 
 private:
   /**

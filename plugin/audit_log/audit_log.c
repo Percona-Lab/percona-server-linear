@@ -632,6 +632,8 @@ int reopen_log_file()
 
   return(0);
 }
+
+
 static
 int audit_log_plugin_init(MYSQL_PLUGIN plugin_info)
 {
