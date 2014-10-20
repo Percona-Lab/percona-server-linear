@@ -17,6 +17,7 @@ MYSQLD=
 niceness=0
 mysqld_ld_preload=
 mysqld_ld_library_path=
+load_jemalloc=1
 load_hotbackup=0
 flush_caches=0
 numa_interleave=
@@ -229,7 +230,10 @@ parse_arguments() {
       # mysqld_safe-specific options - must be set in my.cnf ([mysqld_safe])!
       --core-file-size=*) core_file_size="$val" ;;
       --ledir=*) ledir="$val" ;;
-      --malloc-lib=*) set_malloc_lib "$val" ;;
+      --malloc-lib=*)
+	set_malloc_lib "$val"
+	load_jemalloc=0
+	;;
       --mysqld=*) MYSQLD="$val" ;;
       --mysqld-version=*)
         if test -n "$val"
