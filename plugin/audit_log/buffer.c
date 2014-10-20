@@ -15,8 +15,8 @@
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA */
 
 #include "buffer.h"
+#include "audit_log.h"
 
-#include <my_pthread.h>
 #include <my_sys.h>
 
 struct audit_log_buffer {
@@ -64,7 +64,7 @@ void audit_log_flush(audit_log_buffer_t *log)
       mysql_mutex_unlock(&log->mutex);
       return;
     }
-    set_timespec(abstime, 1);
+    set_timespec(&abstime, 1);
     mysql_cond_timedwait(&log->written_cond, &log->mutex, &abstime);
   }
 
@@ -137,8 +137,8 @@ audit_log_buffer_t *audit_log_buffer_init(size_t size, int drop_if_full,
     log->size= size;
 
     mysql_mutex_init(key_log_mutex, &log->mutex, MY_MUTEX_INIT_FAST);
-    mysql_cond_init(key_log_flushed_cond, &log->flushed_cond, NULL);
-    mysql_cond_init(key_log_written_cond, &log->written_cond, NULL);
+    mysql_cond_init(key_log_flushed_cond, &log->flushed_cond);
+    mysql_cond_init(key_log_written_cond, &log->written_cond);
     pthread_create(&log->flush_worker_thread, NULL,
                             audit_log_flush_worker, log);
 
