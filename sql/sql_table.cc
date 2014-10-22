@@ -2091,6 +2091,15 @@ bool mysql_rm_table(THD *thd,TABLE_LIST *tables, my_bool if_exists,
     DBUG_RETURN(true);
   }
 
+  /*
+    bug 72475 : DROP tables need to have their logging format determined if
+    in MIXED mode and dropping a TEMP table.
+  */
+  if (thd->decide_logging_format(tables))
+  {
+    DBUG_RETURN(true);
+  }
+
   /* Disable drop of enabled log tables, must be done before name locking */
   for (table= tables; table; table= table->next_local)
   {
@@ -2466,7 +2475,7 @@ int mysql_rm_table_no_locks(THD *thd, TABLE_LIST *tables, bool if_exists,
       if (!dont_log_query)
       {
         /*
-          Note that unless if_exists is TRUE or a temporary table was deleted, 
+          Note that unless if_exists is TRUE or a temporary table was deleted,
           there is no means to know if the statement should be written to the
           binary log. See further information on this variable in what follows.
         */
@@ -2544,7 +2553,6 @@ int mysql_rm_table_no_locks(THD *thd, TABLE_LIST *tables, bool if_exists,
       error= ha_delete_table(thd, table_type, path, db, table->table_name,
                              !dont_log_query);
 
-      /* No error if non existent table and 'IF EXIST' clause or view */
       if ((error == ENOENT || error == HA_ERR_NO_SUCH_TABLE) && 
           (if_exists || table_type == NULL))
       {
@@ -2873,7 +2881,7 @@ bool quick_rm_table(THD *thd, handlerton *base, const char *db,
 static int sort_keys(KEY *a, KEY *b)
 {
   ulong a_flags= a->flags, b_flags= b->flags;
-  
+
   if (a_flags & HA_NOSAME)
   {
     if (!(b_flags & HA_NOSAME))
@@ -5501,7 +5509,9 @@ bool mysql_create_table(THD *thd, TABLE_LIST *create_table,
     To check the existence of table, lock of type "S" is obtained on the table
     and then it is upgraded to "X" if table does not exists.
   */
-  if (open_tables(thd, &thd->lex->query_tables, &not_used, 0))
+
+  if (open_tables(thd, &thd->lex->query_tables, &not_used, 0) ||
+      thd->decide_logging_format(thd->lex->query_tables))
   {
     result= TRUE;
     goto end;
@@ -5758,9 +5768,14 @@ bool mysql_create_like_table(THD* thd, TABLE_LIST* table, TABLE_LIST* src_table,
     that we can safely perform table creation.
     Thus by holding both these locks we ensure that our statement is
     properly isolated from all concurrent operations which matter.
+
+    bug 72475 : CREATE LIKE needs to have the logging format determined if in
+    MIXED mode and creating LIKE a TEMP table.
   */
-  if (open_tables(thd, &thd->lex->query_tables, &not_used, 0))
+  if (open_tables(thd, &thd->lex->query_tables, &not_used, 0) ||
+      thd->decide_logging_format(thd->lex->query_tables))
     goto err;
+
   src_table->table->use_all_columns();
 
   DEBUG_SYNC(thd, "create_table_like_after_open");
@@ -9846,6 +9861,8 @@ bool mysql_alter_table(THD *thd, const char *new_db, const char *new_name,
                                              true, false)))
       goto err_new_table_cleanup;
 
+    DEBUG_SYNC(thd, "after_open_altered_table");
+
     /* Set markers for fields in TABLE object for altered table. */
     update_altered_table(ha_alter_info, altered_table);
 
@@ -10397,9 +10414,8 @@ bool mysql_trans_prepare_alter_copy_data(THD *thd)
   DBUG_ENTER("mysql_prepare_alter_copy_data");
   /*
     Turn off recovery logging since rollback of an alter table is to
-    delete the new table so there is no need to log the changes to it.
+
     
-    This needs to be done before external_lock.
   */
   if (ha_enable_transaction(thd, FALSE))
     DBUG_RETURN(TRUE);
@@ -10419,8 +10435,6 @@ bool mysql_trans_commit_alter_copy_data(THD *thd)
   if (ha_enable_transaction(thd, TRUE))
     DBUG_RETURN(TRUE);
 
-  DEBUG_SYNC(thd, "commit_alter_copy_table");
-  
   /*
     Ensure that the new table is saved properly to disk before installing
     the new .frm.
@@ -10953,7 +10967,7 @@ static bool check_engine(THD *thd, const char *db_name,
   }
 
   /*
-    Check, if the given table name is system table, and if the storage engine 
+    Check, if the given table name is system table, and if the storage engine
     does supports it.
   */
   if ((create_info->used_fields & HA_CREATE_USED_ENGINE) &&
