@@ -77,6 +77,8 @@
 #include "rpl_handler.h"
 
 #include "sp_head.h"
+#include "sp_rcontext.h"
+#include "sp_instr.h"
 #include "sp.h"
 #include "sp_cache.h"
 #include "events.h"
