@@ -1407,9 +1407,11 @@ bool Query_logger::slow_log_write(THD *thd, const char *query,
   const LEX_CSTRING sctx_host = sctx->host();
   const LEX_CSTRING sctx_ip = sctx->ip();
   const size_t user_host_len =
-      (strxnmov(user_host_buff, MAX_USER_HOST_SIZE, sctx->priv_user().str, "[",
-                sctx_user.length ? sctx_user.str : "", "] @ ",
-                sctx_host.length ? sctx_host.str : "", " [",
+      (strxnmov(user_host_buff, MAX_USER_HOST_SIZE,
+                sctx->priv_user().str ? sctx->priv_user().str : "", "[",
+                sctx_user.length ? sctx_user.str
+                                 : (thd->slave_thread ? "SQL_SLAVE" : ""),
+                "] @ ", sctx_host.length ? sctx_host.str : "", " [",
                 sctx_ip.length ? sctx_ip.str : "", "]", NullS) -
        user_host_buff);
   const ulonglong current_utime = my_micro_time();
@@ -1758,6 +1760,7 @@ bool log_slow_applicable(THD *thd, int sp_sql_command) {
 	 return false;
 
   ulonglong query_exec_time = get_query_exec_time(thd);
+
 
   /*
     Don't log the CALL statement if slow statements logging
