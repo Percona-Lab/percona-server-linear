@@ -3108,6 +3108,10 @@ int open_table_from_share(THD *thd, TABLE_SHARE *share, const char *alias,
               (my_bitmap_map *)(bitmaps + bitmap_size * 6), share->fields);
   outparam->default_column_bitmaps();
 
+  /* Fill record with default values */
+  if (outparam->record[0] != outparam->s->default_values)
+    restore_record(outparam, s->default_values);
+
   /*
     Process generated columns, if any.
   */
