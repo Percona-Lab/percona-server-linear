@@ -5424,25 +5424,33 @@ loop:
 			lock_mutex_exit();
 			mutex_exit(&trx_sys->mutex);
 
-			DEBUG_SYNC_C("innodb_monitor_before_lock_page_read");
+			if (srv_show_verbose_locks) {
 
-				mtr_start(&mtr);
+				DEBUG_SYNC_C("innodb_monitor_before_lock_page_read");
 
-			if (!tablespace_being_deleted) {
-				mtr_start(&mtr);
+				/* Check if the space is exists or not. only
+                                when the space is valid, try to get the page. */
+				tablespace_being_deleted
+					= fil_inc_pending_ops(space, false);
 
-				buf_page_get_gen(space, zip_size, page_no,
-						 RW_NO_LATCH, NULL,
-						 BUF_GET_POSSIBLY_FREED,
-						 __FILE__, __LINE__, &mtr);
+				if (!tablespace_being_deleted) {
+					mtr_start(&mtr);
 
-				mtr_commit(&mtr);
+					buf_page_get_gen(space, zip_size,
+							 page_no, RW_NO_LATCH,
+							 NULL,
+							 BUF_GET_POSSIBLY_FREED,
+							 __FILE__, __LINE__,
+							 &mtr);
 
-				fil_decr_pending_ops(space);
-			} else {
-				fprintf(file, "RECORD LOCKS on"
-					" non-existing space %lu\n",
-					(ulong) space);
+					mtr_commit(&mtr);
+
+					fil_decr_pending_ops(space);
+				} else {
+					fprintf(file, "RECORD LOCKS on"
+						" non-existing space %lu\n",
+						(ulong) space);
+				}
 			}
 
 			load_page_first = FALSE;

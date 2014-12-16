@@ -516,9 +516,6 @@ else
   $cmd = quote_options($print_defaults, "mysqld", "mysql_install_db");
 }
 
-my @default_options;
-my $cmd = quote_options($print_defaults, $print_def_file,
-                        "mysqld","mysql_install_db");
 open(PIPE, "$cmd |") or error($opt,"can't run $cmd: $!");
 while ( <PIPE> )
 {

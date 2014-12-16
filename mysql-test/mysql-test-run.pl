@@ -238,7 +238,6 @@ my $opt_boot_ddd;
 our $opt_manual_gdb;
 our $opt_manual_lldb;
 our $opt_manual_dbx;
-our $opt_manual_lldb;
 our $opt_manual_ddd;
 our $opt_manual_debug;
 our $opt_debugger;
@@ -6156,34 +6155,6 @@ sub lldb_arguments {
 }
 
 #
-# Modify the exe and args so that program is run in lldb
-#
-sub lldb_arguments {
-  my $args= shift;
-  my $exe= shift;
-  my $type= shift;
-  my $input= shift;
-
-  my $lldb_init_file= "$opt_vardir/tmp/lldbinit.$type";
-  unlink($lldb_init_file);
-
-  my $str= join(" ", @$$args);
-  my $runline= $input ? "r $str < $input" : "r $str";
-
-  # write init file for mysqld or client
-  mtr_tofile($lldb_init_file,
-	     "b main\n" .
-	     $runline);
-
-  print "\nTo start lldb for $type, type in another window:\n";
-  print "(cd $glob_mysql_test_dir && lldb -s $lldb_init_file $$exe)\n";
-
-  # Indicate the exe should not be started
-  $$exe= undef;
-  return;
-}
-
-#
 # Modify the exe and args so that program is run in ddd
 #
 sub ddd_arguments {
@@ -6660,8 +6631,6 @@ Options for debugging the product
   manual-debug          Let user manually start mysqld in debugger, before
                         running test(s)
   manual-gdb            Let user manually start mysqld in gdb, before running
-                        test(s)
-  manual-lldb           Let user manually start mysqld in lldb, before running
                         test(s)
   manual-ddd            Let user manually start mysqld in ddd, before running
                         test(s)
