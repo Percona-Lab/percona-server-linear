@@ -3606,8 +3606,11 @@ loop:
 	ut_ad(srv_force_recovery != SRV_FORCE_NO_LOG_REDO
 	      || lsn == log_sys->last_checkpoint_lsn + LOG_BLOCK_HDR_SIZE);
 
+
 	if ((srv_force_recovery != SRV_FORCE_NO_LOG_REDO
 	     && lsn != log_sys->last_checkpoint_lsn)
+	    || (srv_track_changed_pages
+		&& (tracked_lsn != log_sys->last_checkpoint_lsn))
 #ifdef UNIV_LOG_ARCHIVE
 	    || (srv_log_archive_on
 		&& lsn != log_sys->archived_lsn + LOG_BLOCK_HDR_SIZE)

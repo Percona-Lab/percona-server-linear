@@ -4425,7 +4425,9 @@ longlong Item_func_is_free_lock::val_int()
   ull_key.mdl_key_init(MDL_key::USER_LOCK, res->c_ptr_safe(), "");
 
   null_value= 0;
-  return thd->mdl_context.get_lock_owner(&ull_key) == 0;
+  longlong ret_val= thd->mdl_context.get_lock_owner(&ull_key) == 0;
+  DEBUG_SYNC(current_thd, "after_getting_user_level_lock_info");
+  return ret_val;
 }
 
 
@@ -4452,6 +4454,7 @@ longlong Item_func_is_used_lock::val_int()
     return 0;
 
   null_value= 0;
+  DEBUG_SYNC(current_thd, "after_getting_user_level_lock_info");
   return thread_id;
 }
 
@@ -6578,68 +6581,6 @@ Item *get_system_var(THD *thd, enum_var_type var_type, LEX_STRING name,
 
   return new Item_func_get_system_var(var, var_type, component_name,
                                       NULL, 0);
-}
-
-
-/**
-  Check a user level lock.
-
-  Sets null_value=TRUE on error.
-
-  @retval
-    1		Available
-  @retval
-    0		Already taken, or error
-*/
-
-longlong Item_func_is_free_lock::val_int()
-{
-  DBUG_ASSERT(fixed == 1);
-  String *res=args[0]->val_str(&value);
-  User_level_lock *ull;
-  longlong ret_val= 0LL;
-
-  null_value=0;
-  if (!res || !res->length())
-  {
-    null_value=1;
-    return ret_val;
-  }
-  
-  mysql_mutex_lock(&LOCK_user_locks);
-  ull= (User_level_lock *) my_hash_search(&hash_user_locks, (uchar*) res->ptr(),
-                                          (size_t) res->length());
-  if (!ull || !ull->locked)
-    ret_val= 1;
-  mysql_mutex_unlock(&LOCK_user_locks);
-  DEBUG_SYNC(current_thd, "after_getting_user_level_lock_info");
-
-  return ret_val;
-}
-
-longlong Item_func_is_used_lock::val_int()
-{
-  DBUG_ASSERT(fixed == 1);
-  String *res=args[0]->val_str(&value);
-  User_level_lock *ull;
-  my_thread_id thread_id= 0UL;
-
-  null_value=1;
-  if (!res || !res->length())
-    return 0;
-  
-  mysql_mutex_lock(&LOCK_user_locks);
-  ull= (User_level_lock *) my_hash_search(&hash_user_locks, (uchar*) res->ptr(),
-                                          (size_t) res->length());
-  if ((ull != NULL) && ull->locked)
-  {
-    null_value= 0;
-    thread_id= ull->thread_id;
-  }
-  mysql_mutex_unlock(&LOCK_user_locks);
-  DEBUG_SYNC(current_thd, "after_getting_user_level_lock_info");
-
-  return thread_id;
 }
 
 
