@@ -6345,6 +6345,7 @@ int main(int argc, char **argv)
 {
   char bin_log_name[FN_REFLEN];
   int exit_code, md_result_fd;
+  int consistent_binlog_pos= 0;
   MY_INIT("mysqldump");
 
   compatible_mode_normal_str[0]= 0;
