@@ -19,6 +19,8 @@
 #include <sql_show.h>
 #include <mysql/plugin_audit.h>
 #include <sp_instr.h>
+#include <sql_parse.h>
+#include <sql_prepare.h>
 #include "query_response_time.h"
 
 
@@ -120,9 +122,9 @@ static int query_response_time_info_deinit(void *arg __attribute__((unused)))
 static struct st_mysql_information_schema query_response_time_info_descriptor=
 { MYSQL_INFORMATION_SCHEMA_INTERFACE_VERSION };
 
-static void query_response_time_audit_notify(MYSQL_THD thd,
-                                             unsigned int event_class,
-                                             const void *event)
+static int query_response_time_audit_notify(MYSQL_THD thd,
+                                            mysql_event_class_t event_class,
+                                            const void *event)
 {
   const struct mysql_event_general *event_general=
     (const struct mysql_event_general *) event;
@@ -130,21 +132,57 @@ static void query_response_time_audit_notify(MYSQL_THD thd,
   if (event_general->event_subclass == MYSQL_AUDIT_GENERAL_STATUS &&
       opt_query_response_time_stats)
   {
+    /*
+     Get sql command id of currently executed statement
+     inside of stored function or procedure. If the command is "PREPARE"
+     don't get the statement inside of "PREPARE". If the statement
+     is not inside of stored function or procedure get sql command id
+     of the statement itself.
+    */
+    enum_sql_command sql_command=
+      (
+        thd->lex->sql_command != SQLCOM_PREPARE &&
+        thd->sp_runtime_ctx &&
+        thd->stmt_arena &&
+        ((sp_lex_instr *)thd->stmt_arena)->get_command() >= 0
+      ) ?
+      (enum_sql_command)((sp_lex_instr *)thd->stmt_arena)->get_command() :
+      thd->lex->sql_command;
+    if (sql_command == SQLCOM_EXECUTE)
+    {
+      const LEX_CSTRING *name=
+        (
+          thd->sp_runtime_ctx &&
+          thd->stmt_arena &&
+          ((sp_lex_instr *)thd->stmt_arena)->get_prepared_stmt_name()
+        )                                                               ?
+        /* If we are inside of SP */
+        ((sp_lex_instr *)thd->stmt_arena)->get_prepared_stmt_name()     :
+        /* otherwise */
+        &thd->lex->prepared_stmt_name;
+      Prepared_statement *stmt= thd->stmt_map.find_by_name(*name);
+      sql_command= stmt->lex->sql_command;
+    }
+    QUERY_TYPE query_type=
+      (sql_command_flags[sql_command] & CF_CHANGES_DATA) ? WRITE : READ;
 #ifndef DBUG_OFF
     if (THDVAR(thd, exec_time_debug)) {
       ulonglong t = THDVAR(thd, exec_time_debug);
       if ((thd->lex->sql_command == SQLCOM_SET_OPTION) ||
-          (thd->lex->spname && thd->stmt_arena &&
+          (thd->lex->spname && thd->stmt_arena && thd->sp_runtime_ctx &&
               ((sp_lex_instr *)thd->stmt_arena)->get_command() ==
               SQLCOM_SET_OPTION )) {
           t = 0;
       }
-      query_response_time_collect(t);
+      query_response_time_collect(query_type, t);
     }
     else
 #endif
-    query_response_time_collect(thd->utime_after_query - thd->utime_after_lock);
+      query_response_time_collect(query_type,
+                                  thd->utime_after_query -
+                                  thd->utime_after_lock);
   }
+  return 0;
 }
 
 
@@ -168,6 +206,36 @@ mysql_declare_plugin(query_response_time)
   0x0100,
   NULL,
   query_response_time_info_vars,
+  (void *)"1.0",
+  0,
+},
+{
+  MYSQL_INFORMATION_SCHEMA_PLUGIN,
+  &query_response_time_info_descriptor,
+  "QUERY_RESPONSE_TIME_READ",
+  "Percona and Sergey Vojtovich",
+  "Query Response Time Distribution INFORMATION_SCHEMA Plugin",
+  PLUGIN_LICENSE_GPL,
+  query_response_time_info_init,
+  query_response_time_info_deinit,
+  0x0100,
+  NULL,
+  NULL,
+  (void *)"1.0",
+  0,
+},
+{
+  MYSQL_INFORMATION_SCHEMA_PLUGIN,
+  &query_response_time_info_descriptor,
+  "QUERY_RESPONSE_TIME_WRITE",
+  "Percona and Sergey Vojtovich",
+  "Query Response Time Distribution INFORMATION_SCHEMA Plugin",
+  PLUGIN_LICENSE_GPL,
+  query_response_time_info_init,
+  query_response_time_info_deinit,
+  0x0100,
+  NULL,
+  NULL,
   (void *)"1.0",
   0,
 },
