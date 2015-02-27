@@ -7517,7 +7517,7 @@ int Xid_log_event::do_apply_event(Relay_log_info const *rli)
     mysql_mutex_assert_not_owner(&rli->data_lock);
     if (thd->backup_binlog_lock.acquire_protection(thd, MDL_EXPLICIT,
                                                    timeout))
-      return 1;
+      DBUG_RETURN(1);
 
     binlog_prot_acquired= true;
   }
