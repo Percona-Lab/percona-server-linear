@@ -26,6 +26,9 @@ ADD_WSHADOW_WARNING()
 DISABLE_MISSING_PROFILE_WARNING()
 
 ## Subdirectory with common client code.
+
+INCLUDE_DIRECTORIES(SYSTEM ${READLINE_INCLUDE_DIR})
+
 ADD_SUBDIRECTORY(base)
 ## Subdirectory for mysqlpump code.
 ADD_SUBDIRECTORY(dump)
@@ -45,7 +48,7 @@ MYSQL_ADD_EXECUTABLE(mysql
   client_query_attributes.cc
   multi_factor_passwordopt-vars.cc
   ${CMAKE_CURRENT_SOURCE_DIR}/common/user_registration.cc
-  LINK_LIBRARIES mysqlclient client_base ${EDITLINE_LIBRARY}
+  LINK_LIBRARIES mysqlclient client_base ${MY_READLINE_LIBRARY}
   )
 
 IF(NOT WITHOUT_SERVER)
