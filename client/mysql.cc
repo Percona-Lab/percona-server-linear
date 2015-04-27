@@ -81,6 +81,9 @@
 #include <readline.h>
 #include <syslog.h>
 
+#if defined(HAVE_READLINE_HISTORY_H)
+#include <history.h>
+#endif
 #define HAVE_READLINE
 #define USE_POPEN
 #endif
@@ -217,7 +220,6 @@ static MEM_ROOT hash_mem_root;
 static uint prompt_counter;
 static char delimiter[16] = DEFAULT_DELIMITER;
 static size_t delimiter_length = 1;
-unsigned short terminal_width = 80;
 static uint opt_zstd_compress_level = default_zstd_compression_level;
 static char *opt_compress_algorithm = nullptr;
 
@@ -1145,11 +1147,13 @@ typedef struct _hist_entry {
 } HIST_ENTRY;
 #endif
 
+#if !defined(HAVE_READLINE_HISTORY_H)
 extern "C" int add_history(const char *command); /* From readline directory */
 extern "C" int read_history(const char *command);
 extern "C" int write_history(const char *command);
 extern "C" HIST_ENTRY *history_get(int num);
 extern "C" int history_length;
+#endif
 static int not_in_history(const char *line);
 static void initialize_readline(char *name);
 #endif /* HAVE_READLINE */
@@ -1173,9 +1177,7 @@ static void kill_query(const char *reason);
 extern "C" void mysql_end(int sig);
 extern "C" void handle_ctrlc_signal(int);
 extern "C" void handle_quit_signal(int sig);
-#if defined(HAVE_TERMIOS_H) && defined(GWINSZ_IN_SYS_IOCTL)
-static void window_resize(int);
-#endif
+static unsigned short get_terminal_width();
 
 const char DELIMITER_NAME[] = "delimiter";
 const uint DELIMITER_NAME_LEN = sizeof(DELIMITER_NAME) - 1;
@@ -1337,13 +1339,6 @@ int main(int argc, char *argv[]) {
   signal(SIGHUP, handle_quit_signal);   // Catch SIGHUP to clean up
 #else
   SetConsoleCtrlHandler((PHANDLER_ROUTINE)windows_ctrl_handler, true);
-#endif
-
-#if defined(HAVE_TERMIOS_H) && defined(GWINSZ_IN_SYS_IOCTL)
-  /* Readline will call this if it installs a handler */
-  signal(SIGWINCH, window_resize);
-  /* call the SIGWINCH handler to get the default term width */
-  window_resize(0);
 #endif
 
   put_info("Welcome to the MySQL monitor.  Commands end with ; or \\g.",
@@ -1605,14 +1600,15 @@ err:
   return;
 }
 
+unsigned short get_terminal_width() {
 #if defined(HAVE_TERMIOS_H) && defined(GWINSZ_IN_SYS_IOCTL)
-void window_resize(int) {
   struct winsize window_size;
 
   if (ioctl(fileno(stdin), TIOCGWINSZ, &window_size) == 0)
-    terminal_width = window_size.ws_col;
-}
+    return window_size.ws_col;
 #endif
+  return 80;
+}
 
 static struct my_option my_long_options[] = {
     {"help", '?', "Display this help and exit.", nullptr, nullptr, nullptr,
@@ -2657,11 +2653,7 @@ static char **new_mysql_completion(const char *text, int start, int end);
   if not.
 */
 
-#if defined(USE_NEW_EDITLINE_INTERFACE)
-static int fake_magic_space(int, int);
-char *no_completion(const char *, int)
-#elif defined(USE_LIBEDIT_INTERFACE)
-static int fake_magic_space(int, int);
+#if defined(USE_NEW_XLINE_INTERFACE) || defined(USE_LIBEDIT_INTERFACE)
 char *no_completion(const char *, int)
 #else
 char *no_completion()
@@ -2682,11 +2674,7 @@ static int not_in_history(const char *line) {
   return 1;
 }
 
-#if defined(USE_NEW_EDITLINE_INTERFACE)
 static int fake_magic_space(int, int)
-#else
-static int fake_magic_space(int, int)
-#endif
 {
   rl_insert(1, ' ');
   return 0;
@@ -2697,7 +2685,7 @@ static void initialize_readline(char *name) {
   rl_readline_name = name;
 
   /* Tell the completer that we want a crack first. */
-#if defined(USE_NEW_EDITLINE_INTERFACE)
+#if defined(USE_NEW_XLINE_INTERFACE)
   rl_attempted_completion_function = &new_mysql_completion;
   rl_completion_entry_function = &no_completion;
 
@@ -2724,7 +2712,7 @@ static char **new_mysql_completion(const char *text,
                                    int start MY_ATTRIBUTE((unused)),
                                    int end MY_ATTRIBUTE((unused))) {
   if (!status.batch && !quick)
-#if defined(USE_NEW_EDITLINE_INTERFACE)
+#if defined(USE_NEW_XLINE_INTERFACE)
     return rl_completion_matches(text, new_command_generator);
 #else
     return completion_matches(const_cast<char *>(text), new_command_generator);
@@ -3325,8 +3313,9 @@ static int com_go(String *buffer, char *line MY_ATTRIBUTE((unused))) {
           print_table_data_html(result);
         else if (opt_xml)
           print_table_data_xml(result);
-        else if (vertical || (auto_vertical_output &&
-                              (terminal_width < get_result_width(result))))
+        else if (vertical ||
+                 (auto_vertical_output &&
+                  (get_terminal_width() < get_result_width(result))))
           print_table_data_vertically(result);
         else if (opt_silent && verbose <= 2 && !output_tables)
           print_tab_data(result);
