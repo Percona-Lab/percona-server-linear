@@ -67,6 +67,9 @@
 #else
 #include <syslog.h>
 #include <readline.h>
+#if HAVE_READLINE_HISTORY_H
+#include <history.h>
+#endif
 #define HAVE_READLINE
 #define USE_POPEN
 #endif
@@ -189,7 +192,6 @@ static MEM_ROOT hash_mem_root;
 static uint prompt_counter;
 static char delimiter[16]= DEFAULT_DELIMITER;
 static size_t delimiter_length= 1;
-unsigned short terminal_width= 80;
 
 #if defined (_WIN32) && !defined (EMBEDDED_LIBRARY)
 static char *shared_memory_base_name=0;
@@ -1136,11 +1138,13 @@ typedef struct _hist_entry {
 } HIST_ENTRY; 
 #endif
 
+#if !defined(HAVE_READLINE_HISTORY_H)
 extern "C" int add_history(const char *command); /* From readline directory */
 extern "C" int read_history(const char *command);
 extern "C" int write_history(const char *command);
 extern "C" HIST_ENTRY *history_get(int num);
 extern "C" int history_length;
+#endif
 static int not_in_history(const char *line);
 static void initialize_readline (char *name);
 #endif                                          /* HAVE_READLINE */
@@ -1164,9 +1168,7 @@ static void kill_query(const char* reason);
 extern "C" void mysql_end(int sig);
 extern "C" void handle_ctrlc_signal(int sig);
 extern "C" void handle_quit_signal(int sig);
-#if defined(HAVE_TERMIOS_H) && defined(GWINSZ_IN_SYS_IOCTL)
-static void window_resize(int sig);
-#endif
+static unsigned short get_terminal_width();
 
 const char DELIMITER_NAME[]= "delimiter";
 const uint DELIMITER_NAME_LEN= sizeof(DELIMITER_NAME) - 1;
@@ -1338,13 +1340,6 @@ int main(int argc,char *argv[])
   SetConsoleCtrlHandler((PHANDLER_ROUTINE) windows_ctrl_handler, TRUE);
 #endif
 
-
-#if defined(HAVE_TERMIOS_H) && defined(GWINSZ_IN_SYS_IOCTL)
-  /* Readline will call this if it installs a handler */
-  signal(SIGWINCH, window_resize);
-  /* call the SIGWINCH handler to get the default term width */
-  window_resize(0);
-#endif
 
   put_info("Welcome to the MySQL monitor.  Commands end with ; or \\g.",
 	   INFO_INFO);
@@ -1622,15 +1617,16 @@ err:
 }
 
 
-#if defined(HAVE_TERMIOS_H) && defined(GWINSZ_IN_SYS_IOCTL)
-void window_resize(int sig)
+unsigned short get_terminal_width()
 {
+#if defined(HAVE_TERMIOS_H) && defined(GWINSZ_IN_SYS_IOCTL)
   struct winsize window_size;
 
   if (ioctl(fileno(stdin), TIOCGWINSZ, &window_size) == 0)
-    terminal_width= window_size.ws_col;
-}
+    return window_size.ws_col;
 #endif
+  return 80;
+}
 
 static struct my_option my_long_options[] =
 {
@@ -3676,7 +3672,7 @@ com_go(String *buffer,char *line MY_ATTRIBUTE((unused)))
 	  print_table_data_html(result);
 	else if (opt_xml)
 	  print_table_data_xml(result);
-  else if (vertical || (auto_vertical_output && (terminal_width < get_result_width(result))))
+  else if (vertical || (auto_vertical_output && (get_terminal_width() < get_result_width(result))))
 	  print_table_data_vertically(result);
 	else if (opt_silent && verbose <= 2 && !output_tables)
 	  print_tab_data(result);
