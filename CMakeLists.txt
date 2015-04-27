@@ -725,12 +725,12 @@ INCLUDE_DIRECTORIES(
 # *except* boost, which requires one specific version to be downloaded
 SET(SYSTEM_LIBRARIES
   CURL
-  EDITLINE
   ICU
   LIBEVENT
   LZ4
 # LZMA     use bundled by default here
   PROTOBUF
+  READLINE
   RE2
   SSL
   ZLIB
