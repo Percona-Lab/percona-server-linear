@@ -277,6 +277,8 @@
 #cmakedefine USE_LIBEDIT_INTERFACE 1
 #cmakedefine HAVE_HIST_ENTRY 1
 #cmakedefine USE_NEW_EDITLINE_INTERFACE 1
+#cmakedefine USE_NEW_READLINE_INTERFACE 1
+#cmakedefine HAVE_READLINE_HISTORY_H 1
 
 /*
  * Libedit
