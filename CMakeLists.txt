@@ -1063,11 +1063,11 @@ ENDIF()
 # version has the necessary patches to make it work.
 SET(SYSTEM_LIBRARIES
   CURL
-  EDITLINE
   ICU
   LIBEVENT
   LZ4
   PROTOBUF
+  READLINE
   RE2
   SSL
   ZLIB
