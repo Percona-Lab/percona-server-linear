@@ -950,11 +950,11 @@ ENDIF()
 # *except* boost, which requires one specific version to be downloaded
 SET(SYSTEM_LIBRARIES
   CURL
-  EDITLINE
   ICU
   LIBEVENT
   LZ4
   PROTOBUF
+  READLINE
   RAPIDJSON
   RE2
   SSL
