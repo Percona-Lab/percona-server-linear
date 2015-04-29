@@ -1,4 +1,4 @@
-/* Copyright (c) 2000, 2014, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2000, 2015, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -1271,7 +1271,7 @@ terminate_slave_thread(THD *thd,
 
   while (*slave_running)                        // Should always be true
   {
-    int error;
+    int error __attribute__((unused));
     DBUG_PRINT("loop", ("killing slave thread"));
 
     mysql_mutex_lock(&thd->LOCK_thd_data);
@@ -6285,6 +6285,8 @@ llstr(rli->get_group_master_log_pos(), llbuff));
   /* we die so won't remember charset - re-update them on next thread start */
   rli->cached_charset_invalidate();
   rli->save_temporary_tables = thd->temporary_tables;
+  delete rli->get_rli_next_event();
+  rli->set_rli_next_event(NULL);
 
   /*
     TODO: see if we can do this conditionally in next_event() instead
@@ -7308,7 +7310,24 @@ static int connect_to_master(THD* thd, MYSQL* mysql, Master_info* mi,
   }
 #endif
 
-  mysql_options(mysql, MYSQL_SET_CHARSET_NAME, default_charset_info->csname);
+  /*
+    If server's default charset is not supported (like utf16, utf32) as client
+    charset, then set client charset to 'latin1' (default client charset).
+  */
+  if (is_supported_parser_charset(default_charset_info))
+    mysql_options(mysql, MYSQL_SET_CHARSET_NAME, default_charset_info->csname);
+  else
+  {
+    sql_print_information("'%s' can not be used as client character set. "
+                          "'%s' will be used as default client character set "
+                          "while connecting to master.",
+                          default_charset_info->csname,
+                          default_client_charset_info->csname);
+    mysql_options(mysql, MYSQL_SET_CHARSET_NAME,
+                  default_client_charset_info->csname);
+  }
+
+
   /* This one is not strictly needed but we have it here for completeness */
   mysql_options(mysql, MYSQL_SET_CHARSET_DIR, (char *) charsets_dir);
 
@@ -7475,6 +7494,12 @@ static Log_event* next_event(Relay_log_info* rli)
 
   DBUG_ASSERT(thd != 0);
 
+  if ((ev = rli->get_rli_next_event()) != NULL)
+  {
+    rli->set_rli_next_event(NULL);
+    DBUG_RETURN(ev);
+  }
+
 #ifndef DBUG_OFF
   if (abort_slave_event_count && !rli->events_until_exit--)
     DBUG_RETURN(0);
@@ -7598,6 +7623,36 @@ static Log_event* next_event(Relay_log_info* rli)
                     (force && (rli->checkpoint_seqno <= (rli->checkpoint_group - 1))) ||
                     sql_slave_killed(thd, rli));
         mysql_mutex_lock(&rli->data_lock);
+      }
+      if (rli->is_parallel_exec() && 
+          ev->should_rollback_current_group() &&
+          (rli->curr_group_seen_begin || rli->curr_group_seen_gtid))
+      {
+        /* We reached the end of relay log file and it doesn't end with
+           COMMIT or ROLLBACK. To prevent MTS from stalling we generate
+           ROLLBACK event. Single-treaded slave takes care of such
+           cases (see Format_description_log_event::do_apply_event).
+           When relay_log_recovery is ON, relay log will be redownloaded
+           from the master. */
+        rli->report(WARNING_LEVEL, 0,
+                    "injecting ROLLBACK at the end of cold group");
+        Query_log_event *rollback_event= 
+            new Query_log_event(thd, STRING_WITH_LEN("ROLLBACK"),
+                                TRUE, FALSE, TRUE, 0, FALSE);
+        if (unlikely(!rollback_event))
+        {
+          errmsg= "Slave SQL thread failed to create a ROLLBACK event "
+            "(out of memory?), MTS may stall";
+          goto err;
+        }
+        rollback_event->data_written = 0;
+        rollback_event->db= "";
+        rollback_event->db_len= 0;
+        rollback_event->server_id= 0; // won't be ignored by slave SQL thread
+        rollback_event->set_artificial_event();
+        rollback_event->future_event_relay_log_pos = BIN_LOG_HEADER_SIZE;
+        rli->set_rli_next_event(ev);
+        DBUG_RETURN(rollback_event);
       }
       DBUG_RETURN(ev);
     }
