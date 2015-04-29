@@ -237,7 +237,7 @@ my_bool vio_reset(Vio* vio, enum enum_vio_type type,
     */
     if (sd != mysql_socket_getfd(vio->mysql_socket))
       if (vio->inactive == FALSE)
-        vio->vioshutdown(vio);
+        vio->vioshutdown(vio, SHUT_RDWR);
 
     my_free(vio->read_buffer);
 

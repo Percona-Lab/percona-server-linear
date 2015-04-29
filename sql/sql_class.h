@@ -618,6 +618,7 @@ typedef struct system_variables
 
   uint  threadpool_high_prio_tickets;
   ulong threadpool_high_prio_mode;
+
   /**
     Compatibility option to mark the pre MySQL-5.6.4 temporals columns using
     the old format using comments for SHOW CREATE TABLE and in I_S.COLUMNS

@@ -1,4 +1,4 @@
-/* Copyright (c) 2000, 2014, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2000, 2015, Oracle and/or its affiliates. All rights reserved.
    Copyright (c) 2009, 2013, Monty Program Ab
    Copyright (C) 2012 Percona Inc.
 
@@ -1075,7 +1075,7 @@ bool LOGGER::slow_log_print(THD *thd, const char *query, uint query_length)
 
     /* fill in user_host value: the format is "%s[%s] @ %s [%s]" */
     user_host_len= (strxnmov(user_host_buff, MAX_USER_HOST_SIZE,
-                             sctx->priv_user ? sctx->priv_user : "", "[",
+                             sctx->priv_user, "[",
                              sctx->user ? sctx->user : (thd->slave_thread ?
                                                         "SQL_SLAVE" : ""),
                              "] @ ",
@@ -1175,12 +1175,6 @@ bool LOGGER::general_log_print(THD *thd, enum enum_server_command command,
                                    format, args);
   else
     message_buff[0]= '\0';
-
-  mysql_audit_general_log(thd, command, message_buff, message_buff_len);
-
-  /* Print the message to the buffer if we want to log this kind of commands */
-  if (! logger.log_command(thd, command))
-    return FALSE;
 
   return general_log_write(thd, command, message_buff, message_buff_len);
 }
@@ -2407,8 +2401,6 @@ bool general_log_print(THD *thd, enum enum_server_command command,
 bool general_log_write(THD *thd, enum enum_server_command command,
                        const char *query, uint query_length)
 {
-  mysql_audit_general_log(thd, command, query, query_length);
-
   /* Write the message to the log if we want to log this king of commands */
   if (logger.log_command(thd, command, query, query_length))
     return logger.general_log_write(thd, command, query, query_length);

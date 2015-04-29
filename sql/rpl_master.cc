@@ -1511,6 +1511,7 @@ void mysql_binlog_send(THD* thd, char* log_ident, my_off_t pos,
           DBUG_ASSERT(!debug_sync_set_action(current_thd,
                                              STRING_WITH_LEN(act)));
       }});
+
       if (skip_group == false)
       {
         if (my_net_write(net, (uchar*) packet->ptr(), packet->length()))
