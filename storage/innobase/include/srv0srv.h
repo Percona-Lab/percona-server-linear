@@ -119,9 +119,6 @@ struct srv_stats_t {
 	/** Number of database lock waits */
 	ulint_ctr_1_t		n_lock_wait_count;
 
-	/** Maximum database lock wait time */
-	ulint_ctr_1_t		n_lock_max_wait_time;
-
 	/** Number of threads currently waiting on database locks */
 	lint_ctr_1_t		n_lock_wait_current_count;
 
@@ -136,6 +133,8 @@ struct srv_stats_t {
 
 	/** Number of rows inserted */
 	ulint_ctr_64_t		n_rows_inserted;
+
+	ulint_ctr_1_t		n_lock_max_wait_time;
 };
 
 extern const char*	srv_main_thread_op_info;
@@ -186,6 +185,10 @@ at a time */
 extern ib_mutex_t	page_zip_stat_per_index_mutex;
 /* Mutex for locking srv_monitor_file. Not created if srv_read_only_mode */
 extern ib_mutex_t	srv_monitor_file_mutex;
+
+/* prototypes for new functions added to ha_innodb.cc */
+bool	innobase_get_slow_log();
+
 /* Temporary file for innodb monitor output */
 extern FILE*	srv_monitor_file;
 /* Mutex for locking srv_dict_tmpfile. Only created if !srv_read_only_mode.
@@ -204,6 +207,7 @@ extern FILE*	srv_misc_tmpfile;
 /* Server parameters which are read from the initfile */
 
 extern char*	srv_data_home;
+
 extern char*	srv_arch_dir;
 
 /** Set if InnoDB must operate in read-only mode. We don't do any
@@ -299,7 +303,6 @@ extern ib_uint64_t	srv_log_file_size;
 /** The value of the startup parameter innodb_log_file_size */
 extern ib_uint64_t	srv_log_file_size_requested;
 extern ulint	srv_log_buffer_size;
-extern ulong	srv_flush_log_at_trx_commit;
 extern uint	srv_flush_log_at_timeout;
 extern ulong	srv_log_write_ahead_size;
 extern char	srv_use_global_flush_log_at_trx_commit;
@@ -330,7 +333,7 @@ extern ulong	srv_n_page_hash_locks;
 extern ulong	srv_LRU_scan_depth;
 /** Whether or not to flush neighbors of a block */
 extern ulong	srv_flush_neighbors;
-/** Previously requested size */
+/** Previously requested size. Accesses protected by memory barriers. */
 extern ulint	srv_buf_pool_old_size;
 /** Current size as scaling factor for the other components */
 extern ulint	srv_buf_pool_base_size;
@@ -338,9 +341,11 @@ extern ulint	srv_buf_pool_base_size;
 extern ulint	srv_buf_pool_curr_size;
 /** Dump this % of each buffer pool during BP dump */
 extern ulong	srv_buf_pool_dump_pct;
-extern ulint	srv_show_locks_held;
-extern ulint	srv_show_verbose_locks;
 /** Lock table size in bytes */
+
+extern ulint    srv_show_locks_held;
+extern ulint    srv_show_verbose_locks;
+
 extern ulint	srv_lock_table_size;
 
 extern ulint	srv_foreground_preflush;/*!< Query thread preflush algorithm */
@@ -387,6 +392,8 @@ to treat NULL value when collecting statistics. It is not defined
 as enum type because the configure option takes unsigned integer type. */
 extern ulong	srv_innodb_stats_method;
 
+extern bool	srv_log_archive_on;
+
 extern char*	srv_file_flush_method_str;
 
 extern ulint	srv_max_n_open_files;
@@ -423,8 +430,9 @@ extern ulong	srv_doublewrite_batch_size;
 extern ulong	srv_checksum_algorithm;
 
 extern double	srv_max_buf_pool_modified_pct;
+
 extern ulong	srv_log_arch_expire_sec;
-extern bool	srv_log_archive_on;
+
 extern ulong	srv_max_purge_lag;
 extern ulong	srv_max_purge_lag_delay;
 
@@ -432,7 +440,7 @@ extern ulong	srv_replication_delay;
 
 extern ulint	srv_pass_corrupt_table;
 
-/* Helper macro to support srv_pass_corrupt_table checks. If 'cond' is FALSE,
+/* Helper macro to support srv_pass_corrupt_table checks. If 'cond' is false,
 execute 'code' if srv_pass_corrupt_table is non-zero, or trigger a fatal error
 otherwise. The break statement in 'code' will obviously not work as
 expected. */
@@ -538,8 +546,6 @@ extern ulong srv_sync_array_size;
 /* print all user-level transactions deadlocks to mysqld stderr */
 extern my_bool srv_print_all_deadlocks;
 
-extern lint	srv_kill_idle_transaction;
-
 extern my_bool	srv_cmp_per_index_enabled;
 
 /** Status variables to be passed to MySQL */
@@ -564,8 +570,8 @@ extern mysql_pfs_key_t	srv_lock_timeout_thread_key;
 extern mysql_pfs_key_t	srv_master_thread_key;
 extern mysql_pfs_key_t	srv_monitor_thread_key;
 extern mysql_pfs_key_t	srv_purge_thread_key;
-extern mysql_pfs_key_t	srv_log_tracking_thread_key;
 extern mysql_pfs_key_t	trx_rollback_clean_thread_key;
+extern mysql_pfs_key_t	srv_log_tracking_thread_key;
 
 /* This macro register the current thread and its key with performance
 schema */
@@ -807,6 +813,7 @@ srv_export_innodb_status(void);
 Removes old archived transaction log files.
 Both parameters couldn't be provided at the same time.
 @return DB_SUCCESS on success, otherwise DB_ERROR */
+
 dberr_t
 purge_archived_logs(
 	time_t	before_date,		/*!< in: all files modified

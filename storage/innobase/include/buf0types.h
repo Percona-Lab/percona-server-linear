@@ -97,24 +97,6 @@ enum srv_checksum_algorithm_t {
 						when reading */
 };
 
-inline
-bool
-is_checksum_strict(srv_checksum_algorithm_t algo)
-{
-	return(algo == SRV_CHECKSUM_ALGORITHM_STRICT_CRC32
-	       || algo == SRV_CHECKSUM_ALGORITHM_STRICT_INNODB
-	       || algo == SRV_CHECKSUM_ALGORITHM_STRICT_NONE);
-}
-
-inline
-bool
-is_checksum_strict(ulint algo)
-{
-	return(algo == SRV_CHECKSUM_ALGORITHM_STRICT_CRC32
-	       || algo == SRV_CHECKSUM_ALGORITHM_STRICT_INNODB
-	       || algo == SRV_CHECKSUM_ALGORITHM_STRICT_NONE);
-}
-
 /** Alternatives for srv_cleaner_lsn_age_factor, set through
 innodb_cleaner_lsn_age_factor variable  */
 enum srv_cleaner_lsn_age_factor_t {
@@ -152,6 +134,24 @@ enum srv_empty_free_list_t {
 					thread */
 };
 
+inline
+bool
+is_checksum_strict(srv_checksum_algorithm_t algo)
+{
+	return(algo == SRV_CHECKSUM_ALGORITHM_STRICT_CRC32
+	       || algo == SRV_CHECKSUM_ALGORITHM_STRICT_INNODB
+	       || algo == SRV_CHECKSUM_ALGORITHM_STRICT_NONE);
+}
+
+inline
+bool
+is_checksum_strict(ulint algo)
+{
+	return(algo == SRV_CHECKSUM_ALGORITHM_STRICT_CRC32
+	       || algo == SRV_CHECKSUM_ALGORITHM_STRICT_INNODB
+	       || algo == SRV_CHECKSUM_ALGORITHM_STRICT_NONE);
+}
+
 /** Parameters of binary buddy system for compressed pages (buf0buddy.h) */
 /* @{ */
 /** Zip shift value for the smallest page size */
@@ -179,7 +179,7 @@ this must be equal to UNIV_PAGE_SIZE */
 #include "sync0rw.h"
 
 typedef ib_bpmutex_t BPageMutex;
-typedef ib_mutex_t BufPoolMutex;
+typedef ib_mutex_t BufListMutex;
 typedef ib_mutex_t FlushListMutex;
 typedef BPageMutex BufPoolZipMutex;
 typedef rw_lock_t BPageLock;

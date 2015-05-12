@@ -250,6 +250,7 @@ public:
 	allocated. If non-NULL, a view will overwrite a previously-existing
 	in-use or released view.
 	@param	from_trx	transation owning the donor read view. */
+
 	void clone(ReadView*& result, trx_t* from_trx) const;
 
 #ifdef UNIV_DEBUG

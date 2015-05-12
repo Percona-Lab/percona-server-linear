@@ -26,6 +26,8 @@ Created 3/26/1996 Heikki Tuuri
 #ifndef trx0trx_h
 #define trx0trx_h
 
+#ifndef UNIV_INNOCHECKSUM
+
 #include <set>
 #include <list>
 
@@ -341,6 +343,7 @@ trx_get_read_view(
 Clones the read view from another transaction. All the consistent reads within
 the receiver transaction will get the same read view as the donor transaction
 @return read view clone */
+
 ReadView*
 trx_clone_read_view(
 /*================*/
@@ -1600,5 +1603,7 @@ private:
 #include "trx0trx.ic"
 #endif
 #endif /* !UNIV_HOTBACKUP */
+
+#endif /* !UNIV_INNOCHECKSUM */
 
 #endif

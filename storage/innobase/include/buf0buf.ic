@@ -495,9 +495,6 @@ buf_page_set_io_fix(
 	enum buf_io_fix	io_fix)	/*!< in: io_fix state */
 {
 #ifdef UNIV_DEBUG
-	buf_pool_t*	buf_pool = buf_pool_from_bpage(bpage);
-	ut_ad(buf_pool_mutex_own(buf_pool));
-#endif /* UNIV_DEBUG */
 	ut_ad(mutex_own(buf_page_get_mutex(bpage)));
 
 	bpage->io_fix = io_fix;
@@ -550,10 +547,6 @@ buf_page_unset_sticky(
 /*==================*/
 	buf_page_t*	bpage)	/*!< in/out: control block */
 {
-#ifdef UNIV_DEBUG
-	buf_pool_t*	buf_pool = buf_pool_from_bpage(bpage);
-	ut_ad(buf_pool_mutex_own(buf_pool));
-#endif /* UNIV_DEBUG */
 	ut_ad(mutex_own(buf_page_get_mutex(bpage)));
 	ut_ad(buf_page_get_io_fix(bpage) == BUF_IO_PIN);
 
@@ -569,10 +562,6 @@ buf_page_can_relocate(
 /*==================*/
 	const buf_page_t*	bpage)	/*!< control block being relocated */
 {
-#ifdef UNIV_DEBUG
-	buf_pool_t*	buf_pool = buf_pool_from_bpage(bpage);
-	ut_ad(buf_pool_mutex_own(buf_pool));
-#endif /* UNIV_DEBUG */
 	ut_ad(mutex_own(buf_page_get_mutex(bpage)));
 	ut_ad(buf_page_in_file(bpage));
 	ut_ad(bpage->in_LRU_list);
@@ -843,12 +832,6 @@ buf_block_free(
 /*===========*/
 	buf_block_t*	block)	/*!< in, own: block to be freed */
 {
-	buf_pool_t*	buf_pool = buf_pool_from_bpage((buf_page_t*) block);
-
-	buf_pool_mutex_enter(buf_pool);
-
-	buf_page_mutex_enter(block);
-
 	ut_a(buf_block_get_state(block) != BUF_BLOCK_FILE_PAGE);
 
 	buf_LRU_block_free_non_file_page(block);
@@ -915,7 +898,7 @@ buf_block_modify_clock_inc(
 
 	/* No latch is acquired if block belongs to intrinsic table. */
 	if (!fsp_is_system_temporary(block->page.id.space())) {
-		ut_ad((buf_pool_mutex_own(buf_pool)
+		ut_ad((mutex_own(&buf_pool->LRU_list_mutex)
 		       && (block->page.buf_fix_count == 0))
 		      || rw_lock_own_flagged(&block->lock,
 					     RW_LOCK_FLAG_X | RW_LOCK_FLAG_SX));

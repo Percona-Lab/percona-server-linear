@@ -1783,7 +1783,11 @@ buf_pool_free_instance(
 	buf_page_t*	bpage;
 	buf_page_t*	prev_bpage = 0;
 
-	mutex_free(&buf_pool->mutex);
+	mutex_free(&buf_pool->LRU_list_mutex);
+	mutex_free(&buf_pool->free_list_mutex);
+	mutex_free(&buf_pool->zip_free_mutex);
+	mutex_free(&buf_pool->zip_hash_mutex);
+	mutex_free(&buf_pool->flush_state_mutex);
 	mutex_free(&buf_pool->zip_mutex);
 	mutex_free(&buf_pool->flush_list_mutex);
 
@@ -1949,8 +1953,8 @@ buf_page_realloc(
 	buf_block_t*	new_block;
 
 	ut_ad(buf_pool_withdrawing);
-	ut_ad(buf_pool_mutex_own(buf_pool));
-	ut_ad(buf_block_get_state(block) == BUF_BLOCK_FILE_PAGE);
+	ut_ad(mutex_own(&buf_pool->LRU_list_mutex));
+	ut_ad(!btr_search_enabled);
 
 	new_block = buf_LRU_get_free_only(buf_pool);
 
@@ -2109,7 +2113,6 @@ buf_block_will_withdrawn(
 	const buf_block_t*	block)
 {
 	ut_ad(buf_pool->curr_size < buf_pool->old_size);
-	ut_ad(!buf_pool_resizing || buf_pool_mutex_own(buf_pool));
 
 	const buf_chunk_t*	chunk
 		= buf_pool->chunks + buf_pool->n_chunks_new;
@@ -2137,7 +2140,6 @@ buf_frame_will_withdrawn(
 	const byte*	ptr)
 {
 	ut_ad(buf_pool->curr_size < buf_pool->old_size);
-	ut_ad(!buf_pool_resizing || buf_pool_mutex_own(buf_pool));
 
 	const buf_chunk_t*	chunk
 		= buf_pool->chunks + buf_pool->n_chunks_new;
@@ -2656,17 +2658,21 @@ withdraw_retry:
 	/* Indicate critical path */
 	buf_pool_resizing = true;
 
-	/* Acquire all buf_pool_mutex/hash_lock */
-	for (ulint i = 0; i < srv_buf_pool_instances; ++i) {
-		buf_pool_t*	buf_pool = buf_pool_from_array(i);
-
-		buf_pool_mutex_enter(buf_pool);
-	}
-	for (ulint i = 0; i < srv_buf_pool_instances; ++i) {
-		buf_pool_t*	buf_pool = buf_pool_from_array(i);
-
-		hash_lock_x_all(buf_pool->page_hash);
-	}
+	/* Acquire all buffer pool mutexes and hash table locks */
+	/* TODO: while we certainly lock a lot here, it does not necessarily
+	buy us enough correctness, see a comment at buf_block_align. */
+	for (ulint i = 0; i < srv_buf_pool_instances; ++i)
+		mutex_enter(&(buf_pool_from_array(i)->LRU_list_mutex));
+	for (ulint i = 0; i < srv_buf_pool_instances; ++i)
+		hash_lock_x_all(buf_pool_from_array(i)->page_hash);
+	for (ulint i = 0; i < srv_buf_pool_instances; ++i)
+		mutex_enter(&(buf_pool_from_array(i)->zip_free_mutex));
+	for (ulint i = 0; i < srv_buf_pool_instances; ++i)
+		mutex_enter(&(buf_pool_from_array(i)->free_list_mutex));
+	for (ulint i = 0; i < srv_buf_pool_instances; ++i)
+		mutex_enter(&(buf_pool_from_array(i)->zip_hash_mutex));
+	for (ulint i = 0; i < srv_buf_pool_instances; ++i)
+		mutex_enter(&(buf_pool_from_array(i)->flush_state_mutex));
 
 	buf_chunk_map_reg = UT_NEW_NOKEY(buf_pool_chunk_map_t());
 
@@ -3045,7 +3051,7 @@ buf_relocate(
 	buf_page_t*	b;
 	buf_pool_t*	buf_pool = buf_pool_from_bpage(bpage);
 
-	ut_ad(buf_pool_mutex_own(buf_pool));
+	ut_ad(mutex_own(&buf_pool->LRU_list_mutex));
 	ut_ad(buf_page_hash_lock_held_x(buf_pool, bpage));
 	ut_ad(mutex_own(buf_page_get_mutex(bpage)));
 	ut_a(buf_page_get_io_fix(bpage) == BUF_IO_NONE);
@@ -5085,7 +5091,6 @@ buf_page_init(
 	buf_page_t*	hash_page;
 
 	ut_ad(buf_pool == buf_pool_get(page_id));
-	ut_ad(buf_pool_mutex_own(buf_pool));
 
 	ut_ad(buf_page_mutex_own(block));
 	ut_a(buf_block_get_state(block) != BUF_BLOCK_FILE_PAGE);
@@ -6066,8 +6071,6 @@ buf_pool_invalidate_instance(
 	mutex_exit(&buf_pool->flush_state_mutex);
 
 	ut_ad(buf_all_freed_instance(buf_pool));
-
-	buf_pool_mutex_enter(buf_pool);
 
 	while (buf_LRU_scan_and_free_block(buf_pool, true)) {
 	}

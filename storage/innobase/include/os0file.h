@@ -44,6 +44,10 @@ Created 10/21/1995 Heikki Tuuri
 #include <time.h>
 #endif /* !_WIN32 */
 
+#ifdef UNIV_INNOCHECKSUM
+struct trx_t;
+#endif
+
 /** File node of a tablespace or the log data space */
 struct fil_node_t;
 
