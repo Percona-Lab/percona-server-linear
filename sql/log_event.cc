@@ -1632,8 +1632,12 @@ err:
   if (!res) {
     DBUG_ASSERT(error != 0);
 #if defined(MYSQL_SERVER)
-    LogErr(ERROR_LEVEL, ER_READ_LOG_EVENT_FAILED, error, data_len,
-           head[EVENT_TYPE_OFFSET]);
+    const auto *thd = current_thd;
+    if (!(thd && thd->lex &&
+          thd->lex->sql_command == SQLCOM_SHOW_BINLOG_EVENTS)) {
+      LogErr(ERROR_LEVEL, ER_READ_LOG_EVENT_FAILED, error, data_len,
+             head[EVENT_TYPE_OFFSET]);
+    }
 #else
     sql_print_error(
         "Error in Log_event::read_log_event(): "
