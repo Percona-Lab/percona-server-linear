@@ -49,6 +49,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "my_dbug.h"
 #include "my_inttypes.h"
 #include "row0sel.h"
+#include "sql/current_thd.h"
 #include "ut0new.h"
 #include "ut0rbt.h"
 
@@ -2462,9 +2463,10 @@ static void fts_query_phrase_split(fts_query_t *query,
         static_cast<fts_string_t *>(ib_vector_push(tokens, NULL));
     fts_string_dup(token, &result_str, heap);
 
+    ut_ad(current_thd != nullptr);
     if (fts_check_token(&result_str, cache->stopword_info.cached_stopword,
-                        query->index->is_ngram,
-                        query->fts_index_table.charset)) {
+                        query->index->is_ngram, query->fts_index_table.charset,
+                        thd_has_ft_ignore_stopwords(current_thd))) {
       /* Add the word to the RB tree so that we can
       calculate it's frequencey within a document. */
       fts_query_add_word_freq(query, token);
