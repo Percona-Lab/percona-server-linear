@@ -1148,6 +1148,10 @@ static MYSQL_THDVAR_ULONG(
     Parallel_reader::MAX_THREADS,                    /* Maximum. */
     0);
 
+static MYSQL_THDVAR_BOOL(ft_ignore_stopwords, PLUGIN_VAR_OPCMDARG,
+                         "Instruct FTS to ignore stopwords.", nullptr, nullptr,
+                         false);
+
 static MYSQL_THDVAR_ULONG(ddl_buffer_size, PLUGIN_VAR_RQCMDARG,
                           "Maximum size of memory to use (in bytes) for DDL.",
                           nullptr, nullptr, 1048576, /* Default. */
@@ -2100,6 +2104,13 @@ std::chrono::seconds thd_lock_wait_timeout(THD *thd) {
   /* According to <mysql/plugin.h>, passing thd == NULL
   returns the global value of the session variable. */
   return std::chrono::seconds{THDVAR(thd, lock_wait_timeout)};
+}
+
+/** Is FT ignore stopwords variable set.
+@param thd Thread object
+@return true if ft_ignore_stopwords is set, false otherwise. */
+bool thd_has_ft_ignore_stopwords(THD *thd) noexcept {
+  return (THDVAR(thd, ft_ignore_stopwords));
 }
 
 void thd_set_lock_wait_time(THD *thd,
@@ -24531,6 +24542,7 @@ static SYS_VAR *innobase_system_variables[] = {
     MYSQL_SYSVAR(corrupt_table_action),
     MYSQL_SYSVAR(compressed_columns_zip_level),
     MYSQL_SYSVAR(compressed_columns_threshold),
+    MYSQL_SYSVAR(ft_ignore_stopwords),
     nullptr};
 
 mysql_declare_plugin(innobase){
