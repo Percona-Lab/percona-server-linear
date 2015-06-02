@@ -896,6 +896,12 @@ The following options may be given as the first argument:
  indexes
  --profiling-history-size=# 
  Limit of query profiling memory
+ --proxy-protocol-networks=name 
+ Enable proxy protocol for these source networks. The
+ syntax is a comma separated list of IPv4 and IPv6
+ networks. If the network doesn't contain mask, it is
+ considered to be a single host. "*" represents all
+ networks and must the only directive on the line.
  --query-alloc-block-size=# 
  Allocation block size for query parsing and execution
  --query-cache-limit=# 
@@ -1562,6 +1568,7 @@ port ####
 port-open-timeout 0
 preload-buffer-size 32768
 profiling-history-size 15
+proxy-protocol-networks 
 query-alloc-block-size 8192
 query-cache-limit 1048576
 query-cache-min-res-unit 4096
@@ -1615,6 +1622,8 @@ slave-exec-mode STRICT
 slave-max-allowed-packet 1073741824
 slave-net-timeout 60
 slave-parallel-type DATABASE
+slave-parallel-workers 0
+slave-pending-jobs-size-max 16777216
 slave-preserve-commit-order FALSE
 slave-rows-search-algorithms TABLE_SCAN,INDEX_SCAN
 slave-skip-errors (No default value)
