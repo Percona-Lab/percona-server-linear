@@ -258,6 +258,7 @@ extern volatile bool password_require_current;
 extern char *my_bind_addr_str;
 extern char glob_hostname[FN_REFLEN];
 extern char system_time_zone[30], *opt_init_file;
+extern char *my_proxy_protocol_networks;
 extern char *opt_tc_log_file;
 extern char server_uuid[UUID_LENGTH + 1];
 extern const char *server_uuid_ptr;
