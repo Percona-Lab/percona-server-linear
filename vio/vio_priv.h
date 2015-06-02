@@ -38,6 +38,7 @@
 
 extern PSI_memory_key key_memory_vio;
 extern PSI_memory_key key_memory_vio_read_buffer;
+extern PSI_memory_key key_memory_vio_proxy_networks;
 
 #ifdef HAVE_OPENSSL
 extern PSI_memory_key key_memory_vio_ssl_fd;
