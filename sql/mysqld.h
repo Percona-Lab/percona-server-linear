@@ -284,6 +284,7 @@ extern uint mysqld_admin_port;
 extern bool listen_admin_interface_in_separate_thread;
 extern char glob_hostname[HOSTNAME_LENGTH + 1];
 extern char system_time_zone[30], *opt_init_file;
+extern char *my_proxy_protocol_networks;
 extern const char *opt_tc_log_file;
 extern char server_uuid[UUID_LENGTH + 1];
 extern const char *server_uuid_ptr;

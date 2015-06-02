@@ -53,6 +53,7 @@ PSI_memory_key key_memory_vio_ssl_fd;
 
 PSI_memory_key key_memory_vio;
 PSI_memory_key key_memory_vio_read_buffer;
+PSI_memory_key key_memory_vio_proxy_networks;
 
 #ifdef HAVE_PSI_INTERFACE
 static PSI_memory_info all_vio_memory[] = {
@@ -62,6 +63,7 @@ static PSI_memory_info all_vio_memory[] = {
 
     {&key_memory_vio, "vio", 0, 0, PSI_DOCUMENT_ME},
     {&key_memory_vio_read_buffer, "read_buffer", 0, 0, PSI_DOCUMENT_ME},
+    {&key_memory_vio_proxy_networks, "proxy_networks", 0, 0, PSI_DOCUMENT_ME},
 };
 
 void init_vio_psi_keys() {
@@ -567,6 +569,7 @@ void vio_end(void) {
 #if defined(HAVE_OPENSSL)
   vio_ssl_end();
 #endif
+  vio_proxy_cleanup();
 }
 
 struct vio_string {
