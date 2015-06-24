@@ -37,8 +37,8 @@ using namespace std;
 #endif
 #undef THIS_MODULE
 #include "buf0checksum.h"
-#ifndef UNIV_INNOCHECKSUM
 #include "page0page.h"
+#ifndef UNIV_INNOCHECKSUM
 #include "mtr0log.h"
 #include "dict0dict.h"
 #include "btr0cur.h"
