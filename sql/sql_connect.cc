@@ -289,6 +289,7 @@ static void increment_connection_count(const THD &thd, bool use_lock) {
       get_valid_user_string(thd.m_main_security_ctx.user().str);
   const char *client_string = get_client_host(thd);
 
+
   if (use_lock) mysql_mutex_lock(&LOCK_global_user_client_stats);
 
   increment_count_by_name(user_string, user_string, global_user_stats, thd);
