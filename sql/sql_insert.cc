@@ -768,6 +768,8 @@ bool Sql_cmd_insert_values::execute_inner(THD *thd) {
     DBUG_ASSERT(opt_debug_sync_timeout > 0);
     DBUG_ASSERT(!debug_sync_set_action(thd, STRING_WITH_LEN(act)));
   };);
+  thd->lex->clear_values_map();
+  DEBUG_SYNC(thd, "after_mysql_insert");
 
   DBUG_RETURN(false);
 }
@@ -2169,6 +2171,7 @@ bool Query_result_insert::send_eof() {
               table->file->has_transactions(), table->file->table_type()));
 
   error = (bulk_insert_started ? table->file->ha_end_bulk_insert() : 0);
+  bulk_insert_started = false;
   if (!error && thd->is_error()) error = thd->get_stmt_da()->mysql_errno();
 
   changed = (info.stats.copied || info.stats.deleted || info.stats.updated);
@@ -2276,7 +2279,10 @@ void Query_result_insert::abort_result_set() {
       if tables are not locked yet (bulk insert is not started yet
       in this case).
     */
-    if (bulk_insert_started) table->file->ha_end_bulk_insert();
+    if (bulk_insert_started) {
+      table->file->ha_end_bulk_insert();
+      bulk_insert_started = false;
+    }
 
     /*
       If at least one row has been inserted/modified and will stay in
