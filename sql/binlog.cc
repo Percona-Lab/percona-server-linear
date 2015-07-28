@@ -37,6 +37,7 @@
 #include <pfs_transaction_provider.h>
 #include <mysql/psi/mysql_transaction.h>
 #include "xa.h"
+
 #include <list>
 #include <string>
 
@@ -92,6 +93,7 @@ static int binlog_clone_consistent_snapshot(handlerton *hton, THD *thd,
                                             THD *from_thd);
 static int binlog_xa_commit(handlerton *hton,  XID *xid);
 static int binlog_xa_rollback(handlerton *hton,  XID *xid);
+
 static void exec_binlog_error_action_abort(const char* err_string);
 
 static char binlog_snapshot_file[FN_REFLEN];
@@ -999,6 +1001,7 @@ class Binlog_event_writer
   ha_checksum initial_checksum;
   ha_checksum checksum;
   uint32 end_log_pos;
+  THD *thd;
 
 public:
   /**
@@ -1007,15 +1010,17 @@ public:
     binlog.
 
     @param output_cache_arg IO_CACHE to write to.
+    @param thd_arg THD to account written binlog byte statistics to
     @param have_checksum_al
   */
-  Binlog_event_writer(IO_CACHE *output_cache_arg)
+  Binlog_event_writer(IO_CACHE *output_cache_arg, THD *thd_arg)
     : output_cache(output_cache_arg),
       have_checksum(binlog_checksum_options !=
                     binary_log::BINLOG_CHECKSUM_ALG_OFF),
       initial_checksum(my_checksum(0L, NULL, 0)),
       checksum(initial_checksum),
-      end_log_pos(my_b_tell(output_cache))
+      end_log_pos(my_b_tell(output_cache)),
+      thd(thd_arg)
   {
     // Simulate checksum error
     if (DBUG_EVALUATE_IF("fault_injection_crc_value", 1, 0))
@@ -1098,6 +1103,7 @@ public:
     *buf_p+= write_bytes;
     *buf_len_p-= write_bytes;
     *event_len_p-= write_bytes;
+    thd->binlog_bytes_written+= write_bytes;
 
     if (have_checksum)
     {
@@ -1108,6 +1114,7 @@ public:
         int4store(checksum_buf, checksum);
         if (my_b_write(output_cache, checksum_buf, BINLOG_CHECKSUM_LEN))
           DBUG_RETURN(true);
+        thd->binlog_bytes_written+= BINLOG_CHECKSUM_LEN;
         checksum= initial_checksum;
       }
     }
@@ -1206,6 +1213,7 @@ int binlog_cache_data::write_event(THD *thd, Log_event *ev)
                         DBUG_SET("-d,simulate_file_write_error");
                         DBUG_SET("-d,simulate_disk_full_at_flush_pending");
                         /* 
+                           after +d,simulate_file_write_error the local cache
                            is in unsane state. Since -d,simulate_file_write_error
                            revokes the first simulation do_write_cache()
                            can't be run without facing an assert.
@@ -1562,7 +1570,7 @@ binlog_cache_data::flush(THD *thd, my_off_t *bytes_written, bool *wrote_xid)
       non-empty then we get two Anonymous_gtid_log_events, which is
       correct.
     */
-    Binlog_event_writer writer(mysql_bin_log.get_log_file());
+    Binlog_event_writer writer(mysql_bin_log.get_log_file(), thd);
 
     /* The GTID ownership process might set the commit_error */
     error= (thd->commit_error == THD::CE_FLUSH_ERROR);
@@ -1834,7 +1842,6 @@ static int binlog_clone_consistent_snapshot(handlerton *hton, THD *thd,
 }
 
 
-
 /**
    Logging XA commit/rollback of a prepared transaction in the case
    it was disconnected and resumed (recovered), or executed by a slave applier.
@@ -1885,6 +1892,7 @@ static int binlog_xa_commit(handlerton *hton,  XID *xid)
 
   return 0;
 }
+
 
 static int binlog_xa_rollback(handlerton *hton,  XID *xid)
 {
@@ -3246,7 +3254,7 @@ bool show_binlog_events(THD *thd, MYSQL_BIN_LOG *binary_log)
         description_event->common_footer->checksum_alg=
                            ev->common_footer->checksum_alg;
       if (event_count >= limit_start &&
-	  ev->net_send(protocol, linfo.log_file_name, pos))
+	 ev->net_send(protocol, linfo.log_file_name, pos))
       {
 	errmsg = "Net error";
 	delete ev;
@@ -3535,7 +3543,7 @@ updating the index files.", max_found);
   }
   *end++='.';
 
-  /*
+  /* 
     Check if the generated extension size + the file name exceeds the
     buffer size used. If one did not check this, then the filename might be
     truncated, resulting in error.
@@ -4888,8 +4896,8 @@ bool MYSQL_BIN_LOG::open_binlog(const char *log_name,
       it may be good to consider what actually happens when
       open_purge_index_file succeeds but register or sync fails.
 
+      Perhaps we might need the code below in MYSQL_BIN_LOG::cleanup
       for "real life" purposes as well? 
-      for "real life" purposes as well?
     */
     DBUG_EXECUTE_IF("fault_injection_registering_index", {
       if (my_b_inited(&purge_index_file))
@@ -5048,8 +5056,8 @@ bool MYSQL_BIN_LOG::open_binlog(const char *log_name,
       the PREVIOUS_GTIDS of binary logs (when current_thd==NULL) after
       server's GTID initialization.
 
+      During server's startup at mysqld_main(), from the binary/relay log
       initialization point of view, it will:
-  
       1) Call init_server_components() that will generate a new binary log
          file but won't write the PREVIOUS_GTIDS event yet;
       2) Initialize server's GTIDs;
@@ -5111,8 +5119,8 @@ bool MYSQL_BIN_LOG::open_binlog(const char *log_name,
   }
   if (flush_io_cache(&log_file) ||
       mysql_file_sync(log_file.file, MYF(MY_WME)))
+    goto err;
   
-
   if (write_file_name_to_index_file)
   {
 #ifdef HAVE_REPLICATION
@@ -5634,8 +5642,8 @@ int MYSQL_BIN_LOG::find_next_relay_log(char log_name[FN_REFLEN+1])
 
   The new index file will only contain this file.
 
+  @param thd Thread
 
-      if (my_errno() == ENOENT) 
   @note
     If not called from slave thread, write start event to new log
 
@@ -7368,6 +7376,8 @@ bool MYSQL_BIN_LOG::write_event(Log_event *event_info)
                              event_info->event_cache_type, event_info->event_logging_type);
           if (cache_data->write_event(thd, &e))
             goto err;
+          if (event_info->is_using_immediate_logging())
+            thd->binlog_bytes_written+= e.header()->data_written;
         }
         if (thd->auto_inc_intervals_in_cur_stmt_for_binlog.nb_elements() > 0)
         {
@@ -7380,6 +7390,8 @@ bool MYSQL_BIN_LOG::write_event(Log_event *event_info)
                              event_info->event_logging_type);
           if (cache_data->write_event(thd, &e))
             goto err;
+          if (event_info->is_using_immediate_logging())
+            thd->binlog_bytes_written+= e.header()->data_written;
         }
         if (thd->rand_used)
         {
@@ -7388,6 +7400,8 @@ bool MYSQL_BIN_LOG::write_event(Log_event *event_info)
                            event_info->event_logging_type);
           if (cache_data->write_event(thd, &e))
             goto err;
+          if (event_info->is_using_immediate_logging())
+            thd->binlog_bytes_written+= e.header()->data_written;
         }
         if (!thd->user_var_events.empty())
         {
@@ -7411,6 +7425,8 @@ bool MYSQL_BIN_LOG::write_event(Log_event *event_info)
                                  event_info->event_logging_type);
             if (cache_data->write_event(thd, &e))
               goto err;
+            if (event_info->is_using_immediate_logging())
+              thd->binlog_bytes_written+= e.header()->data_written;
           }
         }
       }
@@ -7424,6 +7440,8 @@ bool MYSQL_BIN_LOG::write_event(Log_event *event_info)
 
     if (DBUG_EVALUATE_IF("injecting_fault_writing", 1, 0))
       goto err;
+    if (event_info->is_using_immediate_logging())
+      thd->binlog_bytes_written+= event_info->common_header->data_written;
 
     /*
       After writing the event, if the trx-cache was used and any unsafe
@@ -12122,8 +12140,8 @@ inline int64 Logical_clock::set_if_greater(int64 new_val)
 
 /**
   Log the current query.
+
   The query will be logged in either row format or statement format
- 
   depending on the value of @c current_stmt_binlog_format_row field and
   the value of the @c qtype parameter.
 
@@ -12191,8 +12209,8 @@ int THD::binlog_query(THD::enum_binlog_query_type qtype, const char *query_arg,
 
     3 - THD::binlog_query (here) which prints warning for top level
     statements not covered by the two cases above: i.e., if not insided a
+    procedure and a function.
  
-
     Besides, we should not try to print these warnings if it is not
     possible to write statements to the binary log as it happens when
     the execution is inside a function, or generaly speaking, when
@@ -12228,8 +12246,8 @@ int THD::binlog_query(THD::enum_binlog_query_type qtype, const char *query_arg,
       if current_stmt_binlog_format_row is row.
 
       @todo Currently there are places that call this method with
+      STMT_QUERY_TYPE and current_stmt_binlog_format is row.  Fix those
       places and add assert to ensure correct behavior. /Sven
-  0,  
     */
   case THD::STMT_QUERY_TYPE:
     /*
@@ -12297,7 +12315,7 @@ mysql_declare_plugin(binlog)
   0x0100 /* 1.0 */,
   binlog_status_vars_top,     /* status variables                */
   NULL,                       /* system variables                */
+  NULL,                       /* config options                  */
   0,  
-  0,
 }
 mysql_declare_plugin_end;
