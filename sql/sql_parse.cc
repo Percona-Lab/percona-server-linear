@@ -77,6 +77,8 @@
 #include "rpl_handler.h"
 
 #include "sp_head.h"
+#include "sp_rcontext.h"
+#include "sp_instr.h"
 #include "sp.h"
 #include "sp_cache.h"
 #include "events.h"
@@ -2326,11 +2328,13 @@ err:
 
   @param thd     Thread context.
 
-  @return FALSE on success, TRUE in case of error.
+  @return false on success, true in case of error.
 */
 
 static bool lock_tables_for_backup(THD *thd)
 {
+  bool res;
+
   DBUG_ENTER("lock_tables_for_backup");
 
   if (check_global_access(thd, RELOAD_ACL))
@@ -2360,7 +2364,15 @@ static bool lock_tables_for_backup(THD *thd)
     DBUG_RETURN(true);
   }
 
-  DBUG_RETURN(thd->backup_tables_lock.acquire(thd));
+  res= thd->backup_tables_lock.acquire(thd);
+
+  if (ha_store_binlog_info(thd))
+  {
+    thd->backup_tables_lock.release(thd);
+    res= true;
+  }
+
+  DBUG_RETURN(res);
 }
 
 /**
@@ -5339,6 +5351,7 @@ static bool execute_sqlcom_select(THD *thd, TABLE_LIST *all_tables)
 
   if (statement_timer_armed && thd->timer)
     reset_statement_timer(thd);
+
   DEBUG_SYNC(thd, "after_table_open");
   return res;
 }
@@ -6673,7 +6686,7 @@ static uint kill_one_thread(THD *thd, my_thread_id id, bool only_kill_query)
 {
   THD *tmp= NULL;
   uint error=ER_NO_SUCH_THREAD;
-  Find_thd_with_id find_thd_with_id(id);
+  Find_thd_with_id find_thd_with_id(id, false);
 
   DBUG_ENTER("kill_one_thread");
   DBUG_PRINT("enter", ("id=%u only_kill=%d", id, only_kill_query));
@@ -6764,7 +6777,8 @@ public:
   {
     mysql_mutex_lock(&thd_to_kill->LOCK_thd_data);
 
-    /* Kill only if non super thread and non slave thread.
+    /* Kill only if non super thread, non slave thread, and non utility user
+       thread.
        If an account has not yet been assigned to the security context of the
        thread we cannot tell if the account is super user or not. In this case
        we cannot kill that thread. In offline mode, after the account is
@@ -6775,7 +6789,10 @@ public:
     if (thd_to_kill->security_context()->has_account_assigned()
   && !(thd_to_kill->security_context()->check_access(SUPER_ACL))
 	&& thd_to_kill->killed != THD::KILL_CONNECTION
-	&& !thd_to_kill->slave_thread)
+	&& !thd_to_kill->slave_thread
+        && !acl_is_utility_user(thd_to_kill->security_context()->user().str,
+                                thd_to_kill->security_context()->host().str,
+                                thd_to_kill->security_context()->ip().str))
       thd_to_kill->awake(THD::KILL_CONNECTION);
 
     mysql_mutex_unlock(&thd_to_kill->LOCK_thd_data);
