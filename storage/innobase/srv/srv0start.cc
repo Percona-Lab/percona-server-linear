@@ -1838,6 +1838,10 @@ dberr_t srv_start(bool create_new_db) {
         return srv_init_abort(DB_ERROR);
       }
 
+      DBUG_EXECUTE_IF(
+          "ib_recovery_print_mysql_binlog_offset",
+          if (recv_needed_recovery) { trx_sys_print_mysql_binlog_offset(); });
+
       /* Validate a few system page types that were left uninitialized
       by older versions of MySQL. */
       verify_page_type({IBUF_SPACE_ID, FSP_IBUF_HEADER_PAGE_NO},
