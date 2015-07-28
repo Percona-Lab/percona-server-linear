@@ -8647,9 +8647,9 @@ MYSQL_BIN_LOG::finish_commit(THD *thd)
     if (thd->commit_error == THD::CE_NONE)
     {
       /*
-        Acquire a shared lock to block commits until START TRANSACTION WITH
-        CONSISTENT SNAPSHOT completes snapshot creation for all storage
-        engines. We only reach this code if binlog_order_commits=0.
+        Acquire a shared lock to block commits if an X lock has been acquired by
+        LOCK TABLES FOR BACKUP or START TRANSACTION WITH CONSISTENT SNAPSHOT. We
+        only reach this code if binlog_order_commits=0.
       */
       DBUG_ASSERT(opt_binlog_order_commits == 0);
 
@@ -9225,7 +9225,7 @@ void MYSQL_BIN_LOG::xlock(void)
     threads with each acquiring a shared lock on LOCK_consistent_snapshot.
 
     binlog_order_commits is a dynamic variable, so we have to keep track what
-    primitives should be used in unlock_for_snapshot().
+    primitives should be used in xunlock().
   */
   if (opt_binlog_order_commits)
   {
