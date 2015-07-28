@@ -843,7 +843,6 @@ class Prepared_statement;
 
 /**
   Container for all prepared statements created/used in a connection.
-
   Prepared statements in Prepared_statement_map have unique id
   (guaranteed by id assignment in Prepared_statement::Prepared_statement).
 
@@ -2112,6 +2111,8 @@ public:
     query execution.
   */
   uint       last_errno;
+  /*** The variables above used in slow_extended.patch ***/
+
   /*** Following methods used in slow_extended.patch ***/
   void clear_slow_extended();
 private:
@@ -3155,8 +3156,10 @@ public:
   ulonglong diff_access_denied_errors;
   // Number of queries that return 0 rows
   ulonglong diff_empty_queries;
-  // milliseconds before every SQL command.
+
   // Per account query delay in miliseconds. When not 0, sleep this number of
+  // milliseconds before every SQL command.
+  ulonglong query_delay_millis;
 
   /* Used by the sys_var class to store temporary values */
   union
@@ -3547,7 +3550,6 @@ public:
     set @@autocommit=0;
     select * from nontrans_table;
     set @var=TRUE;
-
     flush tables;
 
     Note, that even for a statement that starts a multi-statement
