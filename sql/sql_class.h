@@ -819,7 +819,6 @@ class Prepared_statement;
 
 /**
   Container for all prepared statements created/used in a connection.
-
   Prepared statements in Prepared_statement_map have unique id
   (guaranteed by id assignment in Prepared_statement::Prepared_statement).
 
@@ -2076,6 +2075,8 @@ public:
     query execution.
   */
   uint       last_errno;
+  /*** The variables above used in slow_extended.patch ***/
+
   /*** Following methods used in slow_extended.patch ***/
   void clear_slow_extended();
 private:
@@ -2090,14 +2091,12 @@ public:
   /* Do not set socket timeouts for wait_timeout (used with threadpool) */
   bool skip_wait_timeout;
 
-  /**
+  /** 
     Used by fill_status() to avoid acquiring LOCK_status mutex twice
-    when this function is called recursively (e.g. queries
-    that contains SELECT on I_S.GLOBAL_STATUS with subquery on the
-    when this function is called recursively (e.g. queries
-    Incremented each time fill_status() function is entered and 
+    when this function is called recursively (e.g. queries 
+    that contains SELECT on I_S.GLOBAL_STATUS with subquery on the 
     same I_S table).
-    Incremented each time fill_status() function is entered and
+    Incremented each time fill_status() function is entered and 
     decremented each time before it returns from the function.
   */
   uint fill_status_recursion_level;
@@ -2159,7 +2158,7 @@ public:
   Rows_log_event* binlog_get_pending_rows_event(bool is_transactional) const;
   inline int binlog_flush_pending_rows_event(bool stmt_end)
   {
-    return (binlog_flush_pending_rows_event(stmt_end, FALSE) ||
+    return (binlog_flush_pending_rows_event(stmt_end, FALSE) || 
             binlog_flush_pending_rows_event(stmt_end, TRUE));
   }
   int binlog_flush_pending_rows_event(bool stmt_end, bool is_transactional);
@@ -3092,8 +3091,10 @@ public:
   ulonglong diff_access_denied_errors;
   // Number of queries that return 0 rows
   ulonglong diff_empty_queries;
-  // milliseconds before every SQL command.
+
   // Per account query delay in miliseconds. When not 0, sleep this number of
+  // milliseconds before every SQL command.
+  ulonglong query_delay_millis;
 
   /* Used by the sys_var class to store temporary values */
   union
@@ -3194,9 +3195,9 @@ public:
     pre-allocate memory for it. We can't do that in THD constructor because
     there are use cases (acl_init, watcher threads,
     killing mysqld) where it's vital to not allocate excessive and not used
-    alloc_root. 
+    memory. Note, that we still don't return error from init_for_queries():
     if preallocation fails, we should notice that at the first call to
-    alloc_root.
+    alloc_root. 
   */
   void init_for_queries(Relay_log_info *rli= NULL);
   void cleanup_connection(void);
@@ -3481,9 +3482,9 @@ public:
     set @@autocommit=0;
     select * from nontrans_table;
     set @var=TRUE;
-    Note, that even for a statement that starts a multi-statement
+    flush tables;
 
-    because of explicit start of a transaction with BEGIN. 
+    Note, that even for a statement that starts a multi-statement
     transaction (i.e. select * from trans_table), this
     flag won't be set until we open the statement's tables
     and the engines register themselves for the transaction
@@ -3493,9 +3494,9 @@ public:
 
     Why do we need a flag?
     ----------------------
-    because of explicit start of a transaction with BEGIN. 
+    We need to maintain a (at first glance redundant)
     session flag, rather than looking at thd->transaction.all.ha_list
-    because of explicit start of a transaction with BEGIN.
+    because of explicit start of a transaction with BEGIN. 
 
     I.e. in case of
     BEGIN;
@@ -3659,7 +3660,7 @@ public:
   Diagnostics_area *get_query_rewrite_plugin_da()
   {
     return m_query_rewrite_plugin_da_ptr;
-  }
+  }  
 
   /**
     Push the given Diagnostics Area on top of the stack, making
@@ -5691,10 +5692,10 @@ public:
 /* Bits in server_command_flags */
 
 /**
+  Skip the increase of the global query id counter. Commonly set for
+  commands that are stateless (won't cause any change on the server
   internal states). This is made obsolete as query id is incremented 
   for ping and statistics commands as well because of race condition 
-  internal states). This is made obsolete as query id is incremented
-  for ping and statistics commands as well because of race condition
   (Bug#58785).
 */
 #define CF_SKIP_QUERY_ID        (1U << 0)
