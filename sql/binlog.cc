@@ -1334,6 +1334,7 @@ static int binlog_init(void *p) {
   binlog_hton->rollback_by_xid = binlog_xa_rollback;
   binlog_hton->prepare = binlog_prepare;
   binlog_hton->start_consistent_snapshot = binlog_start_consistent_snapshot;
+  binlog_hton->clone_consistent_snapshot = binlog_clone_consistent_snapshot;
   binlog_hton->recover = binlog_dummy_recover;
   binlog_hton->flags = HTON_NOT_USER_SELECTABLE | HTON_HIDDEN;
   return 0;
