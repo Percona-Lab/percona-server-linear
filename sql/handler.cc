@@ -222,8 +222,8 @@ static const LEX_STRING sys_table_aliases[]=
 const char *ha_row_type[] = {
   "", "FIXED", "DYNAMIC", "COMPRESSED", "REDUNDANT", "COMPACT",
   /* Reserved to be "PAGE" in future versions */ "?",
-  "TOKUDB_UNCOMPRESSED", "TOKUDB_ZLIB", "TOKUDB_QUICKLZ", "TOKUDB_LZMA",
-  "TOKUDB_FAST", "TOKUDB_SMALL",
+  "TOKUDB_UNCOMPRESSED", "TOKUDB_ZLIB", "TOKUDB_SNAPPY", "TOKUDB_QUICKLZ",
+  "TOKUDB_LZMA", "TOKUDB_FAST", "TOKUDB_SMALL",
   "?","?","?"
 };
 
@@ -8632,3 +8632,4 @@ bool handler::my_eval_gcolumn_expr(THD *thd,
   const bool res= my_eval_gcolumn_expr_helper(thd, table, fields, record, false);
   DBUG_RETURN(res);
 }
+

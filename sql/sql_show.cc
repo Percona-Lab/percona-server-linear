@@ -2179,7 +2179,10 @@ public:
     if ((!inspect_thd->get_protocol()->connection_alive() &&
          !inspect_thd->system_thread) ||
         (m_user && (inspect_thd->system_thread || !inspect_sctx_user.str ||
-                    strcmp(inspect_sctx_user.str, m_user))))
+                    strcmp(inspect_sctx_user.str, m_user))) ||
+          acl_is_utility_user(inspect_sctx_user.str,
+                              inspect_sctx_host.str,
+                              inspect_sctx->ip().str))
       return;
 
     thread_info *thd_info= new thread_info;
@@ -5483,6 +5486,9 @@ static int get_schema_tables_record(THD *thd, TABLE_LIST *tables,
         break;
       case ROW_TYPE_TOKU_ZLIB:
         tmp_buff= "tokudb_zlib";
+        break;
+      case ROW_TYPE_TOKU_SNAPPY:
+        tmp_buff= "tokudb_snappy";
         break;
       case ROW_TYPE_TOKU_QUICKLZ:
         tmp_buff= "tokudb_quicklz";
