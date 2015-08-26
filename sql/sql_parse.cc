@@ -2568,6 +2568,9 @@ mysql_execute_command(THD *thd, bool first_level)
         lex->sql_command != SQLCOM_ROLLBACK_TO_SAVEPOINT &&
         !rpl_filter->db_ok(thd->db().str))
     {
+      /* we warn the slave SQL thread */
+      my_message(ER_SLAVE_IGNORED_TABLE, ER(ER_SLAVE_IGNORED_TABLE), MYF(0));
+
       binlog_gtid_end_transaction(thd);
       DBUG_RETURN(0);
     }
