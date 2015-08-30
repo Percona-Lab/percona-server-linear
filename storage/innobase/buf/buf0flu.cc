@@ -1,6 +1,6 @@
 /*****************************************************************************
 
-Copyright (c) 1995, 2013, Oracle and/or its affiliates. All Rights Reserved.
+Copyright (c) 1995, 2015, Oracle and/or its affiliates. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License as published by the Free Software
@@ -936,9 +936,11 @@ buf_flush_write_block_low(
 		break;
 	case BUF_BLOCK_ZIP_DIRTY:
 		frame = bpage->zip.data;
-
 		mach_write_to_8(frame + FIL_PAGE_LSN,
 				bpage->newest_modification);
+
+		ut_a(page_zip_verify_checksum(frame, zip_size));
+
 		memset(frame + FIL_PAGE_FILE_FLUSH_LSN, 0, 8);
 
 		ut_a(page_zip_verify_checksum(frame, zip_size));
@@ -2209,9 +2211,10 @@ Clears up tail of the LRU lists:
 * Put replaceable pages at the tail of LRU to the free list
 * Flush dirty pages at the tail of LRU to the disk
 The depth to which we scan each buffer pool is controlled by dynamic
-config parameter innodb_LRU_scan_depth. */
+config parameter innodb_LRU_scan_depth.
+@return total pages flushed */
 UNIV_INTERN
-void
+ulint
 buf_flush_LRU_tail(void)
 /*====================*/
 {
@@ -2313,6 +2316,8 @@ buf_flush_LRU_tail(void)
 			MONITOR_LRU_BATCH_PAGES,
 			total_flushed);
 	}
+
+	return(total_flushed);
 }
 
 /*********************************************************************//**
@@ -2722,8 +2727,7 @@ DECLARE_THREAD(buf_flush_page_cleaner_thread)(
 			}
 
 			/* Flush pages from flush_list if required */
-			n_flushed = page_cleaner_flush_pages_if_needed();
-
+			n_flushed += page_cleaner_flush_pages_if_needed();
 		} else {
 			n_flushed = page_cleaner_do_flush_batch(
 							PCT_IO(100),
@@ -2848,6 +2852,8 @@ DECLARE_THREAD(buf_flush_lru_manager_thread)(
 	while (srv_shutdown_state == SRV_SHUTDOWN_NONE
 	       || srv_shutdown_state == SRV_SHUTDOWN_CLEANUP) {
 
+		ulint n_flushed_lru;
+
 		srv_current_thread_priority = srv_cleaner_thread_priority;
 
 		page_cleaner_sleep_if_needed(next_loop_time);
@@ -2856,7 +2862,16 @@ DECLARE_THREAD(buf_flush_lru_manager_thread)(
 
 		next_loop_time = ut_time_ms() + lru_sleep_time;
 
-		buf_flush_LRU_tail();
+		n_flushed_lru = buf_flush_LRU_tail();
+
+		if (n_flushed_lru) {
+
+			MONITOR_INC_VALUE_CUMULATIVE(
+				MONITOR_FLUSH_BACKGROUND_TOTAL_PAGE,
+				MONITOR_FLUSH_BACKGROUND_COUNT,
+				MONITOR_FLUSH_BACKGROUND_PAGES,
+				n_flushed_lru);
+		}
 	}
 
 	buf_lru_manager_is_active = false;
