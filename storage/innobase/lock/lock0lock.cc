@@ -1139,7 +1139,7 @@ lock_rec_has_expl(
 /*********************************************************************//**
 Checks if some other transaction has a lock request in the queue.
 @return lock or NULL */
-static
+static MY_ATTRIBUTE((warn_unused_result))
 const lock_t*
 lock_rec_other_has_expl_req(
 /*========================*/
@@ -5318,6 +5318,7 @@ lock_print_info_all_transactions(
 	ut_ad(lock_validate());
 }
 
+
 #ifdef UNIV_DEBUG
 /*********************************************************************//**
 Find the the lock in the trx_t::trx_lock_t::table_locks vector.
@@ -5330,6 +5331,10 @@ lock_trx_table_locks_find(
 	const lock_t*	find_lock)	/*!< in: lock to find */
 {
 	bool		found = false;
+	    /* TODO broken
+	if ( srv_show_verbose_locks ) {
+	block = buf_page_try_get(space, page_no, &mtr);
+	    */
 
 	trx_mutex_enter(trx);
 
@@ -5356,6 +5361,7 @@ lock_trx_table_locks_find(
 		ut_a(lock_get_type_low(lock) & LOCK_TABLE);
 		ut_a(lock->un_member.tab_lock.table != NULL);
 	}
+	// } TODO broken
 
 	trx_mutex_exit(trx);
 
@@ -5821,6 +5827,7 @@ lock_rec_insert_check_and_lock(
 	      || dict_index_is_clust(index)
 	      || (flags & BTR_CREATE_FLAG));
 	ut_ad(mtr->is_named_space(index->space));
+	ut_ad((flags & BTR_NO_LOCKING_FLAG) || thr);
 
 	if (flags & BTR_NO_LOCKING_FLAG) {
 
@@ -7527,10 +7534,6 @@ DeadlockChecker::check_and_resolve(const lock_t* lock, const trx_t* trx)
 
 			rollback_print(victim_trx, lock);
 
-			MONITOR_INC(MONITOR_DEADLOCK);
-
-			break;
-
 		} else if (victim_trx != 0 && victim_trx != trx) {
 
 			ut_ad(victim_trx == checker.m_wait_lock->trx);
@@ -7550,6 +7553,8 @@ DeadlockChecker::check_and_resolve(const lock_t* lock, const trx_t* trx)
 		print("*** WE ROLL BACK TRANSACTION (2)\n");
 
 		lock_deadlock_found = true;
+
+		MONITOR_INC(MONITOR_DEADLOCK);
 	}
 
 	return(victim_trx);
