@@ -1975,6 +1975,12 @@ end_of_index:
 
 		rec = page_cur_get_rec(cur);
 
+		SRV_CORRUPT_TABLE_CHECK(rec,
+		{
+			err = DB_CORRUPTION;
+			goto func_exit;
+		});
+
 		offsets = rec_get_offsets(rec, clust_index, NULL,
 					  ULINT_UNDEFINED, &row_heap);
 
