@@ -3074,6 +3074,8 @@ dberr_t btr_cur_pessimistic_insert(
   }
 
   if (!(flags & BTR_NO_UNDO_LOG_FLAG) || index->table->is_intrinsic()) {
+    ut_a(cursor->tree_height != ULINT_UNDEFINED);
+
     /* First reserve enough free space for the file segments
     of the index tree, so that the insert will not fail because
     of lack of space */
@@ -4757,6 +4759,8 @@ ibool btr_cur_pessimistic_delete(dberr_t *err, ibool has_reserved_extents,
     of the index tree, so that the node pointer updates will
     not fail because of lack of space */
 
+    ut_a(cursor->tree_height != ULINT_UNDEFINED);
+
     ulint n_extents = cursor->tree_height / 32 + 1;
 
     success = fsp_reserve_free_extents(&n_reserved, index->space, n_extents,
@@ -5594,6 +5598,12 @@ bool btr_estimate_number_of_different_key_vals(
     page = btr_cur_get_page(&cursor);
 
     SRV_CORRUPT_TABLE_CHECK(page, goto exit_loop;);
+    DBUG_EXECUTE_IF("ib_corrupt_page_while_stats_calc", page = NULL;);
+
+    SRV_CORRUPT_TABLE_CHECK(page, {
+      mtr_commit(&mtr);
+      goto exit_loop;
+    });
 
     rec = page_rec_get_next(page_get_infimum_rec(page));
 
