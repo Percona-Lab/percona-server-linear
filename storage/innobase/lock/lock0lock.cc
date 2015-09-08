@@ -918,7 +918,7 @@ bool can_trx_be_ignored(const trx_t *trx) {
 
 /** Checks if some other transaction has a lock request in the queue.
  @return lock or NULL */
-static const lock_t *lock_rec_other_has_expl_req(
+MY_NODISCARD static const lock_t *lock_rec_other_has_expl_req(
     lock_mode mode,           /*!< in: LOCK_S or LOCK_X */
     const buf_block_t *block, /*!< in: buffer block containing
                               the record */
@@ -7233,8 +7233,6 @@ const trx_t *DeadlockChecker::check_and_resolve(const lock_t *lock,
 
       rollback_print(victim_trx, lock);
 
-      MONITOR_INC(MONITOR_DEADLOCK);
-
       break;
 
     } else if (victim_trx != NULL && victim_trx != trx) {
@@ -7254,6 +7252,8 @@ const trx_t *DeadlockChecker::check_and_resolve(const lock_t *lock,
     print("*** WE ROLL BACK TRANSACTION (2)\n");
 
     lock_deadlock_found = true;
+
+    MONITOR_INC(MONITOR_DEADLOCK);
   }
 
   trx_mutex_enter(trx);
