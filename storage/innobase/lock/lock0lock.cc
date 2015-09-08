@@ -785,7 +785,7 @@ const lock_t *lock_rec_has_expl(ulint precise_mode, const buf_block_t *block,
 #ifdef UNIV_DEBUG
 /** Checks if some other transaction has a lock request in the queue.
  @return lock or NULL */
-static const lock_t *lock_rec_other_has_expl_req(
+MY_NODISCARD static const lock_t *lock_rec_other_has_expl_req(
     lock_mode mode,           /*!< in: LOCK_S or LOCK_X */
     const buf_block_t *block, /*!< in: buffer block containing
                               the record */
