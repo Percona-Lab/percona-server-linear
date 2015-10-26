@@ -2045,7 +2045,10 @@ void mysqld_list_processes(THD *thd, const char *user, bool verbose) {
     else
       protocol->store(command_name[thd_info->command].str, system_charset_info);
     if (thd_info->start_time_in_secs)
-      protocol->store_long((longlong)(now - thd_info->start_time_in_secs));
+      protocol->store_long(
+          (thd_info->start_time_in_secs > now)
+              ? 0
+              : static_cast<longlong>(now - thd_info->start_time_in_secs));
     else
       protocol->store_null();
     protocol->store(thd_info->state_info, system_charset_info);
@@ -2083,6 +2086,7 @@ class Fill_process_list : public Do_THD_Impl {
         m_client_thd->security_context()->check_access(PROCESS_ACL)
             ? NullS
             : client_priv_user;
+    ulonglong now_utime = my_micro_time();
 
     if ((!inspect_thd->get_protocol()->connection_alive() &&
          !inspect_thd->system_thread) ||
@@ -2148,6 +2152,12 @@ class Fill_process_list : public Do_THD_Impl {
       table->field[6]->store(val, strlen(val), system_charset_info);
       table->field[6]->set_notnull();
     }
+
+    /* TIME_MS */
+    ulonglong tmp_start_utime = inspect_thd->start_utime;
+    table->field[8]->store(
+        ((tmp_start_utime < now_utime ? now_utime - tmp_start_utime : 0) /
+         1000));
 
     mysql_mutex_unlock(&inspect_thd->LOCK_thd_data);
 
@@ -4931,6 +4941,8 @@ ST_FIELD_INFO processlist_fields_info[] = {
     {"STATE", 64, MYSQL_TYPE_STRING, 0, 1, "State", SKIP_OPEN_TABLE},
     {"INFO", PROCESS_LIST_INFO_WIDTH, MYSQL_TYPE_STRING, 0, 1, "Info",
      SKIP_OPEN_TABLE},
+    {"TIME_MS", MY_INT64_NUM_DECIMAL_DIGITS, MYSQL_TYPE_LONGLONG, 0, 0,
+     "Time_ms", SKIP_OPEN_TABLE},
     {0, 0, MYSQL_TYPE_STRING, 0, 0, 0, SKIP_OPEN_TABLE}};
 
 ST_FIELD_INFO plugin_fields_info[] = {
