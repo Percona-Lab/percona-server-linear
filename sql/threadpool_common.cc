@@ -28,7 +28,6 @@
 #include <mysqld_thd_manager.h>
 #include <mysql/thread_pool_priv.h>
 
-
 /* Threadpool parameters */
 
 uint threadpool_min_threads;
@@ -40,6 +39,7 @@ uint threadpool_oversubscribe;
 
 /* Stats */
 TP_STATISTICS tp_stats;
+
 
 extern bool do_command(THD*);
 
@@ -203,6 +203,7 @@ int threadpool_add_connection(THD* thd)
                                 thd->thread_id());
 #endif
 
+
   /* Login. */
   thread_attach(thd);
   thd->start_utime= thd->thr_create_utime= my_micro_time();
@@ -338,7 +339,6 @@ end:
   worker_context.restore();
   return retval;
 }
-
 
 THD_event_functions tp_event_functions=
 {
