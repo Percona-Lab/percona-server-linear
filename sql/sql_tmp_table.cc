@@ -2470,6 +2470,12 @@ void free_tmp_table(THD *thd, TABLE *entry) {
   save_proc_info = thd->proc_info;
   THD_STAGE_INFO(thd, stage_removing_tmp_table);
 
+  thd->tmp_tables_used++;
+  if (entry->file) {
+    thd->tmp_tables_size += entry->file->stats.data_file_length;
+    if (entry->file->ht->db_type != DB_TYPE_HEAP) thd->tmp_tables_disk_used++;
+  }
+
   filesort_free_buffers(entry, true);
 
   DBUG_ASSERT(entry->s->tmp_handler_count <= entry->s->ref_count);
