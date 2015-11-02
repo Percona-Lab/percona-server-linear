@@ -126,10 +126,6 @@ Files: *
 Copyright: 2009-2013 Percona LLC
 License: GPL-2
 
-Files: storage/HandlerSocket-Plugin-for-MySQL/*
-Copyright: Copyright (c) 2010 DeNA Co.,Ltd.
-License: BSD (3 clause)
-
 Files: UDF/src/*.cc
 Copyright: None, Public Domain
 License: PD
