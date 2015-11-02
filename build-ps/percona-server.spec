@@ -1277,7 +1277,6 @@ fi
 %attr(755, root, root) %{_libdir}/mysql/plugin/auth_pam.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/auth_pam_compat.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/dialog.so
-%attr(755, root, root) %{_libdir}/mysql/plugin/handlersocket.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/query_response_time.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/mysql_no_login.so
 
@@ -1302,7 +1301,6 @@ fi
 %attr(755, root, root) %{_libdir}/mysql/plugin/debug/semisync_master.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/debug/semisync_slave.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/debug/validate_password.so
-%attr(755, root, root) %{_libdir}/mysql/plugin/debug/handlersocket.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/debug/query_response_time.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/debug/mysql_no_login.so
 # Audit Log and Scalability Metrics files
