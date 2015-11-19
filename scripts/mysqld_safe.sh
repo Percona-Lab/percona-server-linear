@@ -19,7 +19,6 @@ mysqld_ld_preload=
 mysqld_ld_library_path=
 load_hotbackup=0
 flush_caches=0
-numa_interleave=
 # Change (disable) transparent huge pages (TokuDB requirement)
 thp_setting=
 
@@ -104,8 +103,6 @@ Usage: $0 [OPTIONS]
   --syslog-tag=TAG           Pass -t "mysqld-TAG" to 'logger'
   --flush-caches             Flush and purge buffers/caches before
                              starting the server
-  --numa-interleave          Run mysqld with its memory interleaved
-                             on all NUMA nodes
 ${thp_usage}
   --mysqld-safe-log-         TYPE must be one of UTC (ISO 8601 UTC),
     timestamps=TYPE          system (ISO 8601 local time), hyphen
