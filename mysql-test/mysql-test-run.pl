@@ -666,10 +666,10 @@ sub run_test_server ($$$) {
 
 	  # Report test status
 	  mtr_report_test($result);
-	  mtr_report_test_subunit($result);
 
 	  if ( $result->is_failed() ) {
 
+	    # Save the workers "savedir" in var/log
 	    my $worker_savedir= $result->{savedir};
 	    my $worker_savename= basename($worker_savedir);
 	    my $savedir= "$opt_vardir/log/$worker_savename";
