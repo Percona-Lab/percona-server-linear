@@ -17110,23 +17110,35 @@ static bool check_engine(THD *thd, const char *db_name, const char *table_name,
   DBUG_ENTER("check_engine");
   handlerton **new_engine = &create_info->db_type;
   handlerton *req_engine = *new_engine;
-  handlerton *enf_engine = nullptr;
-
   bool no_substitution = (!is_engine_substitution_allowed(thd));
-
-  if (!opt_initialize && !opt_noacl) enf_engine = ha_enforce_handlerton(thd);
-
   if (!(*new_engine =
             ha_checktype(thd, ha_legacy_type(req_engine), no_substitution, 1)))
     DBUG_RETURN(true);
 
-  if (enf_engine) {
-    if (enf_engine != *new_engine && no_substitution) {
-      const char *engine_name = ha_resolve_storage_engine_name(req_engine);
-      my_error(ER_UNKNOWN_STORAGE_ENGINE, MYF(0), engine_name, engine_name);
-      DBUG_RETURN(true);
+  if (enforce_storage_engine && !opt_initialize && !opt_noacl) {
+    /*
+      Storage engine enforcement must be forbidden:
+      1. for "OPTIMIZE TABLE" statements.
+      2. for "ALTER TABLE" statements without explicit "... ENGINE=xxx" part
+      3. Transactional data dictionary (DD) tables
+    */
+    bool enforcement_forbidden =
+        ((thd->lex->sql_command == SQLCOM_ALTER_TABLE) &&
+         (create_info->used_fields & HA_CREATE_USED_ENGINE) == 0) ||
+        (thd->lex->sql_command == SQLCOM_OPTIMIZE) ||
+        dd::get_dictionary()->is_dd_table_name(db_name, table_name);
+
+    if (!enforcement_forbidden) {
+      handlerton *enf_engine = ha_enforce_handlerton(thd);
+      if (enf_engine) {
+        if (enf_engine != *new_engine && no_substitution) {
+          const char *engine_name = ha_resolve_storage_engine_name(req_engine);
+          my_error(ER_UNKNOWN_STORAGE_ENGINE, MYF(0), engine_name, engine_name);
+          DBUG_RETURN(true);
+        }
+        *new_engine = enf_engine;
+      }
     }
-    *new_engine = enf_engine;
   }
   if (req_engine && req_engine != *new_engine) {
     push_warning_printf(
