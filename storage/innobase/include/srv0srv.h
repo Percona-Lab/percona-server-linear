@@ -586,9 +586,6 @@ extern ulong srv_buf_pool_dump_pct;
 
 extern ulint srv_show_locks_held;
 
-
-extern ulint srv_show_locks_held;
-
 extern ulint srv_lock_table_size;
 
 extern ulint srv_cleaner_max_lru_time; /*!< the maximum time limit for a
