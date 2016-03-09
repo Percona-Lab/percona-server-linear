@@ -767,6 +767,10 @@ struct srv_sys_t {
 
   srv_stats_t::ulint_ctr_1_t activity_count; /*!< For tracking server
                                              activity */
+  srv_stats_t::ulint_ctr_1_t
+      ibuf_merge_activity_count; /*!< For tracking change
+                               buffer merge activity, a subset
+                               of overall server activity */
 };
 
 static srv_sys_t *srv_sys = NULL;
@@ -1853,8 +1857,13 @@ loop:
   srv_threads.m_error_monitor_thread_active = false;
 }
 
-/** Increment the server activity count. */
-void srv_inc_activity_count(void) { srv_sys->activity_count.inc(); }
+/** Increment the server activity count.
+@param[in]	ibuf_merge_activity	whether this activity bump is caused by
+                                        the background change buffer merge */
+void srv_inc_activity_count(bool ibuf_merge_activity) noexcept {
+  srv_sys->activity_count.inc();
+  if (ibuf_merge_activity) srv_sys->ibuf_merge_activity_count.inc();
+}
 
 /** Check whether any background thread (except the master thread) is active.
 Send the threads wakeup signal.
@@ -2015,12 +2024,41 @@ void srv_wake_master_thread(void) {
  @return activity count. */
 ulint srv_get_activity_count(void) { return (srv_sys->activity_count); }
 
-/** Check if there has been any activity.
- @return false if no change in activity counter. */
-ibool srv_check_activity(
-    ulint old_activity_count) /*!< in: old activity count */
-{
-  return (srv_sys->activity_count != old_activity_count);
+/** Get current server ibuf merge activity count.
+@return ibuf merge activity count */
+static ulint srv_get_ibuf_merge_activity_count() noexcept {
+  return (srv_sys->ibuf_merge_activity_count);
+}
+
+/** Check if there has been any activity. Considers background change buffer
+merge as regular server activity unless a non-default
+old_ibuf_merge_activity_count value is passed, in which case the merge will be
+treated as keeping server idle.
+@param[in]	old_activity_count	old activity count
+@param[in]	old_ibuf_merge_activity_count	old change buffer merge
+                                                activity count, or
+                                                ULINT_UNDEFINED
+@return false if no change in activity counter. */
+bool srv_check_activity(ulint old_activity_count,
+                        ulint old_ibuf_merge_activity_count) noexcept {
+  const ulint new_activity_count = srv_sys->activity_count;
+  if (old_ibuf_merge_activity_count == ULINT_UNDEFINED)
+    return (new_activity_count != old_activity_count);
+
+  /* If we care about ibuf merge activity, then the server is considered dle if
+  all activity, if any, was due to ibuf merge. */
+  const ulint new_ibuf_merge_activity_count =
+      srv_sys->ibuf_merge_activity_count;
+
+  ut_ad(new_ibuf_merge_activity_count <= new_activity_count);
+  ut_ad(new_ibuf_merge_activity_count >= old_ibuf_merge_activity_count);
+  ut_ad(new_activity_count >= old_activity_count);
+
+  const ulint ibuf_merge_activity_delta =
+      new_ibuf_merge_activity_count - old_ibuf_merge_activity_count;
+  const ulint activity_delta = new_activity_count - old_activity_count;
+
+  return (activity_delta > ibuf_merge_activity_delta);
 }
 
 /** Make room in the table cache by evicting an unused table.
@@ -2671,6 +2709,7 @@ void srv_master_thread() {
 
   srv_slot_t *slot;
   ulint old_activity_count = srv_get_activity_count();
+  ulint old_ibuf_merge_activity_count = srv_get_ibuf_merge_activity_count();
   ib_time_t last_print_time;
 
   my_thread_init();
@@ -2713,8 +2752,9 @@ loop:
     srv_main_thread_op_info = "checking free log space";
     log_free_check();
 
-    if (srv_check_activity(old_activity_count)) {
+    if (srv_check_activity(old_activity_count, old_ibuf_merge_activity_count)) {
       old_activity_count = srv_get_activity_count();
+      old_ibuf_merge_activity_count = srv_get_ibuf_merge_activity_count();
       srv_master_do_active_tasks();
     } else {
       srv_master_do_idle_tasks();
