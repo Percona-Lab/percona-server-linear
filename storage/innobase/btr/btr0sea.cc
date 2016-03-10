@@ -1172,6 +1172,7 @@ retry:
 	assert_block_ahi_valid(block);
 
 	if (index == NULL) {
+		assert_block_ahi_empty(block);
 		return;
 	}
 
@@ -1198,6 +1199,7 @@ retry:
 
 	if (block->index == NULL) {
 		rw_lock_s_unlock(latch);
+		assert_block_ahi_empty(block);
 		return;
 	}
 
