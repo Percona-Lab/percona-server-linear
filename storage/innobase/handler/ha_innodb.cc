@@ -18986,22 +18986,18 @@ innodb_buffer_pool_evict_uncompressed(void)
 			ut_ad(block->in_unzip_LRU_list);
 			ut_ad(block->page.in_LRU_list);
 
-			rw_lock_t* hash_lock
-				= buf_page_hash_lock_get(buf_pool,
-							 block->page.id);
-			rw_lock_x_lock(hash_lock);
 			mutex_enter(&block->mutex);
+			all_evicted = buf_LRU_free_page(&block->page, false);
 
-			if (!buf_page_can_relocate(&block->page)
-			    || block->page.oldest_modification) {
-				rw_lock_x_unlock(hash_lock);
-				mutex_exit(&block->mutex);
-				all_evicted = false;
+			if (all_evicted) {
+
+				mutex_enter(&buf_pool->LRU_list_mutex);
+				block = UT_LIST_GET_LAST(buf_pool->unzip_LRU);
 			} else {
-				buf_LRU_free_one_page(&block->page, false);
-			}
 
-			block = prev_block;
+				mutex_exit(&block->mutex);
+				block = prev_block;
+			}
 		}
 
 		mutex_exit(&buf_pool->LRU_list_mutex);
