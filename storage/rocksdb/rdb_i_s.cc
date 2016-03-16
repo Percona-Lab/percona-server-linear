@@ -65,10 +65,9 @@ static ST_FIELD_INFO rdb_i_s_cfstats_fields_info[] = {
     ROCKSDB_FIELD_INFO("VALUE", sizeof(uint64_t), MYSQL_TYPE_LONGLONG, 0),
     ROCKSDB_FIELD_INFO_END};
 
-static int rdb_i_s_cfstats_fill_table(my_core::THD *const thd,
-                                      my_core::TABLE_LIST *const tables,
-                                      my_core::Item *const cond
-                                      __attribute__((__unused__))) {
+static int rdb_i_s_cfstats_fill_table(
+    my_core::THD *const thd, my_core::TABLE_LIST *const tables,
+    my_core::Item *const cond MY_ATTRIBUTE((__unused__))) {
   DBUG_ENTER_FUNC();
 
   bool ret;
@@ -156,10 +155,9 @@ static ST_FIELD_INFO rdb_i_s_dbstats_fields_info[] = {
     ROCKSDB_FIELD_INFO("VALUE", sizeof(uint64_t), MYSQL_TYPE_LONGLONG, 0),
     ROCKSDB_FIELD_INFO_END};
 
-static int rdb_i_s_dbstats_fill_table(my_core::THD *const thd,
-                                      my_core::TABLE_LIST *const tables,
-                                      my_core::Item *const cond
-                                      __attribute__((__unused__))) {
+static int rdb_i_s_dbstats_fill_table(
+    my_core::THD *const thd, my_core::TABLE_LIST *const tables,
+    my_core::Item *const cond MY_ATTRIBUTE((__unused__))) {
   DBUG_ENTER_FUNC();
 
   bool ret;
@@ -242,10 +240,9 @@ static ST_FIELD_INFO rdb_i_s_perf_context_fields_info[] = {
     ROCKSDB_FIELD_INFO("VALUE", sizeof(uint64_t), MYSQL_TYPE_LONGLONG, 0),
     ROCKSDB_FIELD_INFO_END};
 
-static int rdb_i_s_perf_context_fill_table(my_core::THD *const thd,
-                                           my_core::TABLE_LIST *const tables,
-                                           my_core::Item *const cond
-                                           __attribute__((__unused__))) {
+static int rdb_i_s_perf_context_fill_table(
+    my_core::THD *const thd, my_core::TABLE_LIST *const tables,
+    my_core::Item *const cond MY_ATTRIBUTE((__unused__))) {
   DBUG_ENTER_FUNC();
 
   DBUG_ASSERT(thd != nullptr);
@@ -329,7 +326,7 @@ static ST_FIELD_INFO rdb_i_s_perf_context_global_fields_info[] = {
 
 static int rdb_i_s_perf_context_global_fill_table(
     my_core::THD *const thd, my_core::TABLE_LIST *const tables,
-    my_core::Item *const cond __attribute__((__unused__))) {
+    my_core::Item *const cond MY_ATTRIBUTE((__unused__))) {
   DBUG_ENTER_FUNC();
 
   DBUG_ASSERT(thd != nullptr);
@@ -387,10 +384,9 @@ static ST_FIELD_INFO rdb_i_s_cfoptions_fields_info[] = {
     ROCKSDB_FIELD_INFO("VALUE", NAME_LEN + 1, MYSQL_TYPE_STRING, 0),
     ROCKSDB_FIELD_INFO_END};
 
-static int rdb_i_s_cfoptions_fill_table(my_core::THD *const thd,
-                                        my_core::TABLE_LIST *const tables,
-                                        my_core::Item *const cond
-                                        __attribute__((__unused__))) {
+static int rdb_i_s_cfoptions_fill_table(
+    my_core::THD *const thd, my_core::TABLE_LIST *const tables,
+    my_core::Item *const cond MY_ATTRIBUTE((__unused__))) {
   DBUG_ENTER_FUNC();
 
   DBUG_ASSERT(thd != nullptr);
@@ -729,10 +725,9 @@ static int rdb_global_info_fill_row(my_core::THD *const thd,
   return my_core::schema_table_store_record(thd, tables->table);
 }
 
-static int rdb_i_s_global_info_fill_table(my_core::THD *const thd,
-                                          my_core::TABLE_LIST *const tables,
-                                          my_core::Item *const cond
-                                          __attribute__((__unused__))) {
+static int rdb_i_s_global_info_fill_table(
+    my_core::THD *const thd, my_core::TABLE_LIST *const tables,
+    my_core::Item *const cond MY_ATTRIBUTE((__unused__))) {
   DBUG_ENTER_FUNC();
 
   DBUG_ASSERT(thd != nullptr);
@@ -808,10 +803,9 @@ static int rdb_i_s_global_info_fill_table(my_core::THD *const thd,
 /*
   Support for INFORMATION_SCHEMA.ROCKSDB_COMPACTION_STATS dynamic table
  */
-static int rdb_i_s_compact_stats_fill_table(my_core::THD *thd,
-                                            my_core::TABLE_LIST *tables,
-                                            my_core::Item *cond
-                                            __attribute__((__unused__))) {
+static int rdb_i_s_compact_stats_fill_table(
+    my_core::THD *thd, my_core::TABLE_LIST *tables,
+    my_core::Item *cond MY_ATTRIBUTE((__unused__))) {
   DBUG_ASSERT(thd != nullptr);
   DBUG_ASSERT(tables != nullptr);
 
@@ -835,7 +829,7 @@ static int rdb_i_s_compact_stats_fill_table(my_core::THD *thd,
       continue;
     }
     std::map<std::string, double> props;
-    bool bool_ret __attribute__((__unused__));
+    bool bool_ret MY_ATTRIBUTE((__unused__));
     bool_ret = rdb->GetMapProperty(cfh, "rocksdb.cfstats", &props);
     DBUG_ASSERT(bool_ret);
 
@@ -1093,10 +1087,9 @@ static ST_FIELD_INFO rdb_i_s_index_file_map_fields_info[] = {
     ROCKSDB_FIELD_INFO_END};
 
 /* Fill the information_schema.rocksdb_index_file_map virtual table */
-static int rdb_i_s_index_file_map_fill_table(my_core::THD *const thd,
-                                             my_core::TABLE_LIST *const tables,
-                                             my_core::Item *const cond
-                                             __attribute__((__unused__))) {
+static int rdb_i_s_index_file_map_fill_table(
+    my_core::THD *const thd, my_core::TABLE_LIST *const tables,
+    my_core::Item *const cond MY_ATTRIBUTE((__unused__))) {
   DBUG_ENTER_FUNC();
 
   DBUG_ASSERT(thd != nullptr);
@@ -1206,10 +1199,9 @@ static ST_FIELD_INFO rdb_i_s_lock_info_fields_info[] = {
     ROCKSDB_FIELD_INFO_END};
 
 /* Fill the information_schema.rocksdb_locks virtual table */
-static int rdb_i_s_lock_info_fill_table(my_core::THD *const thd,
-                                        my_core::TABLE_LIST *const tables,
-                                        my_core::Item *const cond
-                                        __attribute__((__unused__))) {
+static int rdb_i_s_lock_info_fill_table(
+    my_core::THD *const thd, my_core::TABLE_LIST *const tables,
+    my_core::Item *const cond MY_ATTRIBUTE((__unused__))) {
   DBUG_ENTER_FUNC();
 
   DBUG_ASSERT(thd != nullptr);
@@ -1314,10 +1306,9 @@ static ST_FIELD_INFO rdb_i_s_trx_info_fields_info[] = {
     ROCKSDB_FIELD_INFO_END};
 
 /* Fill the information_schema.rocksdb_trx virtual table */
-static int rdb_i_s_trx_info_fill_table(my_core::THD *const thd,
-                                       my_core::TABLE_LIST *const tables,
-                                       my_core::Item *const cond
-                                       __attribute__((__unused__))) {
+static int rdb_i_s_trx_info_fill_table(
+    my_core::THD *const thd, my_core::TABLE_LIST *const tables,
+    my_core::Item *const cond MY_ATTRIBUTE((__unused__))) {
   DBUG_ENTER_FUNC();
 
   DBUG_ASSERT(thd != nullptr);
@@ -1389,7 +1380,7 @@ static int rdb_i_s_trx_info_init(void *const p) {
   DBUG_RETURN(0);
 }
 
-static int rdb_i_s_deinit(void *p __attribute__((__unused__))) {
+static int rdb_i_s_deinit(void *p MY_ATTRIBUTE((__unused__))) {
   DBUG_ENTER_FUNC();
   DBUG_RETURN(0);
 }
