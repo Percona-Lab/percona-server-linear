@@ -2679,7 +2679,7 @@ handler *handler::clone(const char *name, MEM_ROOT *mem_root) {
             (uchar *)alloc_root(mem_root, ALIGN_SIZE(ref_length) * 2)))
     goto err;
 
-  new_handler->cloned= true;
+  new_handler->cloned = true;
 
   /*
     TODO: Implement a more efficient way to have more than one index open for
@@ -2799,6 +2799,10 @@ int handler::ha_open(TABLE *table_arg, const char *name, int mode,
                            ? &table->s->mem_root
                            : &table->mem_root;
   DBUG_ASSERT(alloc_root_inited(mem_root));
+
+  if (cloned) {
+    DEBUG_SYNC(ha_thd(), "start_handler_ha_open_cloned");
+  }
 
   if ((error = open(name, mode, test_if_locked, table_def))) {
     if ((error == EACCES || error == EROFS) && mode == O_RDWR &&
