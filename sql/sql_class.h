@@ -1831,7 +1831,6 @@ class THD : public MDL_context_owner,
   uint last_errno;
   /*** The variables above used in slow_extended.patch ***/
 
-
   inline void set_slow_log_for_admin_command() noexcept {
     enable_slow_log = opt_log_slow_admin_statements &&
                       (sp_runtime_ctx ? opt_log_slow_sp_statements : true);
