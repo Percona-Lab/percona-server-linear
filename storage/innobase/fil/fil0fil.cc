@@ -2328,7 +2328,12 @@ dberr_t Fil_shard::get_file_size(fil_node_t *file, bool read_only_mode) {
   }
 #endif /* UNIV_HOTBACKUP */
 
-  if (space->flags != flags) {
+  /* Do not compare the data directory flag, in case this tablespace was
+  relocated. */
+  auto relevant_space_flags = space->flags & ~FSP_FLAGS_MASK_DATA_DIR;
+  auto relevant_flags = flags & ~FSP_FLAGS_MASK_DATA_DIR;
+
+  if (UNIV_UNLIKELY(relevant_space_flags != relevant_flags)) {
     ib::fatal(ER_IB_MSG_272, space->flags, file->name, flags);
   }
 
@@ -2427,6 +2432,7 @@ bool Fil_shard::open_file(fil_node_t *file, bool extend) {
   bool read_only_mode;
 
   read_only_mode = !fsp_is_system_temporary(space->id) && srv_read_only_mode;
+
 
   if (file->size == 0 ||
       (space->size_in_header == 0 && space->purpose == FIL_TYPE_TABLESPACE &&
