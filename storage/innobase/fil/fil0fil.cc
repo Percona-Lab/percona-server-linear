@@ -2356,8 +2356,10 @@ dberr_t Fil_shard::get_file_size(fil_node_t *file, bool read_only_mode) {
 
   /* Make a copy of space->flags and flags from the page header
   so that they can be compared. */
-  uint32_t fil_space_flags = space->flags;
-  uint32_t header_fsp_flags = flags;
+  /* Do not compare the data directory flag, in case this tablespace was
+  relocated. */
+  auto fil_space_flags = space->flags & ~FSP_FLAGS_MASK_DATA_DIR;
+  auto header_fsp_flags = flags & ~FSP_FLAGS_MASK_DATA_DIR;
 
   /* If a crash occurs while an UNDO space is being truncated,
   it will be created new at startup. In that case, the fil_space_t
@@ -2374,7 +2376,7 @@ dberr_t Fil_shard::get_file_size(fil_node_t *file, bool read_only_mode) {
   }
 
   /* Make sure the space_flags are the same as the header page flags. */
-  if (fil_space_flags != header_fsp_flags) {
+  if (UNIV_UNLIKELY(fil_space_flags != header_fsp_flags)) {
     ib::error(ER_IB_MSG_272, ulong{space->flags}, file->name, ulonglong{flags});
     ut_error;
   }
@@ -2474,6 +2476,7 @@ bool Fil_shard::open_file(fil_node_t *file, bool extend) {
   bool read_only_mode;
 
   read_only_mode = !fsp_is_system_temporary(space->id) && srv_read_only_mode;
+
 
   if (file->size == 0 ||
       (space->size_in_header == 0 && space->purpose == FIL_TYPE_TABLESPACE &&
