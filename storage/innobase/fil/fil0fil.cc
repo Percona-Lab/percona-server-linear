@@ -2538,7 +2538,12 @@ dberr_t fil_space_t::validate_first_page() {
   if (recv_recovery_is_on() || id == TRX_SYS_SPACE) {
     flags = on_disk_flags;
   } else {
-    if (flags != on_disk_flags) {
+    /* Do not compare the data directory flag, in case this tablespace was
+    relocated. */
+    const auto fil_space_flags = flags & ~FSP_FLAGS_MASK_DATA_DIR;
+    const auto header_fsp_flags = on_disk_flags & ~FSP_FLAGS_MASK_DATA_DIR;
+
+    if (UNIV_UNLIKELY(fil_space_flags != header_fsp_flags)) {
       ib::fatal(UT_LOCATION_HERE, ER_IB_MSG_TABLESPACE_FLAGS_MISMATCH,
                 ulong{flags}, file.name, ulonglong{on_disk_flags});
     }
