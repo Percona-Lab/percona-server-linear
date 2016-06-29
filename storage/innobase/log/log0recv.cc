@@ -3332,6 +3332,7 @@ static void recv_init_crash_recovery() {
   ib::info(ER_IB_MSG_726);
   ib::info(ER_IB_MSG_727);
 
+
   buf_dblwr_process();
 }
 #endif /* !UNIV_HOTBACKUP */
