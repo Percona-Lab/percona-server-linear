@@ -1130,9 +1130,18 @@ void handle_error(struct st_command *command, std::uint32_t err_errno,
                   DYNAMIC_STRING *ds) {
   DBUG_ENTER("handle_error");
 
-  if (command->abort_on_error)
+  if (command->abort_on_error) {
+    if (err_errno == ER_NO_SUCH_THREAD) {
+      /* No such thread id, let's dump the available ones */
+      fprintf(stderr,
+              "mysqltest: query '%s returned ER_NO_SUCH_THREAD, "
+              "dumping processlist\n",
+              command->query);
+      show_query(&cur_con->mysql, "SHOW PROCESSLIST");
+    }
     die("Query '%s' failed.\nERROR %d (%s): %s", command->query, err_errno,
         err_sqlstate, err_error);
+  }
 
   DBUG_PRINT("info", ("Expected errors count: %zu", expected_errors->count()));
 
@@ -1171,6 +1180,14 @@ void handle_error(struct st_command *command, std::uint32_t err_errno,
   }
 
   if (expected_errors->count()) {
+    if (err_errno == ER_NO_SUCH_THREAD) {
+      /* No such thread id, let's dump the available ones */
+      fprintf(stderr,
+              "mysqltest: query '%s returned ER_NO_SUCH_THREAD, "
+              "dumping processlist\n",
+              command->query);
+      show_query(&cur_con->mysql, "SHOW PROCESSLIST");
+    }
     if (expected_errors->count() == 1) {
       die("Query '%s' failed with wrong error %d: '%s', should have failed "
           "with error '%s'.",
@@ -2773,7 +2790,19 @@ static FILE *my_popen(DYNAMIC_STRING *ds_cmd, const char *mode,
   }
 #endif /* _WIN32 */
 
-  return popen(ds_cmd->str, mode);
+  errno = 0;
+  FILE *file = popen(ds_cmd->str, mode);
+  if (file == NULL) {
+    if (errno != 0) {
+      fprintf(stderr, "mysqltest: popen failed with errno %d (%s)\n", errno,
+              strerror(errno));
+    } else {
+      fprintf(stderr,
+              "mysqltest: popen returned NULL without setting errno "
+              "(out-of-memory?)\n");
+    }
+  }
+  return file;
 }
 
 static void init_builtin_echo(void) {
@@ -5247,6 +5276,23 @@ static int query_get_string(MYSQL *mysql, const char *query, int column,
 }
 
 /**
+  A wrapper around kill call that prints diagnostics if the call failed with
+  any other error than ESRCH.
+
+  @param pid    Process id
+  @param sig    Signal to send to process
+  @return The return value of kill call
+*/
+static int my_kill(int pid, int sig) {
+  const int result = kill(pid, sig);
+  if (result == -1 && errno != ESRCH) {
+    log_msg("kill(%d, %d) returned errno %d (%s)", pid, sig, errno,
+            strerror(errno));
+  }
+  return result;
+}
+
+/**
   Check if process is active.
 
   @param pid  Process id.
@@ -5268,7 +5314,7 @@ static bool is_process_active(int pid) {
 
   return true;
 #else
-  return (kill(pid, 0) == 0);
+  return (my_kill(pid, 0) == 0);
 #endif
 }
 
@@ -5290,7 +5336,7 @@ static bool kill_process(int pid) {
 
   CloseHandle(proc);
 #else
-  killed = (kill(pid, SIGKILL) == 0);
+  killed = (my_kill(pid, SIGKILL) == 0);
 #endif
   return killed;
 }
@@ -5345,7 +5391,9 @@ static void abort_process(int pid, const char *path MY_ATTRIBUTE((unused))) {
     verbose_msg("OpenProcess failed: %d\n", err);
   }
 #else
-  kill(pid, SIGABRT);
+  log_msg("shutdown_server timeout exceeded, SIGABRT set to the server PID %d",
+          pid);
+  my_kill(pid, SIGABRT);
 #endif
 }
 
@@ -5364,7 +5412,7 @@ static void abort_process(int pid, const char *path MY_ATTRIBUTE((unused))) {
 */
 
 static void do_shutdown_server(struct st_command *command) {
-  long timeout = 60;
+  long timeout = 600;
   int pid, error = 0;
   std::string ds_file_name;
   MYSQL *mysql = &cur_con->mysql;
@@ -9730,7 +9778,8 @@ void replace_numeric_round_append(int round, DYNAMIC_STRING *result,
           to 1.2000000
         */
         if (size1 < (size_t)r) r = size1;
-      // fallthrough: all cases till next break are executed
+        // fallthrough
+        // all cases till next break are executed
       case 'e':
       case 'E':
         if (isdigit(*(from + size + 1))) {
