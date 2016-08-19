@@ -317,6 +317,7 @@ parse_arguments() {
 # LD_LIBRARY_PATH and stripped from the lib value.
 add_mysqld_ld_preload() {
   lib_to_add="$1"
+  lib_to_add=$(readlink -f $lib_to_add)
   log_notice "Adding '$lib_to_add' to LD_PRELOAD for mysqld"
 
   # Check if the library is in the reduced number of standard system directories
@@ -906,6 +907,7 @@ then
   if [ ! -h "$pid_file" ]; then
       rm -f "$pid_file"
   fi
+  
   if test -f "$pid_file"
   then
     log_error "Fatal error: Can't remove the pid file:
