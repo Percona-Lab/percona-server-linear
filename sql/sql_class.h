@@ -647,10 +647,6 @@ class Open_tables_state {
     intermediate tables used in ALTER TABLE implementation.
   */
   TABLE *temporary_tables;
-  /**
-     Protects temporary_tables.
-  */
-  mysql_mutex_t LOCK_temporary_tables;
 
   /*
     During a MySQL session, one can lock tables in two modes: automatic
@@ -1373,6 +1369,11 @@ class THD : public MDL_context_owner,
     while having this mutex locked.
   */
   mysql_mutex_t LOCK_thd_query;
+
+  /**
+    Protects temporary_tables.
+  */
+  mysql_mutex_t LOCK_temporary_tables;
 
   /**
     Protects THD::variables while being updated. This should be taken inside
