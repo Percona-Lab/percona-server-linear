@@ -994,10 +994,6 @@ public:
     XXX Why are internal temporary tables added to this list?
   */
   TABLE *temporary_tables;
-  /**
-     Protects temporary_tables.
-  */
-  mysql_mutex_t LOCK_temporary_tables;
 
   TABLE *derived_tables;
   /*
@@ -1766,6 +1762,11 @@ public:
     while having this mutex locked.
   */
   mysql_mutex_t LOCK_thd_query;
+
+  /**
+    Protects temporary_tables.
+  */
+  mysql_mutex_t LOCK_temporary_tables;
 
   /**
     Protects THD::variables while being updated. This should be taken inside
