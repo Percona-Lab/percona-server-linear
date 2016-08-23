@@ -416,6 +416,11 @@ static MYSQL_THDVAR_ULONG(lock_wait_timeout, PLUGIN_VAR_RQCMDARG,
                           /*max*/ 1024 * 1024 * 1024, 0);
 
 static MYSQL_THDVAR_BOOL(
+    trace_sst_api, PLUGIN_VAR_RQCMDARG,
+    "Generate trace output in the log for each call to the SstFileWriter",
+    nullptr, nullptr, FALSE);
+
+static MYSQL_THDVAR_BOOL(
     bulk_load, PLUGIN_VAR_RQCMDARG,
     "Use bulk-load mode for inserts. This disables "
     "unique_checks and enables rocksdb_commit_in_the_middle.",
@@ -2560,12 +2565,12 @@ public:
       rdb->GetEnv()->GetCurrentTime(&curr_time);
 
       THD *thd = tx->get_thd();
-
+      char buffer[1024];
+      thd_security_context(thd, buffer, sizeof buffer, 0);
       m_data += format_string("---SNAPSHOT, ACTIVE %lld sec\n"
-                              "MySQL thread id %lu, OS thread handle %p\n"
+                              "%s\n"
                               "lock count %llu, write count %llu\n",
-                              curr_time - snapshot_timestamp,
-                              my_core::thd_get_thread_id(thd), thd,
+                              curr_time - snapshot_timestamp, buffer,
                               tx->get_lock_count(), tx->get_write_count());
     }
   }
@@ -6475,9 +6480,9 @@ int ha_rocksdb::bulk_load_key(Rdb_transaction *tx, const Rdb_key_def &kd,
   DBUG_ASSERT(cf != nullptr);
 
   if (m_sst_info == nullptr) {
-    m_sst_info =
-        std::make_shared<Rdb_sst_info>(rdb, m_table_handler->m_table_name,
-                                       kd.get_name(), cf, rocksdb_db_options);
+    m_sst_info = std::make_shared<Rdb_sst_info>(
+        rdb, m_table_handler->m_table_name, kd.get_name(), cf,
+        rocksdb_db_options, THDVAR(ha_thd(), trace_sst_api));
     tx->start_bulk_load(this);
     m_bulk_load_tx = tx;
   }
