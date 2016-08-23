@@ -415,6 +415,11 @@ static MYSQL_THDVAR_ULONG(lock_wait_timeout, PLUGIN_VAR_RQCMDARG,
                           /*max*/ 1024 * 1024 * 1024, 0);
 
 static MYSQL_THDVAR_BOOL(
+    trace_sst_api, PLUGIN_VAR_RQCMDARG,
+    "Generate trace output in the log for each call to the SstFileWriter",
+    nullptr, nullptr, FALSE);
+
+static MYSQL_THDVAR_BOOL(
     bulk_load, PLUGIN_VAR_RQCMDARG,
     "Use bulk-load mode for inserts. This disables "
     "unique_checks and enables rocksdb_commit_in_the_middle.",
@@ -578,7 +583,7 @@ static MYSQL_SYSVAR_BOOL(
     allow_concurrent_memtable_write,
     *reinterpret_cast<my_bool *>(
         &rocksdb_db_options.allow_concurrent_memtable_write),
-    PLUGIN_VAR_RQCMDARG,
+    PLUGIN_VAR_RQCMDARG | PLUGIN_VAR_READONLY,
     "DBOptions::allow_concurrent_memtable_write for RocksDB", nullptr, nullptr,
     rocksdb_db_options.allow_concurrent_memtable_write);
 
@@ -586,7 +591,7 @@ static MYSQL_SYSVAR_BOOL(
     enable_write_thread_adaptive_yield,
     *reinterpret_cast<my_bool *>(
         &rocksdb_db_options.enable_write_thread_adaptive_yield),
-    PLUGIN_VAR_RQCMDARG,
+    PLUGIN_VAR_RQCMDARG | PLUGIN_VAR_READONLY,
     "DBOptions::enable_write_thread_adaptive_yield for RocksDB", nullptr,
     nullptr, rocksdb_db_options.enable_write_thread_adaptive_yield);
 
@@ -2560,12 +2565,12 @@ public:
       rdb->GetEnv()->GetCurrentTime(&curr_time);
 
       THD *thd = tx->get_thd();
-
+      char buffer[1024];
+      thd_security_context(thd, buffer, sizeof buffer, 0);
       m_data += format_string("---SNAPSHOT, ACTIVE %lld sec\n"
-                              "MySQL thread id %lu, OS thread handle %p\n"
+                              "%s\n"
                               "lock count %llu, write count %llu\n",
-                              curr_time - snapshot_timestamp,
-                              my_core::thd_get_thread_id(thd), thd,
+                              curr_time - snapshot_timestamp, buffer,
                               tx->get_lock_count(), tx->get_write_count());
     }
   }
@@ -6474,9 +6479,9 @@ int ha_rocksdb::bulk_load_key(Rdb_transaction *tx, const Rdb_key_def &kd,
   DBUG_ASSERT(cf != nullptr);
 
   if (m_sst_info == nullptr) {
-    m_sst_info =
-        std::make_shared<Rdb_sst_info>(rdb, m_table_handler->m_table_name,
-                                       kd.get_name(), cf, rocksdb_db_options);
+    m_sst_info = std::make_shared<Rdb_sst_info>(
+        rdb, m_table_handler->m_table_name, kd.get_name(), cf,
+        rocksdb_db_options, THDVAR(ha_thd(), trace_sst_api));
     tx->start_bulk_load(this);
     m_bulk_load_tx = tx;
   }
@@ -8696,7 +8701,6 @@ struct rocksdb_status_counters_t {
   uint64_t number_multiget_bytes_read;
   uint64_t number_deletes_filtered;
   uint64_t number_merge_failures;
-  uint64_t sequence_number;
   uint64_t bloom_filter_prefix_checked;
   uint64_t bloom_filter_prefix_useful;
   uint64_t number_reseeks_iteration;
@@ -8753,7 +8757,6 @@ DEF_SHOW_FUNC(number_multiget_keys_read, NUMBER_MULTIGET_KEYS_READ)
 DEF_SHOW_FUNC(number_multiget_bytes_read, NUMBER_MULTIGET_BYTES_READ)
 DEF_SHOW_FUNC(number_deletes_filtered, NUMBER_FILTERED_DELETES)
 DEF_SHOW_FUNC(number_merge_failures, NUMBER_MERGE_FAILURES)
-DEF_SHOW_FUNC(sequence_number, SEQUENCE_NUMBER)
 DEF_SHOW_FUNC(bloom_filter_prefix_checked, BLOOM_FILTER_PREFIX_CHECKED)
 DEF_SHOW_FUNC(bloom_filter_prefix_useful, BLOOM_FILTER_PREFIX_USEFUL)
 DEF_SHOW_FUNC(number_reseeks_iteration, NUMBER_OF_RESEEKS_IN_ITERATION)
@@ -8845,7 +8848,6 @@ static SHOW_VAR rocksdb_status_vars[] = {
     DEF_STATUS_VAR(number_multiget_bytes_read),
     DEF_STATUS_VAR(number_deletes_filtered),
     DEF_STATUS_VAR(number_merge_failures),
-    DEF_STATUS_VAR(sequence_number),
     DEF_STATUS_VAR(bloom_filter_prefix_checked),
     DEF_STATUS_VAR(bloom_filter_prefix_useful),
     DEF_STATUS_VAR(number_reseeks_iteration),
