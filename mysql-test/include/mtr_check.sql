@@ -85,6 +85,9 @@ BEGIN
   SELECT * FROM performance_schema.persisted_variables
     ORDER BY VARIABLE_NAME;
 
+  SELECT * FROM performance_schema.session_variables
+    WHERE variable_name = 'debug_sync';
+
   -- Dump all databases, there should be none
   -- except those that was created during bootstrap
   SELECT * FROM INFORMATION_SCHEMA.SCHEMATA ORDER BY SCHEMA_NAME;
@@ -137,6 +140,9 @@ BEGIN
   -- Dump all plugins, loaded with plugin-loading options or through
   -- INSTALL/UNINSTALL command
   SELECT * FROM INFORMATION_SCHEMA.PLUGINS;
+
+  -- Dump all created compression dictionaries
+  SELECT * FROM INFORMATION_SCHEMA.COMPRESSION_DICTIONARY ORDER BY DICT_NAME;
 
   SHOW GLOBAL STATUS LIKE 'slave_open_temp_tables';
 
