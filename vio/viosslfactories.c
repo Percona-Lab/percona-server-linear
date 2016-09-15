@@ -492,6 +492,9 @@ new_VioSSLFd(const char *key_file, const char *cert_file,
   long ssl_ctx_options= SSL_OP_NO_SSLv2 | SSL_OP_NO_SSLv3;
   int ret_set_cipherlist= 0;
   char cipher_list[SSL_CIPHER_LIST_SIZE]= {0};
+#if !defined(HAVE_YASSL) && (OPENSSL_VERSION_NUMBER < 0x10002000L)
+  EC_KEY *ecdh;
+#endif
   DBUG_ENTER("new_VioSSLFd");
   DBUG_PRINT("enter",
              ("key_file: '%s'  cert_file: '%s'  ca_file: '%s'  ca_path: '%s'  "
@@ -547,11 +550,26 @@ new_VioSSLFd(const char *key_file, const char *cert_file,
     NOTE: SSL_CTX_set_cipher_list will return 0 if
     none of the provided ciphers could be selected
   */
+  DBUG_ASSERT(strlen(tls_cipher_blocked) + 1 <= sizeof(cipher_list));
   strcat(cipher_list, tls_cipher_blocked);
   if (cipher)
+  {
+    if (strlen(cipher_list) + strlen(cipher) + 1 > sizeof(cipher_list))
+    {
+      *error= SSL_INITERR_CIPHERS;
+      DBUG_PRINT("error", ("User specified cipher too long"));
+      SSL_CTX_free(ssl_fd->ssl_context);
+      my_free(ssl_fd);
+      DBUG_RETURN(0);
+    }
     strcat(cipher_list, cipher);
+  }
   else
+  {
+    DBUG_ASSERT(strlen(cipher_list) + strlen(tls_ciphers_list) + 1
+                <= sizeof(cipher_list));
     strcat(cipher_list, tls_ciphers_list);
+  }
 
   if (ret_set_cipherlist == SSL_CTX_set_cipher_list(ssl_fd->ssl_context, cipher_list))
   {
@@ -649,6 +667,45 @@ new_VioSSLFd(const char *key_file, const char *cert_file,
     DBUG_RETURN(0);
   }
   DH_free(dh);
+
+#ifndef HAVE_YASSL
+#if OPENSSL_VERSION_NUMBER < 0x10002000L
+  ecdh= EC_KEY_new_by_curve_name(NID_X9_62_prime256v1);
+  if (!ecdh)
+  {
+    *error= SSL_INITERR_DHFAIL;
+    DBUG_PRINT("error", ("%s", sslGetErrString(*error)));
+    report_errors();
+    SSL_CTX_free(ssl_fd->ssl_context);
+    my_free(ssl_fd);
+    DBUG_RETURN(0);
+  }
+
+  if (SSL_CTX_set_tmp_ecdh(ssl_fd->ssl_context, ecdh) != 1)
+  {
+    *error= SSL_INITERR_DHFAIL;
+    DBUG_PRINT("error", ("%s", sslGetErrString(*error)));
+    report_errors();
+    EC_KEY_free(ecdh);
+    SSL_CTX_free(ssl_fd->ssl_context);
+    my_free(ssl_fd);
+    DBUG_RETURN(0);
+  }
+  EC_KEY_free(ecdh);
+
+#else /* OPENSSL_VERSION_NUMBER < 0x10002000L */
+
+  if (SSL_CTX_set_ecdh_auto(ssl_fd->ssl_context, 1) != 1)
+  {
+    *error= SSL_INITERR_DHFAIL;
+    DBUG_PRINT("error", ("%s", sslGetErrString(*error)));
+    report_errors();
+    SSL_CTX_free(ssl_fd->ssl_context);
+    my_free(ssl_fd);
+    DBUG_RETURN(0);
+  }
+#endif /* OPENSSL_VERSION_NUMBER < 0x10002000L */
+#endif /* !HAVE_YASSL */
 
   DBUG_PRINT("exit", ("OK 1"));
 
