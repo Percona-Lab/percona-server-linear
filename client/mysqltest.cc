@@ -4440,6 +4440,7 @@ void do_change_user(struct st_command *command)
   dynstr_free(&ds_user);
   dynstr_free(&ds_passwd);
   dynstr_free(&ds_db);
+  dynstr_free(&ds_reconnect);
 
   DBUG_VOID_RETURN;
 }
