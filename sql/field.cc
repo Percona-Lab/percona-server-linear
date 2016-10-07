@@ -9539,7 +9539,7 @@ Field *make_field(const Create_field &create_field, TABLE_SHARE *share) {
     length
 */
 
-uint32 Field_blob::char_length() const {
+uint32 Field_blob::char_length() const noexcept {
   switch (packlength) {
     case 1:
       return 255;
