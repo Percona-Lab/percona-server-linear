@@ -3992,7 +3992,7 @@ class Field_blob : public Field_longstr {
     return charset() == &my_charset_bin ? false : true;
   }
   uint32 max_display_length() const final override;
-  uint32 char_length() const override;
+  uint32 char_length() const noexcept override;
   bool copy_blob_value(MEM_ROOT *mem_root);
   uint is_equal(const Create_field *new_field) const override;
   bool is_text_key_type() const final override {
