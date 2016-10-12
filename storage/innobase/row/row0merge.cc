@@ -465,6 +465,7 @@ static void row_merge_buf_redundant_convert_func(
 @param[in,out]	v_heap		heap memory to process data for virtual column
 @param[in,out]	my_table	mysql table object
 @param[in]	trx		transaction object
+@param[in]	prebuilt	compress_heap must be taken from here
 @return number of rows added, 0 if out of space */
 static ulint row_merge_buf_add(row_merge_buf_t *buf, dict_index_t *fts_index,
                                const dict_table_t *old_table,
@@ -472,8 +473,8 @@ static ulint row_merge_buf_add(row_merge_buf_t *buf, dict_index_t *fts_index,
                                fts_psort_t *psort_info, const dtuple_t *row,
                                const row_ext_t *ext, doc_id_t *doc_id,
                                mem_heap_t *conv_heap, dberr_t *err,
-                               mem_heap_t **v_heap, TABLE *my_table,
-                               trx_t *trx) {
+                               mem_heap_t **v_heap, TABLE *my_table, trx_t *trx,
+                               row_prebuilt_t *prebuilt) {
   ulint i;
   const dict_index_t *index;
   mtuple_t *entry;
@@ -554,7 +555,7 @@ static ulint row_merge_buf_add(row_merge_buf_t *buf, dict_index_t *fts_index,
 
         row_field = innobase_get_computed_value(
             row, v_col, clust_index, v_heap, NULL, ifield, trx->mysql_thd,
-            my_table, old_table, NULL, NULL);
+            my_table, old_table, nullptr, nullptr, prebuilt);
 
         if (row_field == NULL) {
           *err = DB_COMPUTE_VALUE_FAILED;
@@ -686,7 +687,11 @@ static ulint row_merge_buf_add(row_merge_buf_t *buf, dict_index_t *fts_index,
     }
 
     ut_ad(len <= col->len || DATA_LARGE_MTYPE(col->mtype) ||
-          (col->mtype == DATA_POINT && len == DATA_MBR_LEN));
+          (col->mtype == DATA_POINT && len == DATA_MBR_LEN) ||
+          ((col->mtype == DATA_VARCHAR || col->mtype == DATA_BINARY ||
+            col->mtype == DATA_VARMYSQL) &&
+           (col->len == 0 ||
+            len <= col->len + prtype_get_compression_extra(col->prtype))));
 
     fixed_len = ifield->fixed_len;
     if (fixed_len && !dict_table_is_comp(index->table) &&
@@ -1478,6 +1483,7 @@ ALTER TABLE. stage->n_pk_recs_inc() will be called for each record read and
 stage->inc() will be called for each page read.
 @param[in]	eval_table	mysql table used to evaluate virtual column
                                 value, see innobase_get_computed_value().
+@param[in]	prebuilt	compress_heap must be taken from here
 @return DB_SUCCESS or error */
 static MY_ATTRIBUTE((warn_unused_result)) dberr_t
     row_merge_read_clustered_index(
@@ -1488,7 +1494,8 @@ static MY_ATTRIBUTE((warn_unused_result)) dberr_t
         const dtuple_t *add_cols, const dict_add_v_col_t *add_v,
         const ulint *col_map, ulint add_autoinc, ib_sequence_t &sequence,
         row_merge_block_t *block, bool skip_pk_sort, int *tmpfd,
-        ut_stage_alter_t *stage, struct TABLE *eval_table) {
+        ut_stage_alter_t *stage, struct TABLE *eval_table,
+        row_prebuilt_t *prebuilt) {
   dict_index_t *clust_index;      /* Clustered index */
   mem_heap_t *row_heap;           /* Heap memory to create
                                   clustered index tuples */
@@ -1961,7 +1968,7 @@ static MY_ATTRIBUTE((warn_unused_result)) dberr_t
       if (UNIV_LIKELY(row && (rows_added = row_merge_buf_add(
                                   buf, fts_index, old_table, new_table,
                                   psort_info, row, ext, &doc_id, conv_heap,
-                                  &err, &v_heap, eval_table, trx)))) {
+                                  &err, &v_heap, eval_table, trx, prebuilt)))) {
         /* If we are creating FTS index,
         a single row can generate more
         records for tokenized word */
@@ -2228,10 +2235,10 @@ static MY_ATTRIBUTE((warn_unused_result)) dberr_t
         that the buffer has been written out
         and emptied. */
 
-        if (UNIV_UNLIKELY(
-                !(rows_added = row_merge_buf_add(
-                      buf, fts_index, old_table, new_table, psort_info, row,
-                      ext, &doc_id, conv_heap, &err, &v_heap, table, trx)))) {
+        if (UNIV_UNLIKELY(!(rows_added = row_merge_buf_add(
+                                buf, fts_index, old_table, new_table,
+                                psort_info, row, ext, &doc_id, conv_heap, &err,
+                                &v_heap, table, trx, prebuilt)))) {
           /* An empty buffer should have enough
           room for at least one record. */
           ut_error;
@@ -3477,6 +3484,7 @@ this function and it will be passed to other functions for further accounting.
 @param[in]	add_v		new virtual columns added along with indexes
 @param[in]	eval_table	mysql table used to evaluate virtual column
                                 value, see innobase_get_computed_value().
+@param[in]	prebuilt	compress_heap must be taken from here
 @return DB_SUCCESS or error code */
 dberr_t row_merge_build_indexes(
     trx_t *trx, dict_table_t *old_table, dict_table_t *new_table, bool online,
@@ -3484,10 +3492,11 @@ dberr_t row_merge_build_indexes(
     struct TABLE *table, const dtuple_t *add_cols, const ulint *col_map,
     ulint add_autoinc, ib_sequence_t &sequence, bool skip_pk_sort,
     ut_stage_alter_t *stage, const dict_add_v_col_t *add_v,
-    struct TABLE *eval_table) {
+    struct TABLE *eval_table, row_prebuilt_t *prebuilt) {
   merge_file_t *merge_files;
   row_merge_block_t *block;
   ut_new_pfx_t block_pfx;
+  ut_new_pfx_t crypt_pfx;
   ulint i;
   ulint j;
   dberr_t error;
@@ -3593,7 +3602,8 @@ dberr_t row_merge_build_indexes(
   error = row_merge_read_clustered_index(
       trx, table, old_table, new_table, online, indexes, fts_sort_idx,
       psort_info, merge_files, key_numbers, n_indexes, add_cols, add_v, col_map,
-      add_autoinc, sequence, block, skip_pk_sort, &tmpfd, stage, eval_table);
+      add_autoinc, sequence, block, skip_pk_sort, &tmpfd, stage, eval_table,
+      prebuilt);
 
   stage->end_phase_read_pk();
 

@@ -1969,7 +1969,7 @@ static MY_ATTRIBUTE((warn_unused_result)) dberr_t row_log_table_apply_update(
       row_build_index_entry_low(row, NULL, index, heap, ROW_BUILD_FOR_INSERT);
   upd_t *update = row_upd_build_difference_binary(
       index, entry, btr_pcur_get_rec(&pcur), cur_offsets, false, NULL, heap,
-      dup->table);
+      dup->table, thr->prebuilt);
 
   if (!update->n_fields) {
     /* Nothing to do. */

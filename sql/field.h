@@ -177,9 +177,10 @@ enum Derivation {
 
 /* Specifies data storage format for individual columns */
 enum column_format_type {
-  COLUMN_FORMAT_TYPE_DEFAULT = 0, /* Not specified (use engine default) */
-  COLUMN_FORMAT_TYPE_FIXED = 1,   /* FIXED format */
-  COLUMN_FORMAT_TYPE_DYNAMIC = 2  /* DYNAMIC format */
+  COLUMN_FORMAT_TYPE_DEFAULT = 0,   /* Not specified (use engine default) */
+  COLUMN_FORMAT_TYPE_FIXED = 1,     /* FIXED format */
+  COLUMN_FORMAT_TYPE_DYNAMIC = 2,   /* DYNAMIC format */
+  COLUMN_FORMAT_TYPE_COMPRESSED = 3 /* COMPRESSED format*/
 };
 
 /**
@@ -785,6 +786,8 @@ class Field : public Proto_field {
 
    */
   bool is_created_from_null_item;
+  LEX_CSTRING zip_dict_name;  // associated compression dictionary name
+  LEX_CSTRING zip_dict_data;  // associated compression dictionary data
   /**
      True if this field belongs to some index (unlike part_of_key, the index
      might have only a prefix).
@@ -1178,6 +1181,17 @@ class Field : public Proto_field {
   }
 
   /**
+    Checks if the field has COLUMN_FORMAT_TYPE_COMPRESSED flag and non-empty
+    associated compression dictionary.
+  */
+  bool has_associated_compression_dictionary() const noexcept {
+    DBUG_ASSERT(zip_dict_name.str == 0 ||
+                column_format() == COLUMN_FORMAT_TYPE_COMPRESSED);
+    return column_format() == COLUMN_FORMAT_TYPE_COMPRESSED &&
+           zip_dict_name.str != 0;
+  }
+
+  /**
     Check if the Field has value NULL or the record specified by argument
     has value NULL for this Field.
 
@@ -1558,6 +1572,7 @@ class Field : public Proto_field {
 
   void set_column_format(column_format_type column_format_arg) {
     DBUG_ASSERT(column_format() == COLUMN_FORMAT_TYPE_DEFAULT);
+    flags &= ~(FIELD_FLAGS_COLUMN_FORMAT_MASK);
     flags |= (column_format_arg << FIELD_FLAGS_COLUMN_FORMAT);
   }
 
@@ -1681,6 +1696,18 @@ class Field : public Proto_field {
 
   const uchar *unpack_int64(uchar *to, const uchar *from,
                             bool low_byte_first_from);
+  /**
+    Checks if the current field definition and provided create field
+    definition have different compression attributes.
+
+    @param   new_field   create field definition to compare with
+
+    @return
+      true  - if compression attributes are different
+      false - if compression attributes are identical.
+  */
+  bool has_different_compression_attributes_with(
+      const Create_field &new_field) const noexcept;
 };
 
 class Field_num : public Field {
@@ -4275,6 +4302,8 @@ class Create_field {
   */
   uint pack_length_override;
 
+  LEX_CSTRING zip_dict_name;  // Compression dictionary name
+
   /* Generated column expression information */
   Generated_column *gcol_info;
   /*
@@ -4322,8 +4351,8 @@ class Create_field {
             Item *default_value, Item *on_update_value, LEX_STRING *comment,
             const char *change, List<String> *interval_list,
             const CHARSET_INFO *cs, bool has_explicit_collation,
-            uint uint_geom_type, Generated_column *gcol_info,
-            Nullable<gis::srid_t> srid);
+            uint uint_geom_type, const LEX_CSTRING *zip_dict_name,
+            Generated_column *gcol_info, Nullable<gis::srid_t> srid);
 
   ha_storage_media field_storage_type() const {
     return (ha_storage_media)((flags >> FIELD_FLAGS_STORAGE_MEDIA) & 3);
@@ -4331,6 +4360,11 @@ class Create_field {
 
   column_format_type column_format() const {
     return (column_format_type)((flags >> FIELD_FLAGS_COLUMN_FORMAT) & 3);
+  }
+
+  void set_column_format(column_format_type column_format_arg) noexcept {
+    flags &= ~(FIELD_FLAGS_COLUMN_FORMAT_MASK);
+    flags |= (column_format_arg << FIELD_FLAGS_COLUMN_FORMAT);
   }
 };
 
