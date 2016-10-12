@@ -3007,7 +3007,8 @@ inline MY_ATTRIBUTE((warn_unused_result)) bool innobase_dropping_foreign(
 @param field MySQL value for the column
 @param comp nonzero if in compact format */
 static void innobase_build_col_map_add(mem_heap_t *heap, dfield_t *dfield,
-                                       const Field *field, ulint comp) {
+                                       const Field *field, ulint comp,
+                                       row_prebuilt_t *prebuilt) {
   if (field->is_real_null()) {
     dfield_set_null(dfield);
     return;
@@ -3019,8 +3020,11 @@ static void innobase_build_col_map_add(mem_heap_t *heap, dfield_t *dfield,
 
   const byte *mysql_data = field->field_ptr();
 
-  row_mysql_store_col_in_innobase_format(dfield, buf, true, mysql_data, size,
-                                         comp);
+  row_mysql_store_col_in_innobase_format(
+      dfield, buf, true, mysql_data, size, comp,
+      field->column_format() == COLUMN_FORMAT_TYPE_COMPRESSED,
+      reinterpret_cast<const byte *>(field->zip_dict_data.str),
+      field->zip_dict_data.length, prebuilt);
 }
 
 /** Construct the translation table for reordering, dropping or
@@ -3038,7 +3042,8 @@ to column numbers in altered_table */
 static MY_ATTRIBUTE((warn_unused_result)) const ulint *innobase_build_col_map(
     Alter_inplace_info *ha_alter_info, const TABLE *altered_table,
     const TABLE *table, const dict_table_t *new_table,
-    const dict_table_t *old_table, dtuple_t *add_cols, mem_heap_t *heap) {
+    const dict_table_t *old_table, dtuple_t *add_cols, mem_heap_t *heap,
+    row_prebuilt_t *prebuilt) {
   DBUG_TRACE;
   assert(altered_table != table);
   assert(new_table != old_table);
@@ -3097,7 +3102,7 @@ static MY_ATTRIBUTE((warn_unused_result)) const ulint *innobase_build_col_map(
     ut_ad(!is_v);
     innobase_build_col_map_add(heap, dtuple_get_nth_field(add_cols, i),
                                altered_table->field[i + num_v],
-                               dict_table_is_comp(new_table));
+                               dict_table_is_comp(new_table), prebuilt);
   found_col:
     if (is_v) {
       num_v++;
@@ -4234,7 +4239,8 @@ static MY_ATTRIBUTE((warn_unused_result)) bool prepare_inplace_alter_table_dict(
     Alter_inplace_info *ha_alter_info, const TABLE *altered_table,
     const TABLE *old_table, const Table *old_dd_tab, Table *new_dd_tab,
     const char *table_name, uint32_t flags, uint32_t flags2,
-    ulint fts_doc_id_col, bool add_fts_doc_id, bool add_fts_doc_id_idx) {
+    ulint fts_doc_id_col, bool add_fts_doc_id, bool add_fts_doc_id_idx,
+    row_prebuilt_t *prebuilt) {
   bool dict_locked = false;
   ulint *add_key_nums;     /* MySQL key numbers */
   index_def_t *index_defs; /* index definitions */
@@ -4250,6 +4256,10 @@ static MY_ATTRIBUTE((warn_unused_result)) bool prepare_inplace_alter_table_dict(
   bool build_fts_common = false;
 
   ha_innobase_inplace_ctx *ctx;
+  // Percona commented out until zip dictionary reimplementation in the new DD
+#if 0
+  zip_dict_id_container_t	zip_dict_ids;
+#endif
 
   DBUG_TRACE;
 
@@ -4427,6 +4437,17 @@ static MY_ATTRIBUTE((warn_unused_result)) bool prepare_inplace_alter_table_dict(
     dtuple_t *add_cols;
     space_id_t space_id = 0;
     ulint z = 0;
+    // Percona commented out until zip dict reimplementation in the new DD
+#if 0
+    const char*	err_zip_dict_name = 0;
+
+		if (!innobase_check_zip_dicts(altered_table, zip_dict_ids,
+			ctx->trx, &err_zip_dict_name)) {
+			my_error(ER_COMPRESSION_DICTIONARY_DOES_NOT_EXIST,
+				MYF(0), err_zip_dict_name);
+			goto new_clustered_failed;
+		}
+#endif
 
     /* SQL-layer already has checked that we are not dropping any
     columns in foreign keys to be kept or making referencing column
@@ -4558,6 +4579,9 @@ static MY_ATTRIBUTE((warn_unused_result)) bool prepare_inplace_alter_table_dict(
           field_type |= DATA_LONG_TRUE_VARCHAR;
         }
       }
+
+      if (field->column_format() == COLUMN_FORMAT_TYPE_COMPRESSED)
+        field_type |= DATA_COMPRESSED;
 
       if (col_type == DATA_POINT) {
         /* DATA_POINT should be of fixed length,
@@ -4698,9 +4722,9 @@ static MY_ATTRIBUTE((warn_unused_result)) bool prepare_inplace_alter_table_dict(
       add_cols = nullptr;
     }
 
-    ctx->col_map =
-        innobase_build_col_map(ha_alter_info, altered_table, old_table,
-                               ctx->new_table, user_table, add_cols, ctx->heap);
+    ctx->col_map = innobase_build_col_map(ha_alter_info, altered_table,
+                                          old_table, ctx->new_table, user_table,
+                                          add_cols, ctx->heap, prebuilt);
     ctx->add_cols = add_cols;
   } else {
     assert(!innobase_need_rebuild(ha_alter_info));
@@ -4904,6 +4928,16 @@ static MY_ATTRIBUTE((warn_unused_result)) bool prepare_inplace_alter_table_dict(
   }
 
   assert(error == DB_SUCCESS);
+
+  // Percona commented out until zip dictionary reimplementation in new DD
+#if 0
+  /* Adding compression dictionary <-> compressed table column links
+  to the SYS_ZIP_DICT_COLS table. */
+  if (!zip_dict_ids.empty())
+    innobase_create_zip_dict_references(altered_table,
+					ctx->trx->table_id, zip_dict_ids,
+					ctx->trx);
+#endif
 
   if (build_fts_common || fts_index) {
     fts_freeze_aux_tables(ctx->new_table);
@@ -5921,7 +5955,7 @@ bool ha_innobase::prepare_inplace_alter_table_impl(
   return prepare_inplace_alter_table_dict(
       ha_alter_info, altered_table, table, old_dd_tab, new_dd_tab,
       table_share->table_name.str, info.flags(), info.flags2(), fts_doc_col_no,
-      add_fts_doc_id, add_fts_doc_id_idx);
+      add_fts_doc_id, add_fts_doc_id_idx, m_prebuilt);
 }
 
 /** Check that the column is part of a virtual index(index contains
@@ -6129,7 +6163,8 @@ bool ha_innobase::inplace_alter_table_impl(TABLE *altered_table,
       m_prebuilt->trx, m_prebuilt->table, ctx->new_table, ctx->online,
       ctx->add_index, ctx->add_key_numbers, ctx->num_to_add_index,
       altered_table, ctx->add_cols, ctx->col_map, ctx->add_autoinc,
-      ctx->sequence, ctx->skip_pk_sort, ctx->m_stage, add_v, eval_table);
+      ctx->sequence, ctx->skip_pk_sort, ctx->m_stage, add_v, eval_table,
+      m_prebuilt);
 
 #ifdef UNIV_DEBUG
 oom:

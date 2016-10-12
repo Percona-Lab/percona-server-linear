@@ -1337,6 +1337,8 @@ bool Prepared_statement::prepare_query() {
     case SQLCOM_SLAVE_STOP:
     case SQLCOM_INSTALL_PLUGIN:
     case SQLCOM_UNINSTALL_PLUGIN:
+    case SQLCOM_CREATE_COMPRESSION_DICTIONARY:
+    case SQLCOM_DROP_COMPRESSION_DICTIONARY:
     case SQLCOM_CREATE_DB:
     case SQLCOM_DROP_DB:
     case SQLCOM_CHECKSUM:
@@ -1978,6 +1980,7 @@ void mysqld_stmt_fetch(THD *thd, Prepared_statement *stmt, ulong num_rows) {
 
   thd->stmt_arena = &stmt->m_arena;
   Statement_backup stmt_backup;
+
   stmt_backup.set_thd_to_ps(thd, stmt);
 
   cursor->fetch(num_rows);
@@ -2008,6 +2011,7 @@ void mysqld_stmt_reset(THD *thd, Prepared_statement *stmt) {
   DBUG_TRACE;
 
   thd->status_var.com_stmt_reset++;
+
   stmt->close_cursor();
 
   /*
