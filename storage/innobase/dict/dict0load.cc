@@ -70,9 +70,9 @@ this program; if not, write to the Free Software Foundation, Inc.,
 /** Following are the InnoDB system tables. The positions in
 this array are referenced by enum dict_system_table_id. */
 const char *SYSTEM_TABLE_NAME[] = {
-    "SYS_TABLES",      "SYS_INDEXES",   "SYS_COLUMNS",
-    "SYS_FIELDS",      "SYS_FOREIGN",   "SYS_FOREIGN_COLS",
-    "SYS_TABLESPACES", "SYS_DATAFILES", "SYS_VIRTUAL"};
+    "SYS_TABLES",  "SYS_INDEXES",      "SYS_COLUMNS",      "SYS_FIELDS",
+    "SYS_FOREIGN", "SYS_FOREIGN_COLS", "SYS_TABLESPACES",  "SYS_DATAFILES",
+    "SYS_VIRTUAL", "SYS_ZIP_DICT",     "SYS_ZIP_DICT_COLS"};
 
 /** This variant is based on name comparison and is used because
 system table id array is not built yet.
