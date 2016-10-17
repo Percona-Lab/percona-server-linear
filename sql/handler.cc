@@ -2989,6 +2989,11 @@ int handler::ha_rnd_next(uchar *buf) {
     m_update_generated_read_fields = false;
   }
   table->set_row_status_from_handler(result);
+
+  if (likely(!result)) {
+    update_index_stats(active_index);
+  }
+
   return result;
 }
 
@@ -3255,6 +3260,11 @@ int handler::ha_index_read_map(uchar *buf, const uchar *key,
     m_update_generated_read_fields = false;
   }
   table->set_row_status_from_handler(result);
+
+  if (likely(!result)) {
+    update_index_stats(active_index);
+  }
+
   return result;
 }
 
@@ -3276,6 +3286,11 @@ int handler::ha_index_read_last_map(uchar *buf, const uchar *key,
     m_update_generated_read_fields = false;
   }
   table->set_row_status_from_handler(result);
+
+  if (likely(!result)) {
+    update_index_stats(active_index);
+  }
+
   return result;
 }
 
@@ -3305,6 +3320,9 @@ int handler::ha_index_read_idx_map(uchar *buf, uint index, const uchar *key,
     m_update_generated_read_fields = false;
   }
   table->set_row_status_from_handler(result);
+  if (likely(!result)) {
+    update_index_stats(index);
+  }
   return result;
 }
 
@@ -3336,6 +3354,9 @@ int handler::ha_index_next(uchar *buf) {
     m_update_generated_read_fields = false;
   }
   table->set_row_status_from_handler(result);
+  if (likely(!result)) {
+    update_index_stats(active_index);
+  }
   return result;
 }
 
@@ -3367,6 +3388,11 @@ int handler::ha_index_prev(uchar *buf) {
     m_update_generated_read_fields = false;
   }
   table->set_row_status_from_handler(result);
+
+  if (likely(!result)) {
+    update_index_stats(active_index);
+  }
+
   return result;
 }
 
@@ -3398,6 +3424,11 @@ int handler::ha_index_first(uchar *buf) {
     m_update_generated_read_fields = false;
   }
   table->set_row_status_from_handler(result);
+
+  if (likely(!result)) {
+    update_index_stats(active_index);
+  }
+
   return result;
 }
 
@@ -3429,6 +3460,11 @@ int handler::ha_index_last(uchar *buf) {
     m_update_generated_read_fields = false;
   }
   table->set_row_status_from_handler(result);
+
+  if (likely(!result)) {
+    update_index_stats(active_index);
+  }
+
   return result;
 }
 
@@ -3462,6 +3498,11 @@ int handler::ha_index_next_same(uchar *buf, const uchar *key, uint keylen) {
     m_update_generated_read_fields = false;
   }
   table->set_row_status_from_handler(result);
+
+  if (likely(!result)) {
+    update_index_stats(active_index);
+  }
+
   return result;
 }
 
@@ -7899,6 +7940,8 @@ int handler::ha_write_row(uchar *buf) {
   if (unlikely((error = binlog_log_row(table, nullptr, buf, log_func))))
     return error; /* purecov: inspected */
 
+  rows_changed++;
+
   DEBUG_SYNC_C("ha_write_row_end");
   return 0;
 }
@@ -7928,6 +7971,7 @@ int handler::ha_update_row(const uchar *old_data, uchar *new_data) {
   if (unlikely(error)) return error;
   if (unlikely((error = binlog_log_row(table, old_data, new_data, log_func))))
     return error;
+  rows_changed++;
   return 0;
 }
 
