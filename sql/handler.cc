@@ -3108,6 +3108,12 @@ int handler::ha_rnd_next(uchar *buf)
     result= update_generated_read_fields(buf, table);
     m_update_generated_read_fields= false;
   }
+
+  if (likely(!result))
+  {
+    update_index_stats(active_index);
+  }
+
   DBUG_RETURN(result);
 }
 
@@ -3142,6 +3148,12 @@ int handler::ha_rnd_pos(uchar *buf, uchar *pos)
     result= update_generated_read_fields(buf, table);
     m_update_generated_read_fields= false;
   }
+
+  if (likely(!result))
+  {
+    update_index_stats(active_index);
+  }
+
   DBUG_RETURN(result);
 }
 
@@ -3198,6 +3210,12 @@ int handler::ha_index_read_map(uchar *buf, const uchar *key,
     result= update_generated_read_fields(buf, table, active_index);
     m_update_generated_read_fields= false;
   }
+
+  if (likely(!result))
+  {
+    update_index_stats(active_index);
+  }
+
   DBUG_RETURN(result);
 }
 
@@ -3226,6 +3244,12 @@ int handler::ha_index_read_last_map(uchar *buf, const uchar *key,
     result= update_generated_read_fields(buf, table, active_index);
     m_update_generated_read_fields= false;
   }
+
+  if (likely(!result))
+  {
+    update_index_stats(active_index);
+  }
+
   DBUG_RETURN(result);
 }
 
@@ -3261,6 +3285,12 @@ int handler::ha_index_read_idx_map(uchar *buf, uint index, const uchar *key,
     result= update_generated_read_fields(buf, table, index);
     m_update_generated_read_fields= false;
   }
+
+  if (likely(!result))
+  {
+    update_index_stats(index);
+  }
+
   return result;
 }
 
@@ -3295,6 +3325,12 @@ int handler::ha_index_next(uchar * buf)
     result= update_generated_read_fields(buf, table, active_index);
     m_update_generated_read_fields= false;
   }
+
+  if (likely(!result))
+  {
+    update_index_stats(active_index);
+  }
+
   DBUG_RETURN(result);
 }
 
@@ -3347,6 +3383,12 @@ int handler::ha_index_prev(uchar * buf)
     result= update_generated_read_fields(buf, table, active_index);
     m_update_generated_read_fields= false;
   }
+
+  if (likely(!result))
+  {
+    update_index_stats(active_index);
+  }
+
   DBUG_RETURN(result);
 }
 
@@ -3386,6 +3428,12 @@ int handler::ha_index_first(uchar * buf)
     result= update_generated_read_fields(buf, table, active_index);
     m_update_generated_read_fields= false;
   }
+
+  if (likely(!result))
+  {
+    update_index_stats(active_index);
+  }
+
   DBUG_RETURN(result);
 }
 
@@ -3425,6 +3473,12 @@ int handler::ha_index_last(uchar * buf)
     result= update_generated_read_fields(buf, table, active_index);
     m_update_generated_read_fields= false;
   }
+
+  if (likely(!result))
+  {
+    update_index_stats(active_index);
+  }
+
   DBUG_RETURN(result);
 }
 
@@ -3461,6 +3515,12 @@ int handler::ha_index_next_same(uchar *buf, const uchar *key, uint keylen)
     result= update_generated_read_fields(buf, table, active_index);
     m_update_generated_read_fields= false;
   }
+
+  if (likely(!result))
+  {
+    update_index_stats(active_index);
+  }
+
   DBUG_RETURN(result);
 }
 
@@ -8285,6 +8345,8 @@ int handler::ha_write_row(uchar *buf)
   if (unlikely((error= binlog_log_row(table, 0, buf, log_func))))
     DBUG_RETURN(error); /* purecov: inspected */
 
+  rows_changed++;
+
   DEBUG_SYNC_C("ha_write_row_end");
   DBUG_RETURN(0);
 }
@@ -8324,6 +8386,7 @@ int handler::ha_update_row(const uchar *old_data, uchar *new_data)
     DBUG_RETURN(error);
   if (unlikely((error= binlog_log_row(table, old_data, new_data, log_func))))
     DBUG_RETURN(error);
+  rows_changed++;
   DBUG_RETURN(0);
 }
 
@@ -8357,6 +8420,7 @@ int handler::ha_delete_row(const uchar *buf)
     return error;
   if (unlikely((error= binlog_log_row(table, buf, 0, log_func))))
     return error;
+  rows_changed++;
   return 0;
 }
 
