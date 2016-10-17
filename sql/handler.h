@@ -4082,6 +4082,9 @@ class handler {
   Item *pushed_idx_cond;
   uint pushed_idx_cond_keyno; /* The index which the above condition is for */
 
+  ulonglong rows_read;
+  ulonglong rows_changed;
+  ulonglong index_rows_read[MAX_KEY];
   /**
     next_insert_id is the next value which should be inserted into the
     auto_increment column: in a inserting-multi-row statement (like INSERT
@@ -4234,6 +4237,8 @@ class handler {
         pushed_cond(0),
         pushed_idx_cond(NULL),
         pushed_idx_cond_keyno(MAX_KEY),
+        rows_read(0),
+        rows_changed(0),
         next_insert_id(0),
         insert_id_for_cur_row(0),
         auto_inc_intervals_count(0),
@@ -4247,6 +4252,7 @@ class handler {
         m_unique(nullptr) {
     DBUG_PRINT("info", ("handler created F_UNLCK %d F_RDLCK %d F_WRLCK %d",
                         F_UNLCK, F_RDLCK, F_WRLCK));
+    memset(index_rows_read, 0, sizeof(index_rows_read));
   }
 
   virtual ~handler(void) {
@@ -4525,6 +4531,8 @@ class handler {
   virtual void change_table_ptr(TABLE *table_arg, TABLE_SHARE *share) {
     table = table_arg;
     table_share = share;
+    rows_read = rows_changed = 0;
+    memset(index_rows_read, 0, sizeof(index_rows_read));
   }
   const TABLE_SHARE *get_table_share() const { return table_share; }
 
@@ -5349,6 +5357,14 @@ class handler {
 
   virtual bool low_byte_first() const { return 1; }
   virtual ha_checksum checksum() const { return 0; }
+  void update_index_stats(uint current_index)
+  {
+    rows_read++;
+    if (current_index < MAX_KEY)
+      index_rows_read[current_index]++;
+    else
+      index_rows_read[0]++;
+  }
 
   /**
     Check if the table is crashed.
