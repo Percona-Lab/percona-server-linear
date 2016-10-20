@@ -1819,6 +1819,7 @@ static void innobase_fts_store_docid(TABLE *tbl, ulonglong doc_id) {
   dbug_tmp_restore_column_map(tbl->write_set, old_map);
 }
 
+
 /** Check for a valid value of innobase_commit_concurrency.
  @return 0 for valid innodb_commit_concurrency */
 static int innobase_commit_concurrency_validate(
@@ -22302,6 +22303,7 @@ static ulonglong innobase_fts_retrieve_docid(FT_INFO_EXT *fts_hdl) {
 
     return (ranking->doc_id);
   }
+
 
   return (ft_prebuilt->fts_doc_id);
 }
