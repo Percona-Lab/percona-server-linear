@@ -17,9 +17,11 @@
 
 /* C++ standard header files */
 #include <string>
+#include <regex>
 
 /* MySQL header files */
 #include "./sql_string.h"
+#include "./sql_regex.h"
 
 /* RocksDB header files */
 #include "rocksdb/slice.h"
@@ -200,5 +202,7 @@ std::string rdb_hexdump(const char *data, std::size_t data_len,
   Helper function to see if a database exists
  */
 bool rdb_database_exists(const std::string &db_name);
+
+void warn_about_bad_patterns(const Regex &regex, const char *name);
 
 } // namespace myrocks
