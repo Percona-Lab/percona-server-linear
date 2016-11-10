@@ -102,6 +102,7 @@ class ha_blackhole : public handler {
              dd::Table *table_def);
   THR_LOCK_DATA **store_lock(THD *thd, THR_LOCK_DATA **to,
                              enum thr_lock_type lock_type);
+  bool has_gap_locks() const noexcept { return true; }
 
  private:
   virtual int write_row(uchar *buf);
