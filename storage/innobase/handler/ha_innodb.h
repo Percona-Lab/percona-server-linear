@@ -169,6 +169,8 @@ class ha_innobase : public handler {
 
   int index_last(uchar *buf) override;
 
+  bool has_gap_locks() const noexcept override { return true; }
+
   int rnd_init(bool scan) override;
 
   int rnd_end() override;
