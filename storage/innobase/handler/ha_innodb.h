@@ -168,6 +168,8 @@ class ha_innobase : public handler {
 
   int rnd_init(bool scan);
 
+	bool has_gap_locks() const noexcept { return true; }
+
   int rnd_end();
 
   int rnd_next(uchar *buf);
