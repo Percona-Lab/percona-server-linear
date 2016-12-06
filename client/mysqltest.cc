@@ -3105,7 +3105,23 @@ FILE* my_popen(DYNAMIC_STRING *ds_cmd, const char *mode,
   }
 #endif /* _WIN32 */
 
-  return popen(ds_cmd->str, mode);
+  errno= 0;
+  FILE *file= popen(ds_cmd->str, mode);
+  if (file == NULL)
+  {
+    if (errno != 0)
+    {
+      fprintf(stderr, "mysqltest: popen failed with errno %d (%s)\n", errno,
+              strerror(errno));
+    }
+    else
+    {
+      fprintf(stderr,
+              "mysqltest: popen returned NULL without setting errno "
+              "(out-of-memory?)\n");
+    }
+  }
+  return file;
 }
 
 
@@ -4995,6 +5011,25 @@ int query_get_string(MYSQL* mysql, const char* query,
 
 
 /**
+  A wrapper around kill call that prints diagnostics if the call failed with
+  any other error than ESRCH.
+
+  @param pid    Process id
+  @param sig    Signal to send to process
+  @return The return value of kill call
+*/
+static int my_kill(int pid, int sig)
+{
+  const int result= kill(pid, sig);
+  if (result == -1 && errno != ESRCH)
+  {
+    log_msg("kill(%d, %d) returned errno %d (%s)", pid, sig, errno,
+            strerror(errno));
+  }
+  return result;
+}
+
+/**
   Check if process is active.
 
   @param pid  Process id.
@@ -5019,7 +5054,7 @@ static bool is_process_active(int pid)
 
   return true;
 #else
-  return (kill(pid, 0) == 0);
+  return (my_kill(pid, 0) == 0);
 #endif
 }
 
@@ -5044,7 +5079,7 @@ static bool kill_process(int pid)
 
   CloseHandle(proc);
 #else
-  killed= (kill(pid, SIGKILL) == 0);
+  killed= (my_kill(pid, SIGKILL) == 0);
 #endif
   return killed;
 }
@@ -5113,7 +5148,9 @@ static void abort_process(int pid, const char *path)
     verbose_msg("OpenProcess failed: %d\n", err);
   }
 #else
-  kill(pid, SIGABRT);
+  log_msg("shutdown_server timeout exceeded, SIGABRT set to the server PID %d",
+          pid);
+  my_kill(pid, SIGABRT);
 #endif
 }
 
