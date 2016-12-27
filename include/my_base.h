@@ -922,7 +922,9 @@ is the global server default. */
 #define HA_ERR_DISK_FULL_NOWAIT 204 /* No more room in disk */
 #define HA_ERR_NO_SESSION_TEMP 205  /* No session temporary space available */
 #define HA_ERR_WRONG_TABLE_NAME 206 /* Wrong or Invalid table name */
-#define HA_ERR_LAST 206             /* Copy of last error nr */
+#define HA_ERR_DEST_SCHEMA_NOT_EXIST 207 /* Destination schema does not exist \
+                                          */
+#define HA_ERR_LAST 207                  /* Copy of last error nr */
 
 /* Number of different errors */
 #define HA_ERR_ERRORS (HA_ERR_LAST - HA_ERR_FIRST + 1)
