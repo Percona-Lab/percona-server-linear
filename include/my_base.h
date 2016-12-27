@@ -986,8 +986,10 @@ Information in the data-dictionary needs to be updated. */
 #define HA_ERR_TOO_LONG_PATH 207
 /** Histogram sampling initialization failed */
 #define HA_ERR_SAMPLING_INIT_FAILED 208
+/** Destination schema does not exist */
+#define HA_ERR_DEST_SCHEMA_NOT_EXIST 209
 /** Copy of last error number */
-#define HA_ERR_LAST 208
+#define HA_ERR_LAST 209
 
 /* Number of different errors */
 #define HA_ERR_ERRORS (HA_ERR_LAST - HA_ERR_FIRST + 1)
