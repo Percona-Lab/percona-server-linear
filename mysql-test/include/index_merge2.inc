@@ -148,22 +148,28 @@ analyze table t2;
 -- enable_result_log
 -- enable_query_log
 
+if (!$skip_ror_EXPLAIN_for_MyRocks)
+{
 if ($index_merge_random_rows_in_EXPLAIN)
 {
   --replace_column 10 #
 }
 explain select count(*) from t1 where
   key1a = 2 and key1b is null and  key2a = 2 and key2b is null;
+}
 
 select count(*) from t1 where
   key1a = 2 and key1b is null and key2a = 2 and key2b is null;
 
+if (!$skip_ror_EXPLAIN_for_MyRocks)
+{
 if ($index_merge_random_rows_in_EXPLAIN)
 {
   --replace_column 10 #
 }
 explain select count(*) from t1 where
   key1a = 2 and key1b is null and key3a = 2 and key3b is null;
+}
 
 select count(*) from t1 where
   key1a = 2 and key1b is null and key3a = 2 and key3b is null;
@@ -372,18 +378,25 @@ alter table t1 add index i2(key2);
 alter table t1 add index i3(key3);
 update t1 set key2=key1,key3=key1;
 
+# Force complete purge
+SET @@GLOBAL.innodb_fast_shutdown = 0;
+--source include/restart_mysqld.inc
+
 -- disable_query_log
 -- disable_result_log
 analyze table t1;
 -- enable_result_log
 -- enable_query_log
 
+if (!$skip_ror_EXPLAIN_for_MyRocks)
+{
 if ($index_merge_random_rows_in_EXPLAIN)
 {
   --replace_column 10 #
 }
 # to test the bug, the following must use "sort_union":
 explain select * from t1 where (key3 > 30 and key3<35) or (key2 >32 and key2 < 40);
+}
 select * from t1 where (key3 > 30 and key3<35) or (key2 >32 and key2 < 40);
 drop table t1;
 
