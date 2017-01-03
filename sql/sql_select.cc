@@ -159,6 +159,7 @@ bool handle_query(THD *thd, LEX *lex, Query_result *result,
     goto err;
 
   if (single_query) {
+    DBUG_ASSERT(unit->cleaned == SELECT_LEX_UNIT::UC_DIRTY);
     if (unit->prepare_limit(thd, unit->global_parameters()))
       goto err; /* purecov: inspected */
 
@@ -1721,6 +1722,7 @@ void JOIN::cleanup_item_list(List<Item> &items) const {
 bool SELECT_LEX::optimize(THD *thd) {
   DBUG_ENTER("SELECT_LEX::optimize");
 
+  DBUG_ASSERT(master_unit()->cleaned == SELECT_LEX_UNIT::UC_DIRTY);
   DBUG_ASSERT(join == NULL);
   JOIN *const join_local = new (thd->mem_root) JOIN(thd, this);
   if (!join_local) DBUG_RETURN(true); /* purecov: inspected */
