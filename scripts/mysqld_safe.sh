@@ -907,7 +907,6 @@ then
   if [ ! -h "$pid_file" ]; then
       rm -f "$pid_file"
   fi
-  
   if test -f "$pid_file"
   then
     log_error "Fatal error: Can't remove the pid file:
