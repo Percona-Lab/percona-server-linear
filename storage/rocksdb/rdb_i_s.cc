@@ -74,10 +74,10 @@ static int rdb_i_s_cfstats_fill_table(my_core::THD *const thd,
                                       my_core::TABLE_LIST *const tables,
                                       my_core::Item *const cond
                                       __attribute__((__unused__))) {
+  DBUG_ENTER_FUNC();
+
   bool ret;
   uint64_t val;
-
-  DBUG_ENTER("rdb_i_s_cfstats_fill_table");
 
   const std::vector<std::pair<const std::string, std::string>> cf_properties = {
       {rocksdb::DB::Properties::kNumImmutableMemTable,
@@ -135,10 +135,11 @@ static int rdb_i_s_cfstats_fill_table(my_core::THD *const thd,
 }
 
 static int rdb_i_s_cfstats_init(void *p) {
-  my_core::ST_SCHEMA_TABLE *schema;
+  DBUG_ENTER_FUNC();
 
-  DBUG_ENTER("rdb_i_s_cfstats_init");
-  DBUG_ASSERT(p != nullptr);
+  assert(p != nullptr);
+
+  my_core::ST_SCHEMA_TABLE *schema;
 
   schema = (my_core::ST_SCHEMA_TABLE *)p;
 
@@ -164,10 +165,10 @@ static int rdb_i_s_dbstats_fill_table(my_core::THD *const thd,
                                       my_core::TABLE_LIST *const tables,
                                       my_core::Item *const cond
                                       __attribute__((__unused__))) {
+  DBUG_ENTER_FUNC();
+
   bool ret;
   uint64_t val;
-
-  DBUG_ENTER("rdb_i_s_dbstats_fill_table");
 
   const std::vector<std::pair<std::string, std::string>> db_properties = {
       {rocksdb::DB::Properties::kBackgroundErrors, "DB_BACKGROUND_ERRORS"},
@@ -216,11 +217,11 @@ static int rdb_i_s_dbstats_fill_table(my_core::THD *const thd,
 }
 
 static int rdb_i_s_dbstats_init(void *const p) {
-  DBUG_ASSERT(p != nullptr);
+  DBUG_ENTER_FUNC();
+
+  assert(p != nullptr);
 
   my_core::ST_SCHEMA_TABLE *schema;
-
-  DBUG_ENTER("rdb_i_s_dbstats_init");
 
   schema = (my_core::ST_SCHEMA_TABLE *)p;
 
@@ -250,13 +251,13 @@ static int rdb_i_s_perf_context_fill_table(my_core::THD *const thd,
                                            my_core::TABLE_LIST *const tables,
                                            my_core::Item *const cond
                                            __attribute__((__unused__))) {
+  DBUG_ENTER_FUNC();
+
   DBUG_ASSERT(thd != nullptr);
   DBUG_ASSERT(tables != nullptr);
 
   int ret = 0;
   Field **field = tables->table->field;
-
-  DBUG_ENTER("rdb_i_s_perf_context_fill_table");
 
   const std::vector<std::string> tablenames = rdb_get_open_table_names();
   for (const auto &it : tablenames) {
@@ -305,11 +306,11 @@ static int rdb_i_s_perf_context_fill_table(my_core::THD *const thd,
 }
 
 static int rdb_i_s_perf_context_init(void *const p) {
-  DBUG_ASSERT(p != nullptr);
+  DBUG_ENTER_FUNC();
+
+  assert(p != nullptr);
 
   my_core::ST_SCHEMA_TABLE *schema;
-
-  DBUG_ENTER("rdb_i_s_perf_context_init");
 
   schema = (my_core::ST_SCHEMA_TABLE *)p;
 
@@ -334,11 +335,12 @@ static ST_FIELD_INFO rdb_i_s_perf_context_global_fields_info[] = {
 static int rdb_i_s_perf_context_global_fill_table(
     my_core::THD *const thd, my_core::TABLE_LIST *const tables,
     my_core::Item *const cond __attribute__((__unused__))) {
+  DBUG_ENTER_FUNC();
+
   DBUG_ASSERT(thd != nullptr);
   DBUG_ASSERT(tables != nullptr);
 
   int ret = 0;
-  DBUG_ENTER("rdb_i_s_perf_context_global_fill_table");
 
   // Get a copy of the global perf counters.
   Rdb_perf_counters global_counters;
@@ -363,11 +365,11 @@ static int rdb_i_s_perf_context_global_fill_table(
 }
 
 static int rdb_i_s_perf_context_global_init(void *const p) {
-  DBUG_ASSERT(p != nullptr);
+  DBUG_ENTER_FUNC();
+
+  assert(p != nullptr);
 
   my_core::ST_SCHEMA_TABLE *schema;
-
-  DBUG_ENTER("rdb_i_s_perf_context_global_init");
 
   schema = (my_core::ST_SCHEMA_TABLE *)p;
 
@@ -394,12 +396,12 @@ static int rdb_i_s_cfoptions_fill_table(my_core::THD *const thd,
                                         my_core::TABLE_LIST *const tables,
                                         my_core::Item *const cond
                                         __attribute__((__unused__))) {
-  DBUG_ASSERT(thd != nullptr);
-  DBUG_ASSERT(tables != nullptr);
+  DBUG_ENTER_FUNC();
+
+  assert(thd != nullptr);
+  assert(tables != nullptr);
 
   bool ret;
-
-  DBUG_ENTER("rdb_i_s_cfoptions_fill_table");
 
   Rdb_cf_manager &cf_manager = rdb_get_cf_manager();
 
@@ -736,10 +738,11 @@ static int rdb_i_s_global_info_fill_table(my_core::THD *const thd,
                                           my_core::TABLE_LIST *const tables,
                                           my_core::Item *const cond
                                           __attribute__((__unused__))) {
+  DBUG_ENTER_FUNC();
+
   assert(thd != nullptr);
   assert(tables != nullptr);
 
-  DBUG_ENTER("rdb_i_s_global_info_fill_table");
   static const uint32_t INT_BUF_LEN = 21;
   static const uint32_t CF_ID_INDEX_BUF_LEN = 60;
 
@@ -953,7 +956,7 @@ int Rdb_ddl_scanner::add_table(Rdb_tbl_def *tdef) {
 static int rdb_i_s_ddl_fill_table(my_core::THD *const thd,
                                   my_core::TABLE_LIST *const tables,
                                   my_core::Item *const cond) {
-  DBUG_ENTER("rdb_i_s_ddl_fill_table");
+  DBUG_ENTER_FUNC();
 
   DBUG_ASSERT(thd != nullptr);
   DBUG_ASSERT(tables != nullptr);
@@ -970,9 +973,10 @@ static int rdb_i_s_ddl_fill_table(my_core::THD *const thd,
 }
 
 static int rdb_i_s_ddl_init(void *const p) {
+  DBUG_ENTER_FUNC();
+
   my_core::ST_SCHEMA_TABLE *schema;
 
-  DBUG_ENTER("rdb_i_s_ddl_init");
   assert(p != nullptr);
 
   schema = (my_core::ST_SCHEMA_TABLE *)p;
@@ -984,10 +988,11 @@ static int rdb_i_s_ddl_init(void *const p) {
 }
 
 static int rdb_i_s_cfoptions_init(void *const p) {
-  my_core::ST_SCHEMA_TABLE *schema;
+  DBUG_ENTER_FUNC();
 
-  DBUG_ENTER("rdb_i_s_cfoptions_init");
   DBUG_ASSERT(p != nullptr);
+
+  my_core::ST_SCHEMA_TABLE *schema;
 
   schema = (my_core::ST_SCHEMA_TABLE *)p;
 
@@ -998,10 +1003,11 @@ static int rdb_i_s_cfoptions_init(void *const p) {
 }
 
 static int rdb_i_s_global_info_init(void *const p) {
-  my_core::ST_SCHEMA_TABLE *schema;
+  DBUG_ENTER_FUNC();
 
-  DBUG_ENTER("rdb_i_s_global_info_init");
   DBUG_ASSERT(p != nullptr);
+
+  my_core::ST_SCHEMA_TABLE *schema;
 
   schema = reinterpret_cast<my_core::ST_SCHEMA_TABLE *>(p);
 
@@ -1082,15 +1088,15 @@ static int rdb_i_s_index_file_map_fill_table(my_core::THD *const thd,
                                              my_core::TABLE_LIST *const tables,
                                              my_core::Item *const cond
                                              __attribute__((__unused__))) {
-  DBUG_ASSERT(thd != nullptr);
-  DBUG_ASSERT(tables != nullptr);
-  DBUG_ASSERT(tables->table != nullptr);
+  DBUG_ENTER_FUNC();
+
+  assert(thd != nullptr);
+  assert(tables != nullptr);
+  assert(tables->table != nullptr);
 
   int ret = 0;
   Field **field = tables->table->field;
   assert(field != nullptr);
-
-  DBUG_ENTER("rdb_i_s_index_file_map_fill_table");
 
   /* Iterate over all the column families */
   rocksdb::DB *const rdb = rdb_get_rocksdb_db();
@@ -1161,10 +1167,11 @@ static int rdb_i_s_index_file_map_fill_table(my_core::THD *const thd,
 
 /* Initialize the information_schema.rocksdb_index_file_map virtual table */
 static int rdb_i_s_index_file_map_init(void *const p) {
-  my_core::ST_SCHEMA_TABLE *schema;
+  DBUG_ENTER_FUNC();
 
-  DBUG_ENTER("rdb_i_s_index_file_map_init");
   DBUG_ASSERT(p != nullptr);
+
+  my_core::ST_SCHEMA_TABLE *schema;
 
   schema = (my_core::ST_SCHEMA_TABLE *)p;
 
@@ -1194,13 +1201,13 @@ static int rdb_i_s_lock_info_fill_table(my_core::THD *const thd,
                                         my_core::TABLE_LIST *const tables,
                                         my_core::Item *const cond
                                         __attribute__((__unused__))) {
+  DBUG_ENTER_FUNC();
+
   DBUG_ASSERT(thd != nullptr);
   DBUG_ASSERT(tables != nullptr);
   DBUG_ASSERT(tables->table != nullptr);
 
   int ret = 0;
-
-  DBUG_ENTER("rdb_i_s_lock_info_fill_table");
 
   rocksdb::TransactionDB *const rdb = rdb_get_rocksdb_db();
   DBUG_ASSERT(rdb != nullptr);
@@ -1237,10 +1244,11 @@ static int rdb_i_s_lock_info_fill_table(my_core::THD *const thd,
 
 /* Initialize the information_schema.rocksdb_lock_info virtual table */
 static int rdb_i_s_lock_info_init(void *const p) {
-  my_core::ST_SCHEMA_TABLE *schema;
+  DBUG_ENTER_FUNC();
 
-  DBUG_ENTER("rdb_i_s_lock_info_init");
   DBUG_ASSERT(p != nullptr);
+
+  my_core::ST_SCHEMA_TABLE *schema;
 
   schema = (my_core::ST_SCHEMA_TABLE *)p;
 
@@ -1301,13 +1309,13 @@ static int rdb_i_s_trx_info_fill_table(my_core::THD *const thd,
                                        my_core::TABLE_LIST *const tables,
                                        my_core::Item *const cond
                                        __attribute__((__unused__))) {
+  DBUG_ENTER_FUNC();
+
   DBUG_ASSERT(thd != nullptr);
   DBUG_ASSERT(tables != nullptr);
   DBUG_ASSERT(tables->table != nullptr);
 
   int ret = 0;
-
-  DBUG_ENTER("rdb_i_s_trx_info_fill_table");
 
   const std::vector<Rdb_trx_info> &all_trx_info = rdb_get_all_trx_info();
 
@@ -1358,10 +1366,11 @@ static int rdb_i_s_trx_info_fill_table(my_core::THD *const thd,
 
 /* Initialize the information_schema.rocksdb_trx_info virtual table */
 static int rdb_i_s_trx_info_init(void *const p) {
-  my_core::ST_SCHEMA_TABLE *schema;
+  DBUG_ENTER_FUNC();
 
-  DBUG_ENTER("rdb_i_s_trx_info_init");
   DBUG_ASSERT(p != nullptr);
+
+  my_core::ST_SCHEMA_TABLE *schema;
 
   schema = (my_core::ST_SCHEMA_TABLE *)p;
 
@@ -1372,7 +1381,7 @@ static int rdb_i_s_trx_info_init(void *const p) {
 }
 
 static int rdb_i_s_deinit(void *p __attribute__((__unused__))) {
-  DBUG_ENTER("rdb_i_s_deinit");
+  DBUG_ENTER_FUNC();
   DBUG_RETURN(0);
 }
 
