@@ -63,7 +63,7 @@ Rdb_key_def::Rdb_key_def(uint indexnr_arg, uint keyno_arg,
       m_is_reverse_cf(is_reverse_cf_arg), m_is_auto_cf(is_auto_cf_arg),
       m_name(_name), m_stats(_stats), m_pk_part_no(nullptr),
       m_pack_info(nullptr), m_keyno(keyno_arg), m_key_parts(0),
-      m_maxlength(0) // means 'not intialized'
+      m_prefix_extractor(nullptr), m_maxlength(0) // means 'not intialized'
 {
   mysql_mutex_init(0, &m_mutex, MY_MUTEX_INIT_FAST);
   rdb_netbuf_store_index(m_index_number_storage_form, m_index_number);
@@ -75,7 +75,8 @@ Rdb_key_def::Rdb_key_def(const Rdb_key_def &k)
       m_is_reverse_cf(k.m_is_reverse_cf), m_is_auto_cf(k.m_is_auto_cf),
       m_name(k.m_name), m_stats(k.m_stats), m_pk_part_no(k.m_pk_part_no),
       m_pack_info(k.m_pack_info), m_keyno(k.m_keyno),
-      m_key_parts(k.m_key_parts), m_maxlength(k.m_maxlength) {
+      m_key_parts(k.m_key_parts), m_prefix_extractor(k.m_prefix_extractor),
+      m_maxlength(k.m_maxlength) {
   mysql_mutex_init(0, &m_mutex, MY_MUTEX_INIT_FAST);
   rdb_netbuf_store_index(m_index_number_storage_form, m_index_number);
   if (k.m_pack_info) {
@@ -268,6 +269,10 @@ void Rdb_key_def::setup(const TABLE *const tbl,
 
     /* Initialize the memory needed by the stats structure */
     m_stats.m_distinct_keys_per_prefix.resize(get_key_parts());
+
+    /* Cache prefix extractor for bloom filter usage later */
+    rocksdb::Options opt = rdb_get_rocksdb_db()->GetOptions(get_cf());
+    m_prefix_extractor = opt.prefix_extractor;
 
     /*
       This should be the last member variable set before releasing the mutex
