@@ -271,6 +271,10 @@ public:
 
   const std::string &get_name() const { return m_name; }
 
+  const rocksdb::SliceTransform *get_extractor() const {
+    return m_prefix_extractor.get();
+  }
+
   Rdb_key_def &operator=(const Rdb_key_def &) = delete;
   Rdb_key_def(const Rdb_key_def &k);
   Rdb_key_def(uint indexnr_arg, uint keyno_arg,
@@ -429,6 +433,9 @@ private:
     many elements are in the m_pack_info array.
   */
   uint m_key_parts;
+
+  /* Prefix extractor for the column family of the key definiton */
+  std::shared_ptr<const rocksdb::SliceTransform> m_prefix_extractor;
 
   /* Maximum length of the mem-comparable form. */
   uint m_maxlength;
