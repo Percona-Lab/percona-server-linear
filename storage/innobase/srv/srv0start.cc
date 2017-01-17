@@ -1711,6 +1711,8 @@ dberr_t srv_start(bool create_new_db) {
 
   srv_start_state_set(SRV_START_STATE_IO);
 
+  bool srv_monitor_thread_created = false;
+
   if (create_new_db) {
     /* There are no pages to be recovered. */
     ut_a(buf_are_flush_lists_empty_validate());
@@ -1807,6 +1809,16 @@ dberr_t srv_start(bool create_new_db) {
     this point there will be only ONE page in the buf_LRU
     and there must be no page in the buf_flush list. */
     buf_pool_invalidate();
+
+    /* Start monitor thread early enough so that e.g. crash recovery failing to
+    find free pages in the buffer pool is diagnosed. */
+    if (!srv_read_only_mode) {
+      /* Create the thread which prints InnoDB monitor info */
+      srv_threads.m_monitor =
+          os_thread_create(srv_monitor_thread_key, 0, srv_monitor_thread);
+      srv_threads.m_monitor.start();
+      srv_monitor_thread_created = true;
+    }
 
     auto recovered_lsn = flushed_lsn;
     /* Do the recovery and persist all the changes to tablespace pages found in
@@ -2025,10 +2037,13 @@ dberr_t srv_start(bool create_new_db) {
     srv_threads.m_error_monitor.start();
 
     /* Create the thread which prints InnoDB monitor info */
-    srv_threads.m_monitor =
-        os_thread_create(srv_monitor_thread_key, 0, srv_monitor_thread);
+    if (!srv_monitor_thread_created) {
+      srv_threads.m_monitor =
+          os_thread_create(srv_monitor_thread_key, 0, srv_monitor_thread);
 
-    srv_threads.m_monitor.start();
+      srv_threads.m_monitor.start();
+      srv_monitor_thread_created = true;
+    }
   }
 
   srv_sys_tablespaces_open = true;
