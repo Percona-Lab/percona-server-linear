@@ -1348,4 +1348,12 @@ struct srv_slot_t {
 };
 #endif /* !UNIV_HOTBACKUP */
 
+#ifndef DBUG_OFF
+/** false before InnoDB monitor has been printed at least once, true
+afterwards */
+extern bool srv_debug_monitor_printed;
+#else
+#define srv_debug_monitor_printed false
+#endif
+
 #endif
