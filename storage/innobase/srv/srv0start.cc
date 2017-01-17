@@ -2523,8 +2523,10 @@ files_checked:
     os_thread_create(srv_error_monitor_thread_key, srv_error_monitor_thread);
 
     /* Create the thread which prints InnoDB monitor info */
-    srv_threads.m_monitor_thread_active = true;
-    os_thread_create(srv_monitor_thread_key, srv_monitor_thread);
+    if (!srv_start_state_is_set(SRV_START_STATE_MONITOR)) {
+      srv_threads.m_monitor_thread_active = true;
+      os_thread_create(srv_monitor_thread_key, srv_monitor_thread);
+    }
 
     srv_start_state_set(SRV_START_STATE_MONITOR);
   }
