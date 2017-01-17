@@ -2832,10 +2832,12 @@ files_checked:
     srv_threads.m_error_monitor.start();
 
     /* Create the thread which prints InnoDB monitor info */
-    srv_threads.m_monitor =
-        os_thread_create(srv_monitor_thread_key, srv_monitor_thread);
+    if (!srv_start_state_is_set(SRV_START_STATE_MONITOR)) {
+      srv_threads.m_monitor =
+          os_thread_create(srv_monitor_thread_key, srv_monitor_thread);
 
-    srv_threads.m_monitor.start();
+      srv_threads.m_monitor.start();
+    }
 
     srv_start_state_set(SRV_START_STATE_MONITOR);
   }
