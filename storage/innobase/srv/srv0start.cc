@@ -1894,6 +1894,8 @@ dberr_t srv_start(bool create_new_db) {
 
   arch_init();
 
+  bool srv_monitor_thread_created = false;
+
   if (create_new_db) {
     ut_a(buf_are_flush_lists_empty_validate());
 
@@ -2456,10 +2458,13 @@ dberr_t srv_start(bool create_new_db) {
     srv_threads.m_error_monitor.start();
 
     /* Create the thread which prints InnoDB monitor info */
-    srv_threads.m_monitor =
-        os_thread_create(srv_monitor_thread_key, 0, srv_monitor_thread);
+    if (!srv_monitor_thread_created) {
+      srv_threads.m_monitor =
+          os_thread_create(srv_monitor_thread_key, 0, srv_monitor_thread);
 
-    srv_threads.m_monitor.start();
+      srv_threads.m_monitor.start();
+      srv_monitor_thread_created = true;
+    }
   }
 
   srv_sys_tablespaces_open = true;
