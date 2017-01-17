@@ -2439,6 +2439,8 @@ files_checked:
 
   mtr_t::s_logging.init();
 
+  bool srv_monitor_thread_created = false;
+
   if (create_new_db) {
     ut_a(!srv_read_only_mode);
 
@@ -2905,10 +2907,13 @@ files_checked:
     srv_threads.m_error_monitor.start();
 
     /* Create the thread which prints InnoDB monitor info */
-    srv_threads.m_monitor =
-        os_thread_create(srv_monitor_thread_key, 0, srv_monitor_thread);
+    if (!srv_monitor_thread_created) {
+      srv_threads.m_monitor =
+          os_thread_create(srv_monitor_thread_key, 0, srv_monitor_thread);
 
-    srv_threads.m_monitor.start();
+      srv_threads.m_monitor.start();
+      srv_monitor_thread_created = true;
+    }
   }
 
   srv_sys_tablespaces_open = true;
