@@ -944,7 +944,6 @@ public:
   mysql_mutex_t* get_binlog_end_pos_lock() { return &LOCK_binlog_end_pos; }
   void lock_binlog_end_pos() { mysql_mutex_lock(&LOCK_binlog_end_pos); }
   void unlock_binlog_end_pos() { mysql_mutex_unlock(&LOCK_binlog_end_pos); }
-  void set_status_variables(THD *thd);
 
   /**
     Deep copy global_sid_map to @param sid_map and
@@ -967,6 +966,8 @@ public:
     True while rotating binlog, which is caused by logging Incident_log_event.
   */
   bool is_rotating_caused_by_incident;
+private:
+  void publish_coordinates_for_global_status(void) const;
 };
 
 typedef struct st_load_file_info
