@@ -167,6 +167,10 @@ PSI_memory_key key_memory_log_event;
 PSI_memory_key key_memory_Incident_log_event_message;
 PSI_memory_key key_memory_Rows_query_log_event_rows_query;
 
+#ifndef EMBEDDED_LIBRARY
+#include "sql_connect.h" //update_global_user_stats
+#endif
+
 using std::max;
 using std::min;
 
@@ -9731,12 +9735,19 @@ int Rows_log_event::do_apply_event(Relay_log_info const *rli) {
 
       error = (this->*do_apply_row_ptr)(rli);
 
+      if (!error) thd->updated_row_count++;
+
       if (handle_idempotent_and_ignored_errors(rli, &error)) break;
 
       /* this advances m_curr_row */
       do_post_row_operations(rli, error);
 
     } while (!error && (m_curr_row != m_rows_end));
+
+    if (unlikely(opt_userstat)) {
+      thd->update_stats(false);
+      update_global_user_stats(thd, true, my_getsystime());
+    }
 
 #ifdef HAVE_PSI_STAGE_INTERFACE
     m_psi_progress.end_work();
