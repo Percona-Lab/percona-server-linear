@@ -269,7 +269,6 @@ static void *handle_connection(void *arg) {
       break;  // We are out of resources, no sense in continuing.
     }
 
-
     DBUG_EXECUTE_IF("after_thread_setup", {
       const char act[] = "now signal thread_setup";
       assert(!debug_sync_set_action(thd, STRING_WITH_LEN(act)));
