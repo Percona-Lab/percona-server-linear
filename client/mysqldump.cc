@@ -114,6 +114,7 @@ static bool verbose = 0, opt_no_create_info = 0, opt_no_data = 0, quick = 1,
             opt_comments_used = 0, opt_alltspcs = 0, opt_notspcs = 0,
             opt_drop_trigger = 0, opt_network_timeout = 0,
             stats_tables_included = 0, column_statistics = false;
+static bool opt_order_by_primary_desc = false;
 static bool insert_pat_inited = 0, debug_info_flag = 0, debug_check_flag = 0;
 static ulong opt_max_allowed_packet, opt_net_buffer_length;
 static MYSQL mysql_connection, *mysql = 0;
@@ -433,6 +434,9 @@ static struct my_option my_long_options[] = {
      "InnoDB table, but will make the dump itself take considerably longer.",
      &opt_order_by_primary, &opt_order_by_primary, 0, GET_BOOL, NO_ARG, 0, 0, 0,
      0, 0, 0},
+    {"order-by-primary-desc", OPT_ORDER_BY_PRIMARY_DESC,
+     "Taking backup ORDER BY primary key DESC.", &opt_order_by_primary_desc,
+     &opt_order_by_primary_desc, 0, GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0},
     {"password", 'p',
      "Password to use when connecting to server. If password is not given it's "
      "solicited on the tty.",
@@ -569,7 +573,7 @@ static int dump_all_databases();
 static char *quote_name(const char *name, char *buff, bool force);
 char check_if_ignore_table(const char *table_name, char *table_type);
 bool is_infoschema_db(const char *db);
-static char *primary_key_fields(const char *table_name);
+static char *primary_key_fields(const char *table_name, const bool desc);
 static bool get_view_structure(char *table, char *db);
 static bool dump_all_views_in_db(char *database);
 static int dump_all_tablespaces();
@@ -705,6 +709,22 @@ static void write_header(FILE *sql_file, char *db_name) {
             "/*!40101 SET @OLD_SQL_MODE=@@SQL_MODE, SQL_MODE='%s%s%s' */;\n"
             "/*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;\n",
             mode1, comma, mode2);
+    fprintf(sql_file,
+            "/*!50112 SELECT COUNT(*) INTO @is_rocksdb_supported FROM"
+            " INFORMATION_SCHEMA.SESSION_VARIABLES WHERE"
+            " VARIABLE_NAME='rocksdb_bulk_load' */;\n"
+            "/*!50112 SET @save_old_rocksdb_bulk_load ="
+            " IF (@is_rocksdb_supported,"
+            " 'SET @old_rocksdb_bulk_load = @@rocksdb_bulk_load',"
+            " 'SET @dummy_old_rocksdb_bulk_load = 0') */;\n"
+            "/*!50112 PREPARE s FROM @save_old_rocksdb_bulk_load */;\n"
+            "/*!50112 EXECUTE s */;\n"
+            "/*!50112 SET @enable_bulk_load = IF (@is_rocksdb_supported,"
+            " 'SET SESSION rocksdb_bulk_load = 1',"
+            " 'SET @dummy_rocksdb_bulk_load = 0') */;\n"
+            "/*!50112 PREPARE s FROM @enable_bulk_load */;\n"
+            "/*!50112 EXECUTE s */;\n"
+            "/*!50112 DEALLOCATE PREPARE s */;\n");
     check_io(sql_file);
   }
 } /* write_header */
@@ -714,6 +734,13 @@ static void write_footer(FILE *sql_file) {
     fputs("</mysqldump>\n", sql_file);
     check_io(sql_file);
   } else if (!opt_compact) {
+    fprintf(sql_file,
+            "/*!50112 SET @disable_bulk_load = IF (@is_rocksdb_supported,"
+            " 'SET SESSION rocksdb_bulk_load = @old_rocksdb_bulk_load',"
+            " 'SET @dummy_rocksdb_bulk_load = 0') */;\n"
+            "/*!50112 PREPARE s FROM @disable_bulk_load */;\n"
+            "/*!50112 EXECUTE s */;\n"
+            "/*!50112 DEALLOCATE PREPARE s */;\n");
     if (opt_tz_utc)
       fprintf(sql_file, "/*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;\n");
     if (stats_tables_included)
@@ -2552,7 +2579,8 @@ static uint get_table_structure(char *table, char *db, char *table_type,
   result_table = quote_name(table, table_buff, 1);
   opt_quoted_table = quote_name(table, table_buff2, 0);
 
-  if (opt_order_by_primary) order_by = primary_key_fields(result_table);
+  if (opt_order_by_primary || opt_order_by_primary_desc)
+    order_by = primary_key_fields(result_table, opt_order_by_primary_desc);
 
   if (!opt_xml && !mysql_query_with_error_report(mysql, 0, query_buff)) {
     /* using SHOW CREATE statement */
@@ -5089,7 +5117,7 @@ bool is_infoschema_db(const char *db) {
     the table unsorted, rather than exit without dumping the data.
 */
 
-static char *primary_key_fields(const char *table_name) {
+static char *primary_key_fields(const char *table_name, const bool desc) {
   MYSQL_RES *res = NULL;
   MYSQL_ROW row;
   /* SHOW KEYS FROM + table name * 2 (escaped) + 2 quotes + \0 */
@@ -5098,6 +5126,7 @@ static char *primary_key_fields(const char *table_name) {
   char *result = 0;
   char buff[NAME_LEN * 2 + 3];
   char *quoted_field;
+  static const constexpr char desc_index[] = " DESC";
 
   snprintf(show_keys_buff, sizeof(show_keys_buff), "SHOW KEYS FROM %s",
            table_name);
@@ -5122,6 +5151,9 @@ static char *primary_key_fields(const char *table_name) {
     do {
       quoted_field = quote_name(row[4], buff, 0);
       result_length += strlen(quoted_field) + 1; /* + 1 for ',' or \0 */
+      if (desc) {
+        result_length += strlen(desc_index);
+      }
     } while ((row = mysql_fetch_row(res)) && atoi(row[3]) > 1);
   }
 
@@ -5141,7 +5173,10 @@ static char *primary_key_fields(const char *table_name) {
     end = my_stpcpy(result, quoted_field);
     while ((row = mysql_fetch_row(res)) && atoi(row[3]) > 1) {
       quoted_field = quote_name(row[4], buff, 0);
-      end = strxmov(end, ",", quoted_field, NullS);
+      end = strxmov(end, desc ? "DESC," : ",", quoted_field, NullS);
+    }
+    if (desc) {
+      end = my_stpmov(end, " DESC");
     }
   }
 
@@ -5555,6 +5590,25 @@ static void dynstr_realloc_checked(DYNAMIC_STRING *str,
     die(EX_MYSQLERR, DYNAMIC_STR_ERROR_MSG);
 }
 
+static bool has_session_variables_like(MYSQL *mysql_con,
+                                       const char *var_name) noexcept {
+  char buf[32], query[256];
+  snprintf(query, sizeof(query),
+           "SELECT COUNT(*) FROM"
+           " INFORMATION_SCHEMA.SESSION_VARIABLES WHERE VARIABLE_NAME LIKE"
+           " %s",
+           quote_for_like(var_name, buf));
+  MYSQL_RES *res;
+  if (mysql_query_with_error_report(mysql_con, &res, query)) return false;
+
+  MYSQL_ROW row = mysql_fetch_row(res);
+  char *val = row ? (char *)row[0] : nullptr;
+  const bool has_var = val && strcmp(val, "0") != 0;
+  mysql_free_result(res);
+
+  return has_var;
+}
+
 int main(int argc, char **argv) {
   char bin_log_name[FN_REFLEN];
   int exit_code, md_result_fd = 0;
@@ -5617,6 +5671,10 @@ int main(int argc, char **argv) {
   if (opt_delete_master_logs) {
     if (get_bin_log_name(mysql, bin_log_name, sizeof(bin_log_name))) goto err;
   }
+
+  if (has_session_variables_like(mysql, "rocksdb_skip_fill_cache"))
+    mysql_query_with_error_report(mysql, nullptr,
+                                  "SET SESSION rocksdb_skip_fill_cache=1");
 
   if (opt_single_transaction && start_transaction(mysql)) goto err;
 
