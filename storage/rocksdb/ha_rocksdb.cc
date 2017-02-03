@@ -336,7 +336,7 @@ static void rocksdb_set_pause_background_work(
     my_core::THD *const thd MY_ATTRIBUTE((__unused__)),
     struct st_mysql_sys_var *const var MY_ATTRIBUTE((__unused__)),
     void *const var_ptr MY_ATTRIBUTE((__unused__)), const void *const save) {
-  mysql_mutex_lock(&rdb_sysvars_mutex);
+  RDB_MUTEX_LOCK_CHECK(rdb_sysvars_mutex);
   const bool pause_requested = *static_cast<const bool *>(save);
   if (rocksdb_pause_background_work != pause_requested) {
     if (pause_requested) {
@@ -346,7 +346,7 @@ static void rocksdb_set_pause_background_work(
     }
     rocksdb_pause_background_work = pause_requested;
   }
-  mysql_mutex_unlock(&rdb_sysvars_mutex);
+  RDB_MUTEX_UNLOCK_CHECK(rdb_sysvars_mutex);
 }
 
 static void rocksdb_set_compaction_options(THD *thd,
@@ -453,11 +453,11 @@ static void rocksdb_set_rocksdb_info_log_level(
     const void *const save) {
   DBUG_ASSERT(save != nullptr);
 
-  mysql_mutex_lock(&rdb_sysvars_mutex);
+  RDB_MUTEX_LOCK_CHECK(rdb_sysvars_mutex);
   rocksdb_info_log_level = *static_cast<const uint64_t *>(save);
   rocksdb_db_options.info_log->SetInfoLogLevel(
       static_cast<const rocksdb::InfoLogLevel>(rocksdb_info_log_level));
-  mysql_mutex_unlock(&rdb_sysvars_mutex);
+  RDB_MUTEX_UNLOCK_CHECK(rdb_sysvars_mutex);
 }
 
 static const char *index_type_names[] = {"kBinarySearch", "kHashSearch", NullS};
@@ -1458,10 +1458,12 @@ public:
   static void walk_tx_list(Rdb_tx_list_walker *walker) {
     assert(walker != nullptr);
 
-    mysql_mutex_lock(&s_tx_list_mutex);
+    RDB_MUTEX_LOCK_CHECK(s_tx_list_mutex);
+
     for (auto it : s_tx_list)
       walker->process_tran(it);
-    mysql_mutex_unlock(&s_tx_list_mutex);
+
+    RDB_MUTEX_UNLOCK_CHECK(s_tx_list_mutex);
   }
 
   int set_status_error(THD *const thd, const rocksdb::Status &s,
@@ -1795,15 +1797,15 @@ public:
 
   explicit Rdb_transaction(THD *const thd)
       : m_thd(thd), m_tbl_io_perf(nullptr) {
-    mysql_mutex_lock(&s_tx_list_mutex);
+    RDB_MUTEX_LOCK_CHECK(s_tx_list_mutex);
     s_tx_list.insert(this);
-    mysql_mutex_unlock(&s_tx_list_mutex);
+    RDB_MUTEX_UNLOCK_CHECK(s_tx_list_mutex);
   }
 
   virtual ~Rdb_transaction() {
-    mysql_mutex_lock(&s_tx_list_mutex);
+    RDB_MUTEX_LOCK_CHECK(s_tx_list_mutex);
     s_tx_list.erase(this);
-    mysql_mutex_unlock(&s_tx_list_mutex);
+    RDB_MUTEX_UNLOCK_CHECK(s_tx_list_mutex);
   }
 };
 
@@ -3154,13 +3156,13 @@ static int rocksdb_init_func(void *const p) {
 
     rocksdb_set_compaction_options(nullptr, nullptr, nullptr, nullptr);
 
-    mysql_mutex_lock(&rdb_sysvars_mutex);
+    RDB_MUTEX_LOCK_CHECK(rdb_sysvars_mutex);
 
     assert(rocksdb_table_stats_sampling_pct <= RDB_TBL_STATS_SAMPLE_PCT_MAX);
     properties_collector_factory->SetTableStatsSamplingPct(
         rocksdb_table_stats_sampling_pct);
 
-    mysql_mutex_unlock(&rdb_sysvars_mutex);
+    RDB_MUTEX_UNLOCK_CHECK(rdb_sysvars_mutex);
   }
 
   if (rocksdb_persistent_cache_size > 0) {
@@ -3430,7 +3432,7 @@ Rdb_open_tables_map::get_table_handler(const char *const table_name) {
   length = (uint)strlen(table_name);
 
   // First, look up the table in the hash map.
-  mysql_mutex_lock(&m_mutex);
+  RDB_MUTEX_LOCK_CHECK(m_mutex);
   if (!(table_handler = reinterpret_cast<Rdb_table_handler *>(my_hash_search(
             &m_hash, reinterpret_cast<const uchar *>(table_name), length)))) {
     // Since we did not find it in the hash map, attempt to create and add it
@@ -3445,7 +3447,7 @@ Rdb_open_tables_map::get_table_handler(const char *const table_name) {
               sizeof(*table_handler), &tmp_name, length + 1, NullS)))) {
 #endif
       // Allocating a new Rdb_table_handler and a new table name failed.
-      mysql_mutex_unlock(&m_mutex);
+      RDB_MUTEX_UNLOCK_CHECK(m_mutex);
       return nullptr;
     }
 
@@ -3456,7 +3458,7 @@ Rdb_open_tables_map::get_table_handler(const char *const table_name) {
 
     if (my_hash_insert(&m_hash, reinterpret_cast<uchar *>(table_handler))) {
       // Inserting into the hash map failed.
-      mysql_mutex_unlock(&m_mutex);
+      RDB_MUTEX_UNLOCK_CHECK(m_mutex);
       my_free(table_handler);
       return nullptr;
     }
@@ -3467,7 +3469,7 @@ Rdb_open_tables_map::get_table_handler(const char *const table_name) {
   DBUG_ASSERT(table_handler->m_ref_count >= 0);
   table_handler->m_ref_count++;
 
-  mysql_mutex_unlock(&m_mutex);
+  RDB_MUTEX_UNLOCK_CHECK(m_mutex);
 
   return table_handler;
 }
@@ -3481,7 +3483,7 @@ std::vector<std::string> Rdb_open_tables_map::get_table_names(void) const {
   const Rdb_table_handler *table_handler;
   std::vector<std::string> names;
 
-  mysql_mutex_lock(&m_mutex);
+  RDB_MUTEX_LOCK_CHECK(m_mutex);
   for (i = 0; (table_handler = reinterpret_cast<const Rdb_table_handler *>(
                    my_hash_const_element(&m_hash, i)));
        i++) {
@@ -3489,7 +3491,7 @@ std::vector<std::string> Rdb_open_tables_map::get_table_names(void) const {
     names.push_back(table_handler->m_table_name);
   }
   DBUG_ASSERT(i == m_hash.records);
-  mysql_mutex_unlock(&m_mutex);
+  RDB_MUTEX_UNLOCK_CHECK(m_mutex);
 
   return names;
 }
@@ -3638,7 +3640,7 @@ int ha_rocksdb::read_hidden_pk_id_from_rowkey(longlong *const hidden_pk_id) {
 
 void Rdb_open_tables_map::release_table_handler(
     Rdb_table_handler *const table_handler) {
-  mysql_mutex_lock(&m_mutex);
+  RDB_MUTEX_LOCK_CHECK(m_mutex);
 
   assert(table_handler != nullptr);
   assert(table_handler->m_ref_count > 0);
@@ -3651,7 +3653,7 @@ void Rdb_open_tables_map::release_table_handler(
     my_free(table_handler);
   }
 
-  mysql_mutex_unlock(&m_mutex);
+  RDB_MUTEX_UNLOCK_CHECK(m_mutex);
 }
 
 static handler *rocksdb_create_handler(my_core::handlerton *const hton,
@@ -6933,7 +6935,7 @@ int ha_rocksdb::finalize_bulk_load() {
     return rc;
   }
 
-  mysql_mutex_lock(&m_bulk_load_mutex);
+  RDB_MUTEX_LOCK_CHECK(m_bulk_load_mutex);
 
   /*
     We need this check because it's possible that m_sst_info has been
@@ -6943,6 +6945,14 @@ int ha_rocksdb::finalize_bulk_load() {
   if (m_sst_info != nullptr) {
     rc = m_sst_info->commit();
     if (rc != 0) {
+      /*
+        Log the error immediately here in case the server crashes before
+        mysql prints via my_printf_error.
+      */
+      sql_print_error("Failed to commit bulk loaded sst file to the "
+                      "data store (%s)",
+                      m_sst_info->error_message().c_str());
+
       my_printf_error(ER_UNKNOWN_ERROR,
                       "Failed to commit bulk loaded sst file to the "
                       "data store (%s)",
@@ -6955,7 +6965,8 @@ int ha_rocksdb::finalize_bulk_load() {
     m_bulk_load_tx = nullptr;
   }
 
-  mysql_mutex_unlock(&m_bulk_load_mutex);
+  RDB_MUTEX_UNLOCK_CHECK(m_bulk_load_mutex);
+
   return rc;
 }
 
@@ -8039,7 +8050,7 @@ ha_rocksdb::get_range(const int &i,
 */
 
 void Rdb_drop_index_thread::run() {
-  mysql_mutex_lock(&m_signal_mutex);
+  RDB_MUTEX_LOCK_CHECK(m_signal_mutex);
 
   for (;;) {
     // The stop flag might be set by shutdown command
@@ -8064,7 +8075,7 @@ void Rdb_drop_index_thread::run() {
     }
     // make sure, no program error is returned
     assert(ret == 0 || ret == ETIMEDOUT);
-    mysql_mutex_unlock(&m_signal_mutex);
+    RDB_MUTEX_UNLOCK_CHECK(m_signal_mutex);
 
     std::unordered_set<GL_INDEX_ID> indices;
     dict_manager.get_ongoing_drop_indexes(&indices);
@@ -8141,10 +8152,10 @@ void Rdb_drop_index_thread::run() {
         dict_manager.finish_drop_indexes(finished);
       }
     }
-    mysql_mutex_lock(&m_signal_mutex);
+    RDB_MUTEX_LOCK_CHECK(m_signal_mutex);
   }
 
-  mysql_mutex_unlock(&m_signal_mutex);
+  RDB_MUTEX_UNLOCK_CHECK(m_signal_mutex);
 }
 
 Rdb_tbl_def *ha_rocksdb::get_table_if_exists(const char *const tablename) {
@@ -9606,7 +9617,7 @@ void Rdb_background_thread::run() {
     // Wait until the next timeout or until we receive a signal to stop the
     // thread. Request to stop the thread should only be triggered when the
     // storage engine is being unloaded.
-    mysql_mutex_lock(&m_signal_mutex);
+    RDB_MUTEX_LOCK_CHECK(m_signal_mutex);
     const auto ret MY_ATTRIBUTE((__unused__)) =
         mysql_cond_timedwait(&m_signal_cond, &m_signal_mutex, &ts_next_sync);
 
@@ -9615,7 +9626,7 @@ void Rdb_background_thread::run() {
     const bool local_stop = m_stop;
     const bool local_save_stats = m_save_stats;
     reset();
-    mysql_mutex_unlock(&m_signal_mutex);
+    RDB_MUTEX_UNLOCK_CHECK(m_signal_mutex);
 
     if (local_stop) {
       // If we're here then that's because condition variable was signaled by
@@ -9874,7 +9885,7 @@ void rocksdb_set_table_stats_sampling_pct(
     my_core::THD *const thd MY_ATTRIBUTE((__unused__)),
     my_core::st_mysql_sys_var *const var MY_ATTRIBUTE((__unused__)),
     void *const var_ptr MY_ATTRIBUTE((__unused__)), const void *const save) {
-  mysql_mutex_lock(&rdb_sysvars_mutex);
+  RDB_MUTEX_LOCK_CHECK(rdb_sysvars_mutex);
 
   const uint32_t new_val = *static_cast<const uint32_t *>(save);
 
@@ -9887,7 +9898,7 @@ void rocksdb_set_table_stats_sampling_pct(
     }
   }
 
-  mysql_mutex_unlock(&rdb_sysvars_mutex);
+  RDB_MUTEX_UNLOCK_CHECK(rdb_sysvars_mutex);
 }
 
 /*
@@ -9990,13 +10001,15 @@ static void rocksdb_set_max_background_compactions(
     const void *const save) {
   DBUG_ASSERT(save != nullptr);
 
-  mysql_mutex_lock(&rdb_sysvars_mutex);
+  RDB_MUTEX_LOCK_CHECK(rdb_sysvars_mutex);
+
   rocksdb_db_options.max_background_compactions =
       *static_cast<const int *>(save);
   rocksdb_db_options.env->SetBackgroundThreads(
       rocksdb_db_options.max_background_compactions,
       rocksdb::Env::Priority::LOW);
-  mysql_mutex_unlock(&rdb_sysvars_mutex);
+
+  RDB_MUTEX_UNLOCK_CHECK(rdb_sysvars_mutex);
 }
 
 void rdb_queue_save_stats_request() { rdb_bg_thread.request_save_stats(); }
