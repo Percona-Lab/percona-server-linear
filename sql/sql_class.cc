@@ -812,6 +812,7 @@ void THD::init(void) {
   rpl_thd_ctx.dependency_tracker_ctx().set_last_session_sequence_number(0);
 }
 
+
 void THD::init_query_mem_roots() {
   reset_root_defaults(mem_root, variables.query_alloc_block_size,
                       variables.query_prealloc_size);
@@ -1371,7 +1372,6 @@ void THD::reset_diff_stats(void) noexcept {
   diff_lost_connections = 0;
   diff_access_denied_errors = 0;
   diff_empty_queries = 0;
-  diff_disconnects = 0;
 }
 
 // Updates 'diff' stats of a THD.
