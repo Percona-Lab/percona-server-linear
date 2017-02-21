@@ -9816,7 +9816,6 @@ static int get_options(int *argc_ptr, char ***argv_ptr) {
   init_slow_query_log_use_global_control();
   init_log_slow_sp_statements();
 
-
   if (opt_short_log_format) opt_specialflag |= SPECIAL_SHORT_LOG_FORMAT;
 
   if (Connection_handler_manager::init()) {
