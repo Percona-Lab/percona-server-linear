@@ -8242,14 +8242,38 @@ static mysql_row_templ_t *build_template_field(
     templ->col_no = i;
     templ->clust_rec_field_no = dict_col_get_clust_pos(col, clust_index);
     ut_a(templ->clust_rec_field_no != ULINT_UNDEFINED);
+    templ->rec_prefix_field_no = ULINT_UNDEFINED;
 
     if (index->is_clustered()) {
+      templ->rec_field_is_prefix = false;
       templ->rec_field_no = templ->clust_rec_field_no;
     } else {
-      templ->rec_field_no = index->get_col_pos(i);
+      /* If we're in a secondary index, keep track of the original index
+      position even if this is just a prefix non-geometry index; we will use
+      this later to avoid a cluster index lookup in some cases. */
+
+      templ->rec_field_no = index->get_col_pos(
+          i, false, false,
+          (field->type() == MYSQL_TYPE_GEOMETRY) ? nullptr
+                                                 : &templ->rec_prefix_field_no);
+      templ->rec_field_is_prefix =
+          (templ->rec_field_no == ULINT_UNDEFINED) &&
+          (templ->rec_prefix_field_no != ULINT_UNDEFINED);
+#ifdef UNIV_DEBUG
+      if (templ->rec_prefix_field_no != ULINT_UNDEFINED) {
+        const auto *const field = index->get_field(templ->rec_prefix_field_no);
+        ut_ad(templ->rec_field_is_prefix == (field->prefix_len != 0));
+      } else {
+        ut_ad(!templ->rec_field_is_prefix);
+      }
+#endif
     }
   } else {
     templ->clust_rec_field_no = v_no;
+    // Prefix optimisation on generated column indexes is not
+    // currently supported
+    templ->rec_field_is_prefix = false;
+    templ->rec_prefix_field_no = ULINT_UNDEFINED;
     if (index->is_clustered()) {
       templ->rec_field_no = templ->clust_rec_field_no;
       templ->icp_rec_field_no = ULINT_UNDEFINED;
