@@ -5473,8 +5473,8 @@ int ha_rocksdb::create_key_def(const TABLE *const table_arg, const uint &i,
   const char *const key_name = get_key_name(i, table_arg, m_tbl_def);
   *new_key_def = std::make_shared<Rdb_key_def>(
       index_id, i, cf_info.cf_handle, index_dict_version, index_type,
-      kv_version, cf_info.is_reverse_cf, cf_info.is_per_partition_cf,
-      key_name, Rdb_index_stats(), ttl_duration);
+      kv_version, cf_info.is_reverse_cf, cf_info.is_per_partition_cf, key_name,
+      Rdb_index_stats(), ttl_duration);
 
   if (!ttl_column.empty()) {
     (*new_key_def)->m_ttl_column = ttl_column;
@@ -10798,10 +10798,7 @@ void rocksdb_set_update_cf_options(THD *const /* unused */,
   for (const auto &cf_name : cf_manager.get_cf_names()) {
     DBUG_ASSERT(!cf_name.empty());
 
-    bool is_automatic = false;
-
-    rocksdb::ColumnFamilyHandle *cfh = cf_manager.get_cf(cf_name.c_str(),
-      "", nullptr, &is_automatic);
+    rocksdb::ColumnFamilyHandle *cfh = cf_manager.get_cf(cf_name);
     DBUG_ASSERT(cfh != nullptr);
 
     const auto it = option_map.find(cf_name);
