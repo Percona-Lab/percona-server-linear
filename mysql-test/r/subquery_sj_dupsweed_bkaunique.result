@@ -1,3 +1,5 @@
+SET debug= '+d,test_bka_unique';
+set optimizer_switch='batched_key_access=on,mrr_cost_based=off';
 set @old_opt_switch=@@optimizer_switch;
 set optimizer_switch='subquery_materialization_cost_based=off';
 drop table if exists t0, t1, t2, t10, t11, t12;
@@ -7680,13 +7682,17 @@ Note	1276	Field or reference 'test.t0.a' of SELECT #2 was resolved in SELECT #1
 Note	1003	/* select#1 */ select `test`.`t0`.`a` AS `a` from `test`.`t2` join `test`.`t0` semi join (`test`.`t1`) where ((`test`.`t1`.`a` = `test`.`t0`.`a`) and (`test`.`t2`.`a` = `test`.`t0`.`a`) and (`test`.`t2`.`b` = `test`.`t1`.`b`))
 update t1 set a=3, b=11 where a=4;
 update t2 set b=11 where a=3;
-select * from t0 where t0.a in (select t1.a from t1, t2 where t2.a=t0.a and t1.b=t2.b);
+create temporary table tmp select * from t0 where t0.a in 
+(select t1.a from t1, t2 where t2.a=t0.a and t1.b=t2.b);
+create temporary table tmp_as_ref (a int);
+insert into tmp_as_ref values(0),(1),(2),(3);
+select * from tmp;
 a
 0
 1
 2
 3
-drop table t0, t1, t2;
+drop table t0, t1, t2, tmp, tmp_as_ref;
 CREATE TABLE t1 (
 id int(11) NOT NULL,
 PRIMARY KEY (id));
@@ -7841,8 +7847,8 @@ create table t2 (id int, a int, primary key(id), key(a)) charset utf8mb4 as sele
 show create table t2;
 Table	Create Table
 t2	CREATE TABLE `t2` (
-  `id` int NOT NULL,
-  `a` int DEFAULT NULL,
+  `id` int(11) NOT NULL,
+  `a` int(11) DEFAULT NULL,
   PRIMARY KEY (`id`),
   KEY `a` (`a`)
 ) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
@@ -12810,4 +12816,5 @@ f1	f2
 14:51:13	S
 11:22:33	Q
 DROP TABLE t1, t2;
+set optimizer_switch=default;
 set optimizer_switch=default;
