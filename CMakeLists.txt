@@ -303,6 +303,7 @@ INCLUDE(install_layout)
 INCLUDE(mysql_add_executable)
 INCLUDE(mysqlgcs)
 INCLUDE(curl)
+INCLUDE(prepend_append_cflags_if_supported)
 
 OPTION(DISABLE_SHARED 
  "Don't build shared libraries, compile code as position-dependent" OFF)
@@ -619,7 +620,7 @@ ENDIF()
 FOREACH(BUILD_TYPE RELEASE RELWITHDEBINFO MINSIZEREL)
   FOREACH(LANG C CXX)
     SET(CMAKE_${LANG}_FLAGS_${BUILD_TYPE} 
-     "${CMAKE_${LANG}_FLAGS_${BUILD_TYPE}} -DDBUG_OFF")
+     "${CMAKE_${LANG}_FLAGS_${BUILD_TYPE}} -DDBUG_OFF -DNDEBUG")
   ENDFOREACH()
 ENDFOREACH()
 
