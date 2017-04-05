@@ -529,6 +529,7 @@ INCLUDE(install_macros)
 INCLUDE(install_layout)
 INCLUDE(mysql_add_executable)
 INCLUDE(curl)
+INCLUDE(prepend_append_cflags_if_supported)
 INCLUDE(rapidjson)
 INCLUDE(fprofile)
 
@@ -987,7 +988,7 @@ ENDIF()
 # Set DBUG_OFF for non-debug project types.
 FOREACH(BUILD_TYPE RELEASE RELWITHDEBINFO MINSIZEREL)
   FOREACH(LANG C CXX)
-    STRING_PREPEND(CMAKE_${LANG}_FLAGS_${BUILD_TYPE} "-DDBUG_OFF ")
+    STRING_PREPEND(CMAKE_${LANG}_FLAGS_${BUILD_TYPE} "-DDBUG_OFF -DNDEBUG ")
   ENDFOREACH()
 ENDFOREACH()
 
