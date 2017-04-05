@@ -214,6 +214,7 @@ INCLUDE(install_macros)
 INCLUDE(install_layout)
 INCLUDE(mysql_add_executable)
 INCLUDE(curl)
+INCLUDE(prepend_append_cflags_if_supported)
 
 # Handle options
 IF(EXISTS ${CMAKE_SOURCE_DIR}/rapid)
@@ -439,7 +440,7 @@ ENDIF()
 FOREACH(BUILD_TYPE RELEASE RELWITHDEBINFO MINSIZEREL)
   FOREACH(LANG C CXX)
     SET(CMAKE_${LANG}_FLAGS_${BUILD_TYPE} 
-     "${CMAKE_${LANG}_FLAGS_${BUILD_TYPE}} -DDBUG_OFF")
+     "${CMAKE_${LANG}_FLAGS_${BUILD_TYPE}} -DDBUG_OFF -DNDEBUG")
   ENDFOREACH()
 ENDFOREACH()
 
