@@ -334,11 +334,12 @@ typedef struct _gl_index_id_s {
   }
 } GL_INDEX_ID;
 
-enum operation_type {
+enum operation_type : int {
   ROWS_DELETED = 0,
   ROWS_INSERTED,
   ROWS_READ,
   ROWS_UPDATED,
+  ROWS_EXPIRED,
   ROWS_MAX
 };
 
@@ -363,6 +364,7 @@ struct st_export_stats {
   ulonglong rows_inserted;
   ulonglong rows_read;
   ulonglong rows_updated;
+  ulonglong rows_expired;
 
   ulonglong system_rows_deleted;
   ulonglong system_rows_inserted;
