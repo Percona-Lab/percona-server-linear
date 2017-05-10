@@ -6169,15 +6169,26 @@ bool mts_checkpoint_routine(Relay_log_info *rli, bool force) {
   };);
 #endif
 
+#ifndef DBUG_OFF
   /*
     rli->checkpoint_group can have two possible values due to
     two possible status of the last (being scheduled) group.
   */
-  DBUG_ASSERT(!rli->gaq->full() ||
-              ((rli->rli_checkpoint_seqno == rli->checkpoint_group - 1 &&
-                (rli->mts_group_status == Relay_log_info::MTS_IN_GROUP ||
-                 rli->mts_group_status == Relay_log_info::MTS_KILLED_GROUP)) ||
-               rli->rli_checkpoint_seqno == rli->checkpoint_group));
+  const bool precondition =
+      !rli->gaq->full() ||
+      ((rli->rli_checkpoint_seqno == rli->checkpoint_group - 1 &&
+        (rli->mts_group_status == Relay_log_info::MTS_IN_GROUP ||
+         rli->mts_group_status == Relay_log_info::MTS_KILLED_GROUP)) ||
+       rli->rli_checkpoint_seqno == rli->checkpoint_group);
+  if (!precondition) {
+    fprintf(stderr, "rli->gaq->full() = %d\n", rli->gaq->full());
+    fprintf(stderr, "rli->rl_checkpoint_seqno = %u\n",
+            rli->rli_checkpoint_seqno);
+    fprintf(stderr, "rli->checkpoint_group = %u\n", rli->checkpoint_group);
+    fprintf(stderr, "rli->mts_group_status = %d\n", rli->mts_group_status);
+    DBUG_ASSERT(precondition);
+  }
+#endif
 
   do {
     if (!is_mts_db_partitioned(rli)) mysql_mutex_lock(&rli->mts_gaq_LOCK);
