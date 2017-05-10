@@ -31,6 +31,7 @@
 #include "sql_audit.h"
 #include "binlog.h"
 #include "item_cmpfunc.h" // Item_func_eq
+#include "debug_sync.h"   // DEBUG_SYNC
 
 #include <algorithm>
 #include <functional>
@@ -441,6 +442,8 @@ bool sp_lex_instr::reset_lex_and_exec_core(THD *thd,
     }
     else
     {
+      DEBUG_SYNC(thd, "sp_before_exec_core");
+
       error= exec_core(thd, nextp);
       DBUG_PRINT("info",("exec_core returned: %d", error));
     }
