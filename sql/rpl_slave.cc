@@ -2292,8 +2292,14 @@ bool sql_slave_killed(THD *thd, Relay_log_info *rli) {
                   return false;);
   if (connection_events_loop_aborted() || thd->killed || rli->abort_slave) {
     rli->sql_thread_kill_accepted = true;
+    /* NOTE: In MTS mode if all workers are done and if the partial trx
+       (if any) can be rolled back safely we can accept the kill */
+    const bool can_rollback =
+        rli->abort_slave &&
+        (!rli->is_mts_in_group() ||
+         (rli->mts_workers_queue_empty() && !rli->cannot_safely_rollback()));
     is_parallel_warn =
-        (rli->is_parallel_exec() && (rli->is_mts_in_group() || thd->killed));
+        (rli->is_parallel_exec() && (!can_rollback || thd->killed));
     /*
       Slave can execute stop being in one of two MTS or Single-Threaded mode.
       The modes define different criteria to accept the stop.
@@ -2365,7 +2371,6 @@ bool sql_slave_killed(THD *thd, Relay_log_info *rli) {
         }
       }
       if (rli->sql_thread_kill_accepted) {
-        rli->last_event_start_time = 0;
         if (rli->mts_group_status == Relay_log_info::MTS_IN_GROUP) {
           rli->mts_group_status = Relay_log_info::MTS_KILLED_GROUP;
         }
@@ -2381,6 +2386,9 @@ bool sql_slave_killed(THD *thd, Relay_log_info *rli) {
       }
     }
   }
+
+  if (rli->sql_thread_kill_accepted) rli->last_event_start_time = 0;
+
   return rli->sql_thread_kill_accepted;
 }
 
@@ -5532,10 +5540,10 @@ requesting master dump") ||
 
         DBUG_EXECUTE_IF(
             "relay_xid_trigger", if (event_len != packet_error) {
-              const uchar *event_buf =
+              const uchar *event_buf2 =
                   static_cast<const uchar *>(mysql->net.read_pos + 1);
               Log_event_type event_type =
-                  static_cast<Log_event_type>(event_buf[EVENT_TYPE_OFFSET]);
+                  static_cast<Log_event_type>(event_buf2[EVENT_TYPE_OFFSET]);
               if (event_type == binary_log::XID_EVENT) {
                 static constexpr char act[] =
                     "now signal relay_xid_reached wait_for resume";
@@ -5720,15 +5728,16 @@ ignore_log_space_limit=%d",
             "stop_io_after_reading_write_rows_log_event",
             if (event_buf[EVENT_TYPE_OFFSET] == binary_log::WRITE_ROWS_EVENT)
                 thd->killed = THD::KILLED_NO_VALUE;);
-         DBUG_EXECUTE_IF(
-             "stop_io_after_reading_unknown_event",
-             /*
-              * Cast to uchar, because of Percona's events
-              * which have values > 128. This causes ENUM_END_EVENT to be > 128
-              * but event_buf is char, so comparison does not work.
-              */
-              if (static_cast<uchar>(event_buf[EVENT_TYPE_OFFSET]) >= binary_log::ENUM_END_EVENT)
-                thd->killed = THD::KILLED_NO_VALUE;);
+        DBUG_EXECUTE_IF(
+            "stop_io_after_reading_unknown_event",
+            /*
+             * Cast to uchar, because of Percona's events
+             * which have values > 128. This causes ENUM_END_EVENT to be > 128
+             * but event_buf is char, so comparison does not work.
+             */
+            if (static_cast<uchar>(event_buf[EVENT_TYPE_OFFSET]) >=
+                binary_log::ENUM_END_EVENT) thd->killed =
+                THD::KILLED_NO_VALUE;);
         DBUG_EXECUTE_IF("stop_io_after_queuing_event",
                         thd->killed = THD::KILLED_NO_VALUE;);
         /*
@@ -6104,6 +6113,20 @@ static void *handle_slave_worker(void *arg) {
               w->jobs.waited_overfill));
 
   w->running_status = Slave_worker::NOT_RUNNING;
+
+  mysql_mutex_lock(&w->info_thd_lock);
+  /* We will delete the THD descriptior in next step.
+  Before Slave_worker is deleted in slave_stop_workers() its value will be
+  copied by copy_values_for_PFS including info_thd member.
+  The member is used in table_replication_applier_status_by_worker::make_row()
+  however only if Slave_worker::running status is Slave_worker::RUNNING, so we
+  are safe here.
+  Without setting below member to nullptr, we would copy stale pointer anyway,
+  so it is safer to explicitly say that
+  */
+  w->info_thd = nullptr;
+  mysql_mutex_unlock(&w->info_thd_lock);
+
   mysql_cond_signal(&w->jobs_cond);  // famous last goodbye
 
   mysql_mutex_unlock(&w->jobs_lock);
@@ -6589,7 +6612,6 @@ static int slave_start_single_worker(Relay_log_info *rli, ulong i) {
     error = 1;
     goto err;
   }
-
   mysql_mutex_lock(&w->jobs_lock);
   if (w->running_status == Slave_worker::NOT_RUNNING)
     mysql_cond_wait(&w->jobs_cond, &w->jobs_lock);
