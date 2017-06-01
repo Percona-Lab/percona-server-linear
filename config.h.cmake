@@ -117,6 +117,8 @@
 #cmakedefine HAVE_NL_LANGINFO 1
 #cmakedefine HAVE_HTONLL 1
 #cmakedefine HAVE_EPOLL 1
+#cmakedefine HAVE_X509_CHECK_HOST 1
+#cmakedefine HAVE_X509_CHECK_IP 1
 
 /* WL2373 */
 #cmakedefine HAVE_SYS_TIME_H 1
