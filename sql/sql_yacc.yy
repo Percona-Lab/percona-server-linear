@@ -1872,6 +1872,7 @@ void warn_about_deprecated_national(THD *thd)
         ts_option_engine
         ts_option_extent_size
         ts_option_file_block_size
+        ts_option_encryption
         ts_option_initial_size
         ts_option_max_size
         ts_option_nodegroup
@@ -5211,6 +5212,7 @@ tablespace_option:
         | ts_option_wait
         | ts_option_comment
         | ts_option_file_block_size
+        | ts_option_encryption
         ;
 
 opt_alter_tablespace_options:
@@ -5383,6 +5385,13 @@ ts_option_wait:
         | NO_WAIT_SYM
           {
             $$= NEW_PTN PT_alter_tablespace_option_wait_until_completed(false);
+          }
+        ;
+
+ts_option_encryption:
+          ENCRYPTION_SYM opt_equal TEXT_STRING_sys
+          {
+            $$= NEW_PTN PT_alter_tablespace_option_encryption($3);
           }
         ;
 
