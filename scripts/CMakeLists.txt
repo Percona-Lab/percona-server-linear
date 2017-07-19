@@ -429,6 +429,7 @@ ELSE()
       mysqldumpslow
       mysqld_safe
       ps_tokudb_admin
+      ps_mysqld_helper
       )
   ELSE()
     SET(BIN_SCRIPTS
@@ -437,6 +438,7 @@ ELSE()
       mysqld_multi
       mysqld_safe
       ps_tokudb_admin
+      ps_mysqld_helper
       )
   ENDIF()
 
