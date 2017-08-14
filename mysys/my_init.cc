@@ -459,15 +459,16 @@ PSI_stage_info stage_waiting_for_table_level_lock = {
 PSI_stage_info stage_waiting_for_disk_space = {0, "Waiting for disk space", 0,
                                                PSI_DOCUMENT_ME};
 
-PSI_mutex_key key_IO_CACHE_append_buffer_lock, key_IO_CACHE_SHARE_mutex,
-    key_KEY_CACHE_cache_lock, key_THR_LOCK_heap, key_THR_LOCK_lock,
-    key_THR_LOCK_malloc, key_THR_LOCK_mutex, key_THR_LOCK_myisam,
-    key_THR_LOCK_net, key_THR_LOCK_open, key_THR_LOCK_threads, key_TMPDIR_mutex,
-    key_THR_LOCK_myisam_mmap;
+PSI_mutex_key key_BITMAP_mutex, key_IO_CACHE_append_buffer_lock,
+    key_IO_CACHE_SHARE_mutex, key_KEY_CACHE_cache_lock, key_THR_LOCK_heap,
+    key_THR_LOCK_lock, key_THR_LOCK_malloc, key_THR_LOCK_mutex,
+    key_THR_LOCK_myisam, key_THR_LOCK_net, key_THR_LOCK_open,
+    key_THR_LOCK_threads, key_TMPDIR_mutex, key_THR_LOCK_myisam_mmap;
 
 #ifdef HAVE_PSI_MUTEX_INTERFACE
 
 static PSI_mutex_info all_mysys_mutexes[] = {
+    {&key_BITMAP_mutex, "BITMAP::mutex", 0, 0, PSI_DOCUMENT_ME},
     {&key_IO_CACHE_append_buffer_lock, "IO_CACHE::append_buffer_lock", 0, 0,
      PSI_DOCUMENT_ME},
     {&key_IO_CACHE_SHARE_mutex, "IO_CACHE::SHARE_mutex", 0, 0, PSI_DOCUMENT_ME},
