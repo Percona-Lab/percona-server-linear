@@ -1160,9 +1160,9 @@ The wrapper functions have the prefix of "innodb_". */
   pfs_os_file_close_no_error_handling_func(file, __FILE__, __LINE__)
 
 #define os_aio(type, mode, name, file, buf, offset, n, read_only, message1,    \
-               message2, space_id, trx)                                        \
+               message2, space_id, trx, should_buffer)                         \
   pfs_os_aio_func(type, mode, name, file, buf, offset, n, read_only, message1, \
-                  message2, space_id, trx, __FILE__, __LINE__)
+                  message2, space_id, trx, should_buffer, __FILE__, __LINE__)
 
 #define os_file_read_pfs(type, file, buf, offset, n) \
   pfs_os_file_read_func(type, file, buf, offset, n, NULL, __FILE__, __LINE__)
@@ -1411,6 +1411,12 @@ an asynchronous I/O operation.
 @param[in,out]	m2		message for the AIO handler (can be used to
                                 identify a completed AIO operation); ignored
                                 if mode is OS_AIO_SYNC
+@param[in]	should_buffer	Whether to buffer an aio request.
+                                AIO read ahead uses this. If you plan to
+                                use this parameter, make sure you remember to
+                                call os_aio_dispatch_read_array_submit()
+                                when you're ready to commit all your
+                                requests.
 @param[in]	src_file	file name where func invoked
 @param[in]	src_line	line where the func invoked
 @return DB_SUCCESS if request was queued successfully, false if fail */
@@ -1418,8 +1424,8 @@ UNIV_INLINE
 dberr_t pfs_os_aio_func(IORequest &type, AIO_mode mode, const char *name,
                         pfs_os_file_t file, void *buf, os_offset_t offset,
                         ulint n, bool read_only, fil_node_t *m1, void *m2,
-                        space_id_t space_id, trx_t *trx, const char *src_file,
-                        uint src_line);
+                        space_id_t space_id, trx_t *trx, bool should_buffer,
+                        const char *src_file, uint src_line);
 
 /** NOTE! Please use the corresponding macro os_file_write(), not directly
 this function!
@@ -1554,9 +1560,9 @@ to original un-instrumented file I/O APIs */
   os_file_close_no_error_handling_func(file)
 
 #define os_aio(type, mode, name, file, buf, offset, n, read_only, message1, \
-               message2, space_id, trx)                                     \
+               message2, space_id, trx, should_buffer)                      \
   os_aio_func(type, mode, name, file, buf, offset, n, read_only, message1,  \
-              message2, space_id, trx)
+              message2, space_id, trx, should_buffer)
 
 #define os_file_read_pfs(type, file, buf, offset, n) \
   os_file_read_func(type, file, buf, offset, n, NULL)
@@ -1894,11 +1900,17 @@ Requests an asynchronous i/o operation.
 @param[in,out]	m2		message for the AIO handler (can be used to
                                 identify a completed AIO operation); ignored
                                 if mode is OS_AIO_SYNC
+@param[in]	should_buffer	Whether to buffer an aio request.
+                                AIO read ahead uses this. If you plan to
+                                use this parameter, make sure you remember to
+                                call os_aio_dispatch_read_array_submit()
+                                when you're ready to commit all your
+                                requests.
 @return DB_SUCCESS or error code */
 dberr_t os_aio_func(IORequest &type, AIO_mode aio_mode, const char *name,
                     pfs_os_file_t file, void *buf, os_offset_t offset, ulint n,
                     bool read_only, fil_node_t *m1, void *m2,
-                    space_id_t space_id, trx_t *trx);
+                    space_id_t space_id, trx_t *trx, bool should_buffer);
 
 /** Wakes up all async i/o threads so that they know to exit themselves in
 shutdown. */
@@ -2083,6 +2095,9 @@ class Dir_Walker {
   static void walk_posix(const Path &basedir, Function &&f);
 #endif /* _WIN32 */
 };
+
+/** Submit buffered AIO requests on the given segment to the kernel. */
+void os_aio_dispatch_read_array_submit();
 
 #include "os0file.ic"
 
