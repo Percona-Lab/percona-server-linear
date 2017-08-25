@@ -324,7 +324,12 @@ class IORequest {
     IBUF = 1 << 12,
 
     /** Force raw write, do not try to compress or encrypt. */
-    NO_WRITE_TRANSFORMATIONS = 1 << 13
+    NO_WRITE_TRANSFORMATIONS = 1 << 13,
+
+    /** Buffer this AIO request instead of submitting it immediately.
+    AIO read-ahead uses this. If you set this flag, call
+    os_aio_dispatch_read_array_submit() when ready to commit the batch. */
+    SHOULD_BUFFER = 1 << 14
   };
 
   /** Default constructor */
@@ -430,6 +435,14 @@ class IORequest {
   }
 
   void set_ibuf() { m_type |= Type::IBUF; }
+
+  /** @return true if this AIO request should be buffered for later submit */
+  [[nodiscard]] bool is_should_buffer() const {
+    return (m_type & Type::SHOULD_BUFFER) == Type::SHOULD_BUFFER;
+  }
+
+  /** Buffer this AIO request for later submit. */
+  void set_should_buffer() { m_type |= Type::SHOULD_BUFFER; }
 
   /** Transaction that requested this IO, for slow query log stats.
   nullptr if the IO is not on behalf of a user transaction. */
@@ -586,6 +599,7 @@ class IORequest {
     PRINT_MASK_ELEMENT(IGNORE_MISSING);
     PRINT_MASK_ELEMENT(DISABLE_PARTIAL_IO_WARNINGS);
     PRINT_MASK_ELEMENT(NO_WRITE_TRANSFORMATIONS);
+    PRINT_MASK_ELEMENT(SHOULD_BUFFER);
 #undef PRINT_MASK_ELEMENT
 
     os << ", comp: " << m_compression.to_string();
@@ -2056,6 +2070,9 @@ class SyncFileIO {
   /** The total number of bytes to be read/written. */
   const size_t m_orig_bytes;
 };
+
+/** Submit buffered AIO requests on the given segment to the kernel. */
+void os_aio_dispatch_read_array_submit();
 
 #include "os0file.ic"
 #endif /* UNIV_NONINL */

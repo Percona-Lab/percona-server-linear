@@ -860,6 +860,8 @@ class Fil_shard {
   @param[in,out]  trx             Transaction the read is performed on behalf
     of, used to account the InnoDB statistics reported by the slow query log,
     or nullptr if not on behalf of a user transaction.
+  @param[in]      should_buffer   whether to buffer an AIO request. Only used
+    by AIO read ahead.
   @param[in] postprocess_result   A callback to be called exactly once when the
     result of this IO operation is known. It may be a success if the read or
     write succeeded or a subset of `dberr_t` errors if the write or read could
@@ -874,7 +876,8 @@ class Fil_shard {
   [[nodiscard]] dberr_t do_io(
       const IORequest::Type type, bool sync, const page_id_t &page_id,
       const page_size_t &page_size, ulint len, byte *buf, buf_page_t *bpage,
-      trx_t *trx, std::function<dberr_t(dberr_t)> postprocess_result);
+      trx_t *trx, bool should_buffer,
+      std::function<dberr_t(dberr_t)> postprocess_result);
 
   /** Iterate through all persistent tablespace files (FIL_TYPE_TABLESPACE)
   returning the nodes via callback function f.
@@ -6942,9 +6945,13 @@ void fil_io_set_encryption(IORequest &req_type, const page_id_t &page_id,
 dberr_t Fil_shard::do_io(const IORequest::Type type, bool sync,
                          const page_id_t &page_id, const page_size_t &page_size,
                          ulint len, byte *buf, buf_page_t *bpage, trx_t *trx,
+                         bool should_buffer,
                          std::function<dberr_t(dberr_t)> postprocess_result) {
   IORequest req_type(type);
   req_type.set_trx(trx);
+  if (should_buffer) {
+    req_type.set_should_buffer();
+  }
 
   ut_ad(req_type.validate());
   ut_a(!req_type.is_log());
@@ -7302,7 +7309,7 @@ dberr_t fil_io(IORequest::Type type, bool sync, const page_id_t &page_id,
                const page_size_t &page_size, ulint len, byte *buf,
                buf_page_t *bpage, bool evict_after_write,
                std::function<void(dberr_t err)> pre_io_complete_callback,
-               trx_t *trx) {
+               trx_t *trx, bool should_buffer) {
   auto shard = fil_system->shard_by_id(page_id.space());
   /* evict_after_write requires the page descriptor to be specified and the IO
   to be a write. */
@@ -7365,7 +7372,7 @@ dberr_t fil_io(IORequest::Type type, bool sync, const page_id_t &page_id,
   deadlocks in the i/o system. We keep tablespace 0 data files always
   open, and use a special i/o thread to serve insert buffer requests. */
   return shard->do_io(type, sync, page_id, page_size, len, buf, bpage, trx,
-                      postprocess_result);
+                      should_buffer, postprocess_result);
 }
 
 /** If the tablespace is on the unflushed list and there are no pending
