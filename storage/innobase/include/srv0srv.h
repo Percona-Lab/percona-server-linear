@@ -157,6 +157,9 @@ struct srv_stats_t {
 
   /** Number of sampled pages skipped */
   ulint_ctr_64_t n_sampled_pages_skipped;
+
+  /** Number of buffered aio requests submitted */
+  ulint_ctr_64_t n_aio_submitted;
 };
 
 /** Structure which keeps shared future objects for InnoDB background
@@ -1301,6 +1304,8 @@ struct export_var_t {
       innodb_sec_rec_cluster_reads_avoided; /*!<
                                                srv_sec_rec_cluster_reads_avoided
                                              */
+
+  ulint innodb_buffered_aio_submitted;
 };
 
 #ifndef UNIV_HOTBACKUP
