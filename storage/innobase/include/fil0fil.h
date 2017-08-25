@@ -1777,15 +1777,18 @@ number should be zero.
                                 to write; in AIO this must be appropriately
                                 aligned
 @param[in]      message         message for AIO handler if !sync, else ignored
+@param[in]      should_buffer   whether to buffer an AIO request. Only used by
+                                AIO read ahead
 @return error code
 @retval DB_SUCCESS on success
 @retval DB_TABLESPACE_DELETED if the tablespace does not exist */
 [[nodiscard]] dberr_t _fil_io(const IORequest &type, bool sync, const page_id_t &page_id,
                 const page_size_t &page_size, ulint byte_offset, ulint len,
-                void *buf, void *message, trx_t *trx);
+                void *buf, void *message, trx_t *trx, bool should_buffer);
 
 #define fil_io(type, sync, page_id, page_size, byte_offset, len, buf, message) \
-  _fil_io(type, sync, page_id, page_size, byte_offset, len, buf, message, NULL)
+  _fil_io(type, sync, page_id, page_size, byte_offset, len, buf, message,      \
+          NULL, false)
 
 /** Waits for an AIO operation to complete. This function is used to write the
 handler for completed requests. The aio array of pending requests is divided
