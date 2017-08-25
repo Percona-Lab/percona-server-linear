@@ -2143,6 +2143,8 @@ number should be zero.
                                 used to account the InnoDB statistics reported
                                 by the slow query log, or nullptr if the read is
                                 not on behalf of a user transaction.
+@param[in]      should_buffer   whether to buffer an AIO request. Only used by
+                                AIO read ahead
 @return error code
 @retval DB_SUCCESS on success
 @retval DB_TABLESPACE_DELETED if the tablespace does not exist
@@ -2152,7 +2154,7 @@ Note: this is not an exhaustive list of errors returned.*/
     const page_size_t &page_size, ulint len, byte *buf, buf_page_t *bpage,
     bool evict_after_write,
     std::function<void(dberr_t err)> pre_io_complete_callback = [](dberr_t) {},
-    trx_t *trx = nullptr);
+    trx_t *trx = nullptr, bool should_buffer = false);
 
 /** Waits for an AIO operation to complete. This function is used to write the
 handler for completed requests. The aio array of pending requests is divided
