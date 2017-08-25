@@ -1084,13 +1084,18 @@ class Fil_shard {
   @param[in,out]        buf             buffer where to store read data or from
   where to write; in AIO this must be appropriately aligned
   @param[in]    message         message for AIO handler if !sync, else ignored
+  @param[in]    should_buffer   whether to buffer an aio request. AIO read
+  ahead uses this. If you plan to use this parameter, make sure you remember to
+  call os_aio_dispatch_read_array_submit() when you're ready to commit all your
+  requests.
   @return error code
   @retval DB_SUCCESS on success
   @retval DB_TABLESPACE_DELETED if the tablespace does not exist */
   [[nodiscard]] dberr_t do_io(const IORequest &type, bool sync,
                               const page_id_t &page_id,
                               const page_size_t &page_size, ulint byte_offset,
-                              ulint len, void *buf, void *message, trx_t *trx);
+                              ulint len, void *buf, void *message, trx_t *trx,
+                              bool should_buffer);
 
   /** Iterate through all persistent tablespace files (FIL_TYPE_TABLESPACE)
   returning the nodes via callback function f.
@@ -2201,7 +2206,7 @@ i/o on a tablespace which does not exist */
 static dberr_t fil_read(const page_id_t &page_id, const page_size_t &page_size,
                         ulint byte_offset, ulint len, void *buf) {
   return fil_io(IORequestRead, true, page_id, page_size, byte_offset, len, buf,
-                nullptr, nullptr);
+                nullptr, nullptr, false);
 }
 
 /** Writes data to a space from a buffer. Remember that the possible incomplete
@@ -2222,7 +2227,7 @@ static dberr_t fil_write(const page_id_t &page_id, const page_size_t &page_size,
   ut_ad(!srv_read_only_mode);
 
   return fil_io(IORequestWrite, true, page_id, page_size, byte_offset, len, buf,
-                nullptr, nullptr);
+                nullptr, nullptr, false);
 }
 
 /** Look up a tablespace. The caller should hold an InnoDB table lock or
@@ -7558,7 +7563,7 @@ dberr_t Fil_shard::get_file_for_io(fil_space_t *space, page_no_t *page_no,
 dberr_t Fil_shard::do_io(const IORequest &type, bool sync,
                          const page_id_t &page_id, const page_size_t &page_size,
                          ulint byte_offset, ulint len, void *buf, void *message,
-                         trx_t *trx) {
+                         trx_t *trx, bool should_buffer) {
   IORequest req_type(type);
 
   ut_ad(req_type.validate());
@@ -7849,7 +7854,7 @@ dberr_t Fil_shard::do_io(const IORequest &type, bool sync,
   err = os_aio(
       req_type, aio_mode, file->name, file->handle, buf, offset, len,
       fsp_is_system_temporary(page_id.space()) ? false : srv_read_only_mode,
-      file, message, page_id.space(), trx);
+      file, message, page_id.space(), trx, should_buffer);
 
 #endif /* UNIV_HOTBACKUP */
 
@@ -7962,12 +7967,17 @@ void fil_aio_wait(ulint segment) {
                                 to write; in AIO this must be appropriately
                                 aligned
 @param[in]	message		message for AIO handler if !sync, else ignored
+@param[in]	should_buffer   whether to buffer an aio request. AIO read
+                                ahead uses this. If you plan to use this
+                                parameter, make sure you remember to call
+                                os_aio_dispatch_read_array_submit() when you're
+                                ready to commit all your requests.
 @return error code
 @retval DB_SUCCESS on success
 @retval DB_TABLESPACE_DELETED if the tablespace does not exist */
 dberr_t fil_io(const IORequest &type, bool sync, const page_id_t &page_id,
                const page_size_t &page_size, ulint byte_offset, ulint len,
-               void *buf, void *message, trx_t *trx) {
+               void *buf, void *message, trx_t *trx, bool should_buffer) {
   auto shard = fil_system->shard_by_id(page_id.space());
 #ifdef UNIV_DEBUG
   if (!sync) {
@@ -7978,7 +7988,7 @@ dberr_t fil_io(const IORequest &type, bool sync, const page_id_t &page_id,
 #endif
 
   auto const err = shard->do_io(type, sync, page_id, page_size, byte_offset,
-                                len, buf, message, trx);
+                                len, buf, message, trx, should_buffer);
 #ifdef UNIV_DEBUG
   /* If the error prevented async io, then we haven't actually transferred the
   io responsibility at all, so we revert the debug io responsibility info. */
