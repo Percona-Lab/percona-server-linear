@@ -823,7 +823,7 @@ TEST_F(
 
 class Mock_keyring_io : public IKeyring_io {
  public:
-  MOCK_METHOD1(init, bool(std::string *keyring_filename));
+  MOCK_METHOD1(init, bool(const std::string *keyring_filename));
   MOCK_METHOD1(flush_to_backup, bool(ISerialized_object *serialized_object));
   MOCK_METHOD1(flush_to_storage, bool(ISerialized_object *serialized_object));
   MOCK_METHOD0(get_serializer, ISerializer *());
