@@ -1612,6 +1612,8 @@ The following options may be given as the first argument:
  (Defaults to on; use --skip-validate-user-plugins to disable.)
  -v, --verbose       Used with --help option for detailed help.
  -V, --version       Output version information and exit.
+ --version-suffix=name 
+ version_suffix
  --version-with-update 
  Output version information including the update component
  and exit.
@@ -2051,6 +2053,7 @@ upgrade AUTO
 validate-config FALSE
 validate-user-plugins TRUE
 verbose TRUE
+version-suffix -debug
 wait-timeout 28800
 windowing-use-high-precision TRUE
 xa-detach-on-prepare TRUE
