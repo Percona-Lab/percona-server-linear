@@ -315,7 +315,7 @@ class Encryption {
                   ulint dst_len) noexcept MY_ATTRIBUTE((warn_unused_result));
 
   /** Check if keyring plugin loaded. */
-  static bool check_keyring() noexcept;
+  MY_NODISCARD static bool check_keyring() noexcept;
 
   /** Get encryption type
   @return encryption type **/
