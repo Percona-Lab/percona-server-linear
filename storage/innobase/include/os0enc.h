@@ -376,7 +376,7 @@ class Encryption {
                                 byte *tmp, ulint tmp_len) const noexcept;
 
   /** Check if keyring plugin loaded. */
-  static bool check_keyring() noexcept;
+  MY_NODISCARD static bool check_keyring() noexcept;
 
   /** Get encryption type
   @return encryption type **/
