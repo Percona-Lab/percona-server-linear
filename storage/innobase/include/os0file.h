@@ -503,7 +503,7 @@ struct Encryption {
                   ulint dst_len) MY_ATTRIBUTE((warn_unused_result));
 
   /** Check if keyring plugin loaded. */
-  static bool check_keyring();
+  MY_NODISCARD static bool check_keyring();
 
   /** Encrypt type */
   Type m_type;
