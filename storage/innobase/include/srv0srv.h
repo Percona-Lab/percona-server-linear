@@ -315,6 +315,9 @@ account whether the tracking is currently enabled (see srv_track_changed_pages
 for that) */
 extern bool srv_redo_log_thread_started;
 
+/** Enable or disable encryption of temporary tablespace.*/
+extern bool srv_tmp_tablespace_encrypt;
+
 extern bool srv_track_changed_pages;
 extern ulonglong	srv_max_bitmap_file_size;
 
@@ -1058,6 +1061,13 @@ void srv_master_thread_disabled_debug_update(THD *thd, SYS_VAR *var,
                                              void *var_ptr, const void *save);
 #endif /* UNIV_DEBUG */
 #endif /* !UNIV_HOTBACKUP */
+
+/** Set temporary tablespace to be encrypted if global variable
+innodb_temp_tablespace_encrypt is TRUE
+@param[in]	enable	true to enable encryption, false to disable
+@return DB_SUCCESS on success, DB_ERROR on failure */
+MY_NODISCARD
+dberr_t srv_temp_encryption_update(bool enable);
 
 /** Status variables to be passed to MySQL */
 struct export_var_t {
