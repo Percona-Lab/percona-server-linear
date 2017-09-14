@@ -949,13 +949,15 @@ static Exit_status process_event(PRINT_EVENT_INFO *print_event_info,
   IO_CACHE *const head = &print_event_info->head_cache;
 
   /*
-    Format events are not concerned by --offset and such, we always need to
-    read them to be able to process the wanted events.
+    Format and Start encryptions events are not concerned by --offset and such,
+    we always need to read them to be able to process the wanted events.
   */
   if (((rec_count >= offset) &&
        ((my_time_t)(ev->common_header->when.tv_sec) >= start_datetime)) ||
-      (ev_type == binary_log::FORMAT_DESCRIPTION_EVENT)) {
-    if (ev_type != binary_log::FORMAT_DESCRIPTION_EVENT) {
+      (ev_type == binary_log::FORMAT_DESCRIPTION_EVENT) ||
+      (ev_type == binary_log::START_ENCRYPTION_EVENT)) {
+    if (ev_type != binary_log::FORMAT_DESCRIPTION_EVENT &&
+        ev_type != binary_log::START_ENCRYPTION_EVENT) {
       /*
         We have found an event after start_datetime, from now on print
         everything (in case the binlog has timestamps increasing and
@@ -1055,6 +1057,7 @@ static Exit_status process_event(PRINT_EVENT_INFO *print_event_info,
         if (head->error == -1) goto err;
         break;
       }
+        // fallthrough
 
       case binary_log::INTVAR_EVENT: {
         buff_event.event = ev;
@@ -1862,8 +1865,7 @@ static Exit_status safe_connect() {
 
   if (opt_default_auth && *opt_default_auth)
     mysql_options(mysql, MYSQL_DEFAULT_AUTH, opt_default_auth);
-  if (opt_compress)
-    mysql_options(mysql,MYSQL_OPT_COMPRESS,NullS);
+  if (opt_compress) mysql_options(mysql, MYSQL_OPT_COMPRESS, NullS);
   if (opt_protocol)
     mysql_options(mysql, MYSQL_OPT_PROTOCOL, (char *)&opt_protocol);
   if (opt_bind_addr) mysql_options(mysql, MYSQL_OPT_BIND, opt_bind_addr);
@@ -2659,6 +2661,9 @@ static Exit_status dump_local_log_entries(PRINT_EVENT_INFO *print_event_info,
   for (;;) {
     char llbuff[21];
     my_off_t old_off = my_b_tell(file);
+
+    binary_log_debug::debug_expect_unknown_event =
+        DBUG_EVALUATE_IF("expect_Unknown_event", true, false);
 
     Log_event *ev = Log_event::read_log_event(file, glob_description_event,
                                               opt_verify_binlog_checksum,

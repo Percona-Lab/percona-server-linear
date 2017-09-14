@@ -74,7 +74,7 @@ ADD_CUSTOM_COMMAND(
   DEPENDS gen_keyword_list
 )
 
-ADD_DEFINITIONS(-DMYSQL_SERVER)
+ADD_DEFINITIONS(-DMYSQL_SERVER -DHAVE_POOL_OF_THREADS)
 
 SET(DD_SOURCES
   dd/collection.cc
@@ -321,6 +321,7 @@ SET(SQL_SHARED_SOURCES
   item_create.cc
   item_func.cc
   item_json_func.cc
+  item_keyring_func.cc
   item_regexp_func.cc
   item_row.cc 
   item_strfunc.cc
@@ -544,6 +545,7 @@ ELSE()
   LIST(APPEND SQL_SHARED_SOURCES threadpool_unix.cc)
 ENDIF()
 
+
 SET(SQL_SOURCE
   ${GEN_SOURCES}
   ${GEN_DIGEST_SOURCES}
@@ -573,6 +575,7 @@ SET(SQL_SOURCE
   event_scheduler.cc
   events.cc
   mf_iocache.cc
+  mf_iocache_encr.cc
   protocol_callback.cc
   signal_handler.cc
   sql_audit.cc
