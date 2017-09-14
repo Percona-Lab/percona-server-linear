@@ -1368,8 +1368,8 @@ static Exit_status process_event(PRINT_EVENT_INFO *print_event_info,
   IO_CACHE *const head = &print_event_info->head_cache;
 
   /*
-    Format events are not concerned by --offset and such, we always need to
-    read them to be able to process the wanted events.
+    Format and Start encryptions events are not concerned by --offset and such,
+    we always need to read them to be able to process the wanted events.
   */
   if (((rec_count >= offset) &&
        ((my_time_t)(ev->common_header->when.tv_sec) >= start_datetime)) ||

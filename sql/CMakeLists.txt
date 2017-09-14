@@ -105,7 +105,7 @@ ADD_CUSTOM_COMMAND(
   DEPENDS gen_keyword_list
 )
 
-ADD_DEFINITIONS(-DMYSQL_SERVER)
+ADD_DEFINITIONS(-DMYSQL_SERVER -DHAVE_POOL_OF_THREADS)
 ADD_SUBDIRECTORY(server_component)
 
 SET(DD_SOURCES
@@ -381,6 +381,7 @@ SET(SQL_SHARED_SOURCES
   item_func.cc
   item_pfs_func.cc
   item_json_func.cc
+  item_keyring_func.cc
   item_regexp_func.cc
   item_row.cc 
   item_strfunc.cc
@@ -669,6 +670,7 @@ IF(WIN32)
 ELSE()
   LIST(APPEND SQL_SHARED_SOURCES threadpool_unix.cc)
 ENDIF()
+
 
 SET(SQL_SOURCE
   ${GEN_SOURCES}
