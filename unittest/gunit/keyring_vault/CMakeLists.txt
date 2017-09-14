@@ -24,11 +24,15 @@ CHECK_IF_CURL_DEPENDS_ON_RTMP("keyring_vault unit tests")
 
 message(STATUS "Building keyring_vault unittests")
 
-INCLUDE_DIRECTORIES(
-        SYSTEM ${GMOCK_INCLUDE_DIRS}
+ADD_DEFINITIONS(-DLOG_COMPONENT_TAG="keyring_vault")
+
+INCLUDE_DIRECTORIES(SYSTEM
+        ${GMOCK_INCLUDE_DIRS}
         SYSTEM ${BOOST_INCLUDE_DIR}
         SYSTEM ${CURL_INCLUDE_DIRS}
-        ${BOOST_PATCHES_DIR}
+        ${BOOST_PATCHES_DIR})
+
+INCLUDE_DIRECTORIES(
         ${CMAKE_SOURCE_DIR}/include
         ${CMAKE_SOURCE_DIR}/sql
         ${CMAKE_SOURCE_DIR}/plugin/keyring/common
@@ -51,6 +55,8 @@ FOREACH(test ${TESTS})
             ${CMAKE_SOURCE_DIR}/plugin/keyring/common/keyring_key.cc
             ${CMAKE_SOURCE_DIR}/plugin/keyring/common/keys_container.cc
             ${CMAKE_SOURCE_DIR}/plugin/keyring/common/keys_iterator.cc
+            ${CMAKE_SOURCE_DIR}/plugin/keyring/common/system_keys_container.cc
+            ${CMAKE_SOURCE_DIR}/plugin/keyring/common/system_key_adapter.cc
             ${CMAKE_SOURCE_DIR}/plugin/keyring_vault/vault_keys_list.cc
             ${CMAKE_SOURCE_DIR}/plugin/keyring_vault/vault_key.cc
             ${CMAKE_SOURCE_DIR}/plugin/keyring_vault/vault_io.cc
@@ -62,18 +68,21 @@ FOREACH(test ${TESTS})
             ${CMAKE_SOURCE_DIR}/plugin/keyring_vault/vault_keys_container.cc
             ${CMAKE_SOURCE_DIR}/plugin/keyring/file_io.cc
             ${CMAKE_SOURCE_DIR}/unittest/gunit/keyring_vault/vault_mount.cc
+            ${CMAKE_SOURCE_DIR}/unittest/gunit/keyring/psi_memory_key.cc
             )
     IF(WIN32)
         LIST(APPEND SRC_FILES ../../../sql/nt_servc.cc)
     ENDIF()
-    ADD_EXECUTABLE(${test}-t ${SRC_FILES})
+    MYSQL_ADD_EXECUTABLE(${test}-t ${SRC_FILES} SKIP_INSTALL ${EXCLUDE_FROM_ALL})
 
-    TARGET_LINK_LIBRARIES(${test}-t gunit_large strings dbug regex mysys sql)
-    TARGET_LINK_LIBRARIES(${test}-t sql binlog rpl master slave sql ${CURL_LIBRARY} ${SSL_LIBRARIES})
+    TARGET_LINK_LIBRARIES(${test}-t gunit_large strings dbug regex)
+    TARGET_LINK_LIBRARIES(${test}-t mysys sql_main sql_gis sql_dd)
+    TARGET_LINK_LIBRARIES(${test}-t binlog rpl master slave)
+    TARGET_LINK_LIBRARIES(${test}-t ${CURL_LIBRARY} ${SSL_LIBRARIES})
+    TARGET_LINK_LIBRARIES(${test}-t ${ICU_LIBRARIES})
 
     IF(WITH_PERFSCHEMA_STORAGE_ENGINE)
         TARGET_LINK_LIBRARIES(${test}-t perfschema)
-        TARGET_LINK_LIBRARIES(${test}-t perfschema pfs_server_stubs)
     ENDIF()
 
     ADD_TEST(${test} ${test}-t)
