@@ -194,8 +194,8 @@ struct Builder {
   @param[in,out] file           File handle.
   @param[in] file_buffer        Write the buffer contents to disk.
   @return DB_SUCCESS or error code. */
-  [[nodiscard]] dberr_t append(ddl::file_t &file,
-                               IO_buffer file_buffer) noexcept;
+  [[nodiscard]] dberr_t append(ddl::file_t &file, IO_buffer file_buffer,
+                               void *crypt_buffer, uint32_t space_id) noexcept;
 
   /** @return the path for temporary files. */
   const char *tmpdir() const noexcept { return m_tmpdir; }
@@ -226,6 +226,8 @@ struct Builder {
   @param[in] index              Index on which redo logging was disabled */
   static void write_redo(const dict_index_t *index) noexcept;
 
+  [[nodiscard]] space_id_t get_space_id();
+
  private:
   /** State of a cluster index reader thread. */
   struct Thread_ctx {
@@ -254,6 +256,9 @@ struct Builder {
     /** Buffer to use for file writes. */
     Aligned_buffer m_aligned_buffer{};
 
+    /** Buffer to use for file writes. */
+    Aligned_buffer m_aligned_buffer_crypt{};
+
     /** Record list starting offset in the output file. */
     Merge_offsets m_offsets{};
 
@@ -273,8 +278,9 @@ struct Builder {
   [[nodiscard]] dberr_t create_merge_sort_tasks() noexcept;
 
   /** Flush all dirty pages, apply the row log and write the redo log record.
+  @param[in] apply_log apply the row log
   @return DB_SUCCESS or error code. */
-  dberr_t finalize() noexcept;
+  dberr_t finalize(bool apply_log) noexcept;
 
   /** Convert the field data from compact to redundant format.
   @param[in]	trx		            Current transaction
@@ -449,6 +455,8 @@ struct Builder {
 
   /** Stage per builder. */
   Alter_stage *m_local_stage{};
+
+  row_prebuilt_t *m_prebuilt;
 };
 
 struct Load_cursor : Btree_load::Cursor {
