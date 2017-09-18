@@ -83,6 +83,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "read0mvcc_interface.h"
 #include "read0read_view_interface.h"
 #include "read0types.h"
+#include "row0log.h"
 #include "row0mysql.h"
 #include "sql/current_thd.h"
 #include "sql/sql_class.h"
@@ -1845,6 +1846,18 @@ void srv_export_innodb_status(void) {
     }
   }
   undo_truncate::spaces->s_unlock();
+
+  export_vars.innodb_n_merge_blocks_encrypted =
+      srv_stats.n_merge_blocks_encrypted;
+
+  export_vars.innodb_n_merge_blocks_decrypted =
+      srv_stats.n_merge_blocks_decrypted;
+
+  export_vars.innodb_n_rowlog_blocks_encrypted =
+      srv_stats.n_rowlog_blocks_encrypted;
+
+  export_vars.innodb_n_rowlog_blocks_decrypted =
+      srv_stats.n_rowlog_blocks_decrypted;
 
 #ifdef UNIV_DEBUG
   rw_lock_s_lock(&purge_sys->latch, UT_LOCATION_HERE);
