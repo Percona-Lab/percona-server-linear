@@ -2739,6 +2739,9 @@ void srv_start_threads(bool bootstrap) {
 
   srv_start_state_set(SRV_START_STATE_MASTER);
 
+  /* Enable row log encryption if it is set */
+  log_tmp_enable_encryption_if_set();
+
   if (srv_force_recovery == 0) {
     /* In the insert buffer we may have even bigger tablespace
     id's, because we may have dropped those tablespaces, but

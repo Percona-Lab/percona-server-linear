@@ -75,6 +75,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "os0thread-create.h"
 #include "pars0pars.h"
 #include "que0que.h"
+#include "row0log.h"
 #include "row0mysql.h"
 #include "sql/current_thd.h"
 #include "sql_thd_internal_api.h"
@@ -1664,6 +1665,18 @@ void srv_export_innodb_status(void) {
   export_vars.innodb_num_open_files = fil_n_file_opened;
 
   export_vars.innodb_truncated_status_writes = srv_truncated_status_writes;
+
+  export_vars.innodb_n_merge_blocks_encrypted =
+      srv_stats.n_merge_blocks_encrypted;
+
+  export_vars.innodb_n_merge_blocks_decrypted =
+      srv_stats.n_merge_blocks_decrypted;
+
+  export_vars.innodb_n_rowlog_blocks_encrypted =
+      srv_stats.n_rowlog_blocks_encrypted;
+
+  export_vars.innodb_n_rowlog_blocks_decrypted =
+      srv_stats.n_rowlog_blocks_decrypted;
 
 #ifdef UNIV_DEBUG
   rw_lock_s_lock(&purge_sys->latch);
