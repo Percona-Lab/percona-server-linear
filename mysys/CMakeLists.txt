@@ -26,6 +26,8 @@ SET(MY_TIME_SOURCES my_time.cc my_systime.cc)
 
 ADD_CONVENIENCE_LIBRARY(mytime ${MY_TIME_SOURCES})
 
+INCLUDE_DIRECTORIES(SYSTEM ${BOOST_PATCHES_DIR} ${BOOST_INCLUDE_DIR})
+
 SET(MYSYS_SOURCES
   array.cc
   charset.cc
@@ -102,6 +104,7 @@ SET(MYSYS_SOURCES
   ptr_cmp.cc
   sql_chars.cc
   stacktrace.cc
+  system_key.cc
   thr_cond.cc
   thr_lock.cc
   thr_mutex.cc
@@ -112,6 +115,7 @@ SET(MYSYS_SOURCES
   keyring_operations_helper.cc
   # From deleted mysys_ssl library
   crypt_genhash_impl.cc
+  my_crypt.cc
   my_default.cc
   my_getopt.cc
   my_kdf.cc
