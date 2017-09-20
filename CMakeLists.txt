@@ -850,7 +850,12 @@ ENDIF()
 
 OPTION(ENABLED_PROFILING "Enable profiling" ON)
 OPTION(WITHOUT_SERVER OFF)
-
+IF(UNIX)
+  OPTION(WITH_VALGRIND "Valgrind instrumentation" OFF)
+  IF (WITH_VALGRIND)
+    ADD_DEFINITIONS(-DUSE_VALGRIND)
+  ENDIF()
+ENDIF()
 IF(WIN32)
   OPTION(WITH_MSCRT_DEBUG "MS Visual Studio Debug CRT instrumentation" OFF)
 ENDIF()
@@ -1610,6 +1615,11 @@ ELSE()
   IF (WITH_SYSTEMD_DEBUG)
     MESSAGE(FATAL_ERROR "systemd-debugging requires systemd, and systemd requires linux")
   ENDIF()
+ENDIF()
+
+IF(APPLE)
+  # Get access to memset_s
+  ADD_DEFINITIONS(-D__STDC_WANT_LIB_EXT1__=1)
 ENDIF()
 
 # Run platform tests
