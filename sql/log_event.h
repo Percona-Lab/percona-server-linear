@@ -44,6 +44,7 @@
 #include <string>
 #include <string_view>
 
+#include "my_aes.h"
 #include "m_string.h"     // native_strncasecmp
 #include "my_bitmap.h"    // MY_BITMAP
 #include "my_checksum.h"  // ha_checksum
@@ -2387,6 +2388,8 @@ class Unknown_log_event : public mysql::binlog::event::Unknown_event,
   Unknown_log_event &operator=(Unknown_log_event &&) noexcept = delete;
   Unknown_log_event(const Unknown_log_event &) = delete;
   Unknown_log_event &operator=(const Unknown_log_event &) = delete;
+
+  enum class kind { UNKNOWN, ENCRYPTED } what;
 
   /**
     Even if this is an unknown event, we still pass description_event to
