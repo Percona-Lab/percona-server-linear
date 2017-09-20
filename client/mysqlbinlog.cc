@@ -960,8 +960,10 @@ static Exit_status process_event(PRINT_EVENT_INFO *print_event_info,
   */
   if (((rec_count >= offset) &&
        ((my_time_t)(ev->common_header->when.tv_sec) >= start_datetime)) ||
-      (ev_type == binary_log::FORMAT_DESCRIPTION_EVENT)) {
-    if (ev_type != binary_log::FORMAT_DESCRIPTION_EVENT) {
+      (ev_type == binary_log::FORMAT_DESCRIPTION_EVENT) ||
+      (ev_type == binary_log::START_ENCRYPTION_EVENT)) {
+    if (ev_type != binary_log::FORMAT_DESCRIPTION_EVENT &&
+        ev_type != binary_log::START_ENCRYPTION_EVENT) {
       /*
         We have found an event after start_datetime, from now on print
         everything (in case the binlog has timestamps increasing and
@@ -1061,6 +1063,7 @@ static Exit_status process_event(PRINT_EVENT_INFO *print_event_info,
         if (head->error == -1) goto err;
         break;
       }
+        // fallthrough
 
       case binary_log::INTVAR_EVENT: {
         buff_event.event = ev;
@@ -1317,6 +1320,11 @@ static Exit_status process_event(PRINT_EVENT_INFO *print_event_info,
         in_transaction = false;
         print_event_info->skipped_event_in_transaction = false;
         seen_gtid = false;
+        ev->print(result_file, print_event_info);
+        if (head->error == -1) goto err;
+        break;
+      }
+      case binary_log::START_ENCRYPTION_EVENT: {
         ev->print(result_file, print_event_info);
         if (head->error == -1) goto err;
         break;
@@ -2249,7 +2257,7 @@ static Exit_status dump_remote_log_entries(PRINT_EVENT_INFO *print_event_info,
         (type == binary_log::FORMAT_DESCRIPTION_EVENT)) {
       Binlog_read_error read_error = binlog_event_deserialize(
           reinterpret_cast<unsigned char *>(event_buf), event_len,
-          &glob_description_event, opt_verify_binlog_checksum, &ev);
+          &glob_description_event, opt_verify_binlog_checksum, &ev, force_opt);
 
       if (read_error.has_error()) {
         error("Could not construct log event object: %s", read_error.get_str());
@@ -2411,15 +2419,48 @@ class Mysqlbinlog_event_data_istream : public Binlog_event_data_istream {
   bool read_event_data(unsigned char **buffer, unsigned int *length,
                        ALLOCATOR *allocator, bool verify_checksum,
                        enum_binlog_checksum_alg checksum_alg) {
-    return Binlog_event_data_istream::read_event_data(
-               buffer, length, allocator, verify_checksum, checksum_alg) ||
-           rewrite_db(buffer, length);
+    bool error = Binlog_event_data_istream::read_event_data(
+        buffer, length, allocator, verify_checksum, checksum_alg);
+
+    if (m_binlog_encrypted &&
+        m_error->get_type() != Binlog_read_error::READ_EOF) {
+      if (!force_opt) {
+        m_error->set_type(Binlog_read_error::ERROR_DECRYPTING_FILE);
+      } else {
+        m_error->set_type(Binlog_read_error::SUCCESS);
+        // We will be creating Unknown_log_events with events marked as
+        // encrypted
+      }
+      if (*buffer != nullptr) {
+        allocator->deallocate(*buffer);
+        *buffer = nullptr;
+      }
+      return true;
+    }
+
+    if (!error &&
+        (*buffer)[EVENT_TYPE_OFFSET] == binary_log::START_ENCRYPTION_EVENT) {
+      m_binlog_encrypted = true;
+    }
+
+    return error || rewrite_db(buffer, length);
   }
+
+  bool start_decryption(
+      binary_log::Start_encryption_event *see MY_ATTRIBUTE((unused))) {
+    m_binlog_encrypted = true;
+    return false;
+  }
+
+  void reset_crypto() noexcept { m_binlog_encrypted = false; }
+
+  bool is_binlog_encrypted() { return m_binlog_encrypted; }
 
   void set_multi_binlog_magic() { m_multi_binlog_magic = true; }
 
  private:
   bool m_multi_binlog_magic = false;
+  bool m_binlog_encrypted = false;
 
   bool rewrite_db(unsigned char **buffer, unsigned int *length) {
     ulong len = *length;
@@ -2574,6 +2615,15 @@ static Exit_status dump_local_log_entries(PRINT_EVENT_INFO *print_event_info,
     my_off_t old_off = mysqlbinlog_file_reader.position();
 
     Log_event *ev = mysqlbinlog_file_reader.read_event_object();
+    if (mysqlbinlog_file_reader.event_data_istream()->is_binlog_encrypted() &&
+        mysqlbinlog_file_reader.get_error_type() !=
+            Binlog_read_error::READ_EOF &&
+        !ev) {
+      if (force_opt) {
+        ev = new Unknown_log_event(
+            nullptr, mysqlbinlog_file_reader.format_description_event());
+      }
+    }
     if (ev == nullptr) {
       /*
         if binlog wasn't closed properly ("in use" flag is set) don't complain

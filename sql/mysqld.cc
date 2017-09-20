@@ -1296,8 +1296,12 @@ char *mysql_data_home = const_cast<char *>(".");
 const char *mysql_real_data_home_ptr = mysql_real_data_home;
 char *opt_protocol_compression_algorithms;
 char server_version[SERVER_VERSION_LENGTH];
+char server_version_suffix[SERVER_VERSION_LENGTH];
 const char *mysqld_unix_port;
 char *opt_mysql_tmpdir;
+bool encrypt_binlog;
+
+bool encrypt_tmp_files;
 
 /** name of reference on left expression in rewritten IN subquery */
 const char *in_left_expr_name = "<left expr>";
@@ -6119,6 +6123,22 @@ static int init_server_components() {
   if (Recovered_xa_transactions::init()) {
     LogErr(ERROR_LEVEL, ER_OOM);
     unireg_abort(MYSQLD_ABORT_EXIT);
+  }
+
+  if (encrypt_binlog) {
+    if (!opt_master_verify_checksum ||
+        binlog_checksum_options == binary_log::BINLOG_CHECKSUM_ALG_OFF ||
+        binlog_checksum_options == binary_log::BINLOG_CHECKSUM_ALG_UNDEF) {
+      sql_print_error(
+          "BINLOG_ENCRYPTION requires MASTER_VERIFY_CHECKSUM = ON and "
+          "BINLOG_CHECKSUM to be turned ON.");
+      unireg_abort(MYSQLD_ABORT_EXIT);
+    }
+    if (!opt_bin_log)
+      sql_print_information(
+          "binlog and relay log encryption enabled without binary logging "
+          "being enabled. "
+          "If relay logs are in use, they will be encrypted.");
   }
 
   if (tc_log->open(opt_bin_log ? opt_bin_logname : opt_tc_log_file)) {
