@@ -24,7 +24,6 @@
 
 #include "my_config.h"
 
-
 #include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
@@ -62,6 +61,7 @@
 #include "my_compiler.h"
 #include "my_dbug.h"
 #include "my_dir.h"
+#include "my_rnd.h"
 #include "my_sqlcommand.h"
 #include "my_stacktrace.h"  // my_safe_print_system_time
 #include "my_thread_local.h"
@@ -243,7 +243,7 @@ static int binlog_start_consistent_snapshot(handlerton *hton, THD *thd);
 static int binlog_clone_consistent_snapshot(handlerton *hton, THD *thd,
                                             THD *from_thd);
 
-ulonglong binlog_space_limit;
+ulong max_binlog_files;
 
 // The last published global binlog position
 static char binlog_global_snapshot_file[FN_REFLEN];
@@ -306,7 +306,7 @@ class MYSQL_BIN_LOG::Binlog_ofile : public Basic_ostream {
      @retval false  Success
      @retval true  Error
   */
-  bool write(const unsigned char *buffer, my_off_t length) {
+  bool write(const unsigned char *buffer, my_off_t length) override {
     DBUG_ASSERT(m_pipeline_head != NULL);
 
     if (m_pipeline_head->write(buffer, length)) return true;
@@ -352,7 +352,7 @@ class MYSQL_BIN_LOG::Binlog_ofile : public Basic_ostream {
   bool flush() { return m_file_ostream.flush(); }
   bool sync() { return m_file_ostream.sync(); }
   bool flush_and_sync() { return flush() || sync(); }
-  my_off_t position() { return m_position; }
+  my_off_t position() const noexcept override { return m_position; }
   bool is_empty() { return position() == 0; }
   bool is_open() { return m_pipeline_head != NULL; }
 
@@ -1197,25 +1197,30 @@ class Binlog_event_writer : public Basic_ostream {
   ha_checksum initial_checksum;
   ha_checksum checksum;
   uint32 end_log_pos;
+  THD *thd;
   uchar header[LOG_EVENT_HEADER_LEN];
   my_off_t header_len = 0;
   uint32 event_len = 0;
 
  public:
+  Event_encrypter event_encrypter;
+
   /**
     Constructs a new Binlog_event_writer. Should be called once before
     starting to flush the transaction or statement cache to the
     binlog.
 
     @param binlog_file to write to.
+    @param thd_arg THD to account written binlog byte statistics to
   */
-  Binlog_event_writer(MYSQL_BIN_LOG::Binlog_ofile *binlog_file)
+  Binlog_event_writer(MYSQL_BIN_LOG::Binlog_ofile *binlog_file, THD *thd_arg)
       : m_binlog_file(binlog_file),
         have_checksum(binlog_checksum_options !=
                       binary_log::BINLOG_CHECKSUM_ALG_OFF),
         initial_checksum(my_checksum(0L, NULL, 0)),
         checksum(initial_checksum),
-        end_log_pos(binlog_file->position()) {
+        end_log_pos(binlog_file->position()),
+        thd(thd_arg) {
     // Simulate checksum error
     if (DBUG_EVALUATE_IF("fault_injection_crc_value", 1, 0)) checksum--;
   }
@@ -1238,7 +1243,7 @@ class Binlog_event_writer : public Basic_ostream {
     if (have_checksum) checksum = my_checksum(checksum, header, header_len);
   }
 
-  bool write(const unsigned char *buffer, my_off_t length) {
+  bool write(const unsigned char *buffer, my_off_t length) override {
     DBUG_ENTER("Binlog_event_writer::write");
 
     while (length > 0) {
@@ -1255,20 +1260,29 @@ class Binlog_event_writer : public Basic_ostream {
 
         if (header_len == LOG_EVENT_HEADER_LEN) {
           update_header();
-          if (m_binlog_file->write(header, header_len)) DBUG_RETURN(true);
-
+          if (event_encrypter.is_encryption_enabled() &&
+              event_encrypter.init(m_binlog_file, header, header_len)) {
+            DBUG_RETURN(true);
+          }
+          if (event_encrypter.encrypt_and_write(m_binlog_file, header,
+                                                header_len))
+            DBUG_RETURN(true);
+          thd->binlog_bytes_written += header_len;
           event_len -= header_len;
           header_len = 0;
         }
       } else {
         my_off_t write_bytes = std::min<uint64>(length, event_len);
 
-        if (m_binlog_file->write(buffer, write_bytes)) DBUG_RETURN(true);
+        if (event_encrypter.encrypt_and_write(m_binlog_file, buffer,
+                                              write_bytes))
+          DBUG_RETURN(true);
 
         // update the checksum
         if (have_checksum)
           checksum = my_checksum(checksum, buffer, write_bytes);
 
+        thd->binlog_bytes_written += write_bytes;
         event_len -= write_bytes;
         length -= write_bytes;
         buffer += write_bytes;
@@ -1278,8 +1292,10 @@ class Binlog_event_writer : public Basic_ostream {
           uchar checksum_buf[BINLOG_CHECKSUM_LEN];
 
           int4store(checksum_buf, checksum);
-          if (m_binlog_file->write(checksum_buf, BINLOG_CHECKSUM_LEN))
+          if (event_encrypter.encrypt_and_write(m_binlog_file, checksum_buf,
+                                                BINLOG_CHECKSUM_LEN))
             DBUG_RETURN(true);
+          thd->binlog_bytes_written += BINLOG_CHECKSUM_LEN;
           checksum = initial_checksum;
         }
       }
@@ -1290,6 +1306,10 @@ class Binlog_event_writer : public Basic_ostream {
     Returns true if per event checksum is enabled.
   */
   bool is_checksum_enabled() { return have_checksum; }
+
+  my_off_t position() const noexcept override {
+    return m_binlog_file->position();
+  }
 };
 
 /*
@@ -1730,7 +1750,10 @@ int binlog_cache_data::flush(THD *thd, my_off_t *bytes_written,
       non-empty then we get two Anonymous_gtid_log_events, which is
       correct.
     */
-    Binlog_event_writer writer(mysql_bin_log.get_binlog_file());
+    Binlog_event_writer writer(mysql_bin_log.get_binlog_file(), thd);
+
+    if (mysql_bin_log.get_crypto_data()->is_enabled())
+      writer.event_encrypter.enable_encryption(mysql_bin_log.get_crypto_data());
 
     /* The GTID ownership process might set the commit_error */
     error = (thd->commit_error == THD::CE_FLUSH_ERROR);
@@ -2830,7 +2853,7 @@ class Log_in_use : public Do_THD_Impl {
     LOG_INFO *linfo;
     mysql_mutex_lock(&thd->LOCK_thd_data);
     if ((linfo = thd->current_linfo)) {
-      if (!memcmp(m_log_name, linfo->log_file_name, m_log_name_len)) {
+      if (!strncmp(m_log_name, linfo->log_file_name, m_log_name_len)) {
         LogErr(WARNING_LEVEL, ER_BINLOG_FILE_BEING_READ_NOT_PURGED, m_log_name,
                thd->thread_id());
         m_count++;
@@ -3808,6 +3831,7 @@ static bool read_gtids_and_update_trx_parser_from_relaylog(
     switch (ev->get_type_code()) {
       case binary_log::FORMAT_DESCRIPTION_EVENT:
       case binary_log::ROTATE_EVENT:
+      case binary_log::START_ENCRYPTION_EVENT:
         // do nothing; just accept this event and go to next
         break;
       case binary_log::PREVIOUS_GTIDS_LOG_EVENT: {
@@ -3996,6 +4020,7 @@ static enum_read_gtids_from_binlog_status read_gtids_from_binlog(
     switch (ev->get_type_code()) {
       case binary_log::FORMAT_DESCRIPTION_EVENT:
       case binary_log::ROTATE_EVENT:
+      case binary_log::START_ENCRYPTION_EVENT:
         // do nothing; just accept this event and go to next
         break;
       case binary_log::PREVIOUS_GTIDS_LOG_EVENT: {
@@ -4611,6 +4636,7 @@ bool MYSQL_BIN_LOG::open_binlog(
   DBUG_ASSERT(need_sid_lock || !need_lock_index);
   DBUG_ENTER("MYSQL_BIN_LOG::open_binlog(const char *, ...)");
   DBUG_PRINT("enter", ("base filename: %s", log_name));
+  const char *const log_to_encrypt = is_relay_log ? "relay_log" : "binlog";
 
   mysql_mutex_assert_owner(get_log_lock());
 
@@ -4620,8 +4646,6 @@ bool MYSQL_BIN_LOG::open_binlog(
   }
 
   DBUG_PRINT("info", ("generated filename: %s", log_file_name));
-
-  DEBUG_SYNC(current_thd, "after_log_file_name_initialized");
 
   if (open_purge_index_file(true) ||
       register_create_index_entry(log_file_name) || sync_purge_index_file() ||
@@ -4702,11 +4726,49 @@ bool MYSQL_BIN_LOG::open_binlog(
     }
   }
 
+  crypto.disable();
   if (!s.is_valid()) goto err;
   s.dont_set_created = null_created_arg;
   /* Set LOG_EVENT_RELAY_LOG_F flag for relay log's FD */
   if (is_relay_log) s.set_relay_log_event();
   if (write_event_to_binlog(&s)) goto err;
+
+  if (encrypt_binlog) {
+    if (crypto.load_latest_binlog_key()) {
+      sql_print_error(
+          "Failed to fetch or create percona_binlog key from/in keyring and "
+          "thus "
+          "failed to initialize %s encryption. Have you enabled "
+          "keyring plugin?",
+          log_to_encrypt);
+      goto err;
+    }
+    DBUG_EXECUTE_IF("check_consecutive_binlog_key_versions", {
+      static uint next_key_version = 1;
+      DBUG_ASSERT(crypto.get_key_version() == next_key_version++);
+    });
+
+    uchar nonce[binary_log::Start_encryption_event::NONCE_LENGTH];
+    memset(nonce, 0, binary_log::Start_encryption_event::NONCE_LENGTH);
+    if (my_rand_buffer(nonce, sizeof(nonce))) goto err;
+
+    Start_encryption_log_event sele(1, crypto.get_key_version(), nonce);
+    sele.common_footer->checksum_alg = s.common_footer->checksum_alg;
+    if (write_event_to_binlog(&sele)) {
+      sql_print_error(
+          "Failed to write Start_encryption event to binary log and thus "
+          "failed to initialize %s encryption.",
+          log_to_encrypt);
+      goto err;
+    }
+    bytes_written += sele.common_header->data_written;
+
+    if (crypto.init_with_loaded_key(sele.crypto_scheme, nonce)) {
+      sql_print_error("Failed to initialize %s encryption.", log_to_encrypt);
+      goto err;
+    }
+  }
+
   /*
     We need to revisit this code and improve it.
     See further comments in the mysqld.
@@ -4862,10 +4924,13 @@ err:
     purge_index_entry(NULL, NULL, need_lock_index);
   close_purge_index_file();
   if (binlog_error_action == ABORT_SERVER) {
-    exec_binlog_error_action_abort(
-        "Either disk is full or file system is read "
-        "only while opening the binlog. Aborting the"
-        " server.");
+    std::string err_msg = "Either disk is full or file system is read only ";
+    if (encrypt_binlog) err_msg += "or encryption failed ";
+    err_msg += "while opening the ";
+    err_msg += log_to_encrypt;
+    err_msg += ". Aborting the server.";
+
+    exec_binlog_error_action_abort(err_msg.c_str());
   } else {
     LogErr(ERROR_LEVEL, ER_BINLOG_CANT_USE_FOR_LOGGING,
            (new_name) ? new_name : name, errno);
@@ -5931,6 +5996,66 @@ err:
 }
 
 /**
+  Purge old logs so that we have a maximum of max_nr_files logs.
+
+  @param max_nr_files	Maximum number of logfiles to have
+
+  @note
+  If any of the logs before the deleted one is in use,
+  only purge logs up to this one.
+
+  @retval
+  0				ok
+  @retval
+  LOG_INFO_PURGE_NO_ROTATE	Binary file that can't be rotated
+  LOG_INFO_FATAL              if any other than ENOENT error from
+  mysql_file_stat() or mysql_file_delete()
+*/
+
+int MYSQL_BIN_LOG::purge_logs_maximum_number(ulong max_nr_files) {
+  int error;
+  char to_log[FN_REFLEN];
+  LOG_INFO log_info;
+  ulong current_number_of_logs = 1;
+
+  DBUG_ENTER("purge_logs_maximum_number");
+
+  mysql_mutex_lock(&LOCK_index);
+  to_log[0] = 0;
+
+  if ((error = find_log_pos(&log_info, NullS, 0 /*no mutex*/))) goto err;
+
+  while (!find_next_log(&log_info, 0)) current_number_of_logs++;
+
+  if (current_number_of_logs <= max_nr_files) {
+    error = 0;
+    goto err; /* No logs to expire */
+  }
+
+  if ((error = find_log_pos(&log_info, NullS, 0 /*no mutex*/))) goto err;
+
+  while (strcmp(log_file_name, log_info.log_file_name) &&
+         !is_active(log_info.log_file_name) &&
+         !log_in_use(log_info.log_file_name) &&
+         current_number_of_logs > max_nr_files) {
+    current_number_of_logs--;
+    strmake(to_log, log_info.log_file_name, sizeof(log_info.log_file_name) - 1);
+
+    if (find_next_log(&log_info, 0)) {
+      break;
+    }
+  }
+
+  error =
+      (to_log[0] ? purge_logs(to_log, true, false, true, (ulonglong *)0, true)
+                 : 0);
+
+err:
+  mysql_mutex_unlock(&LOCK_index);
+  DBUG_RETURN(error);
+}
+
+/**
   Remove all logs before the given file date from disk and from the
   index file.
 
@@ -6462,14 +6587,27 @@ bool MYSQL_BIN_LOG::write_event(Log_event *ev, Master_info *mi) {
   DBUG_RETURN(error);
 }
 
-bool MYSQL_BIN_LOG::write_buffer(const char *buf, uint len, Master_info *mi) {
-  DBUG_ENTER("MYSQL_BIN_LOG::write_buffer(char *, uint, Master_info *");
+bool MYSQL_BIN_LOG::write_buffer(uchar *buf, uint len, Master_info *mi) {
+  DBUG_ENTER("MYSQL_BIN_LOG::write_buffer(uchar *, uint, Master_info *");
 
   // check preconditions
   DBUG_ASSERT(is_relay_log);
   mysql_mutex_assert_owner(&LOCK_log);
 
   // write data
+  unique_ptr_my_free<uchar> ebuf;
+
+  if (crypto.is_enabled()) {
+    ebuf.reset(reinterpret_cast<uchar *>(
+        my_malloc(PSI_NOT_INSTRUMENTED, len, MYF(MY_WME))));
+    if (!ebuf || encrypt_event(m_binlog_file->position(), crypto, buf,
+                               ebuf.get(), len)) {
+      DBUG_RETURN(true);
+    }
+
+    buf = ebuf.get();
+  }
+
   bool error = false;
   if (m_binlog_file->write((uchar *)buf, len) == 0) {
     bytes_written += len;
@@ -6479,7 +6617,7 @@ bool MYSQL_BIN_LOG::write_buffer(const char *buf, uint len, Master_info *mi) {
                ER_THD(current_thd, ER_SLAVE_RELAY_LOG_WRITE_FAILURE),
                "failed to write event to the relay log file");
     truncate_relaylog_file(mi, atomic_binlog_end_pos);
-    error = true;
+    DBUG_RETURN(true);
   }
 
   DBUG_RETURN(error);
@@ -6662,6 +6800,8 @@ bool MYSQL_BIN_LOG::write_event(Log_event *event_info) {
               thd->first_successful_insert_id_in_prev_stmt_for_binlog,
               event_info->event_cache_type, event_info->event_logging_type);
           if (cache_data->write_event(&e)) goto err;
+          if (event_info->is_using_immediate_logging())
+            thd->binlog_bytes_written += e.header()->data_written;
         }
         if (thd->auto_inc_intervals_in_cur_stmt_for_binlog.nb_elements() > 0) {
           DBUG_PRINT(
@@ -6673,12 +6813,16 @@ bool MYSQL_BIN_LOG::write_event(Log_event *event_info) {
               thd->auto_inc_intervals_in_cur_stmt_for_binlog.minimum(),
               event_info->event_cache_type, event_info->event_logging_type);
           if (cache_data->write_event(&e)) goto err;
+          if (event_info->is_using_immediate_logging())
+            thd->binlog_bytes_written += e.header()->data_written;
         }
         if (thd->rand_used) {
           Rand_log_event e(thd, thd->rand_saved_seed1, thd->rand_saved_seed2,
                            event_info->event_cache_type,
                            event_info->event_logging_type);
           if (cache_data->write_event(&e)) goto err;
+          if (event_info->is_using_immediate_logging())
+            thd->binlog_bytes_written += e.header()->data_written;
         }
         if (!thd->user_var_events.empty()) {
           for (size_t i = 0; i < thd->user_var_events.size(); i++) {
@@ -6696,6 +6840,8 @@ bool MYSQL_BIN_LOG::write_event(Log_event *event_info) {
                 user_var_event->type, user_var_event->charset_number, flags,
                 event_info->event_cache_type, event_info->event_logging_type);
             if (cache_data->write_event(&e)) goto err;
+            if (event_info->is_using_immediate_logging())
+              thd->binlog_bytes_written += e.header()->data_written;
           }
         }
       }
@@ -6707,6 +6853,8 @@ bool MYSQL_BIN_LOG::write_event(Log_event *event_info) {
     if (cache_data->write_event(event_info)) goto err;
 
     if (DBUG_EVALUATE_IF("injecting_fault_writing", 1, 0)) goto err;
+    if (event_info->is_using_immediate_logging())
+      thd->binlog_bytes_written += event_info->common_header->data_written;
 
     /*
       After writing the event, if the trx-cache was used and any unsafe
@@ -6798,6 +6946,7 @@ void MYSQL_BIN_LOG::purge() {
       }
     }
   }
+  if (max_binlog_files) purge_logs_maximum_number(max_binlog_files);
 }
 
 /**
@@ -7840,7 +7989,9 @@ TC_LOG::enum_result MYSQL_BIN_LOG::commit(THD *thd, bool all) {
       DBUG_RETURN(RESULT_ABORTED);
     }
 
-    if (ordered_commit(thd, all, skip_commit)) DBUG_RETURN(RESULT_INCONSISTENT);
+    int rc = ordered_commit(thd, all, skip_commit);
+
+    if (rc) DBUG_RETURN(RESULT_INCONSISTENT);
 
     /*
       Mark the flag m_is_binlogged to true only after we are done
@@ -10972,30 +11123,26 @@ void THD::issue_unsafe_warnings() {
 
   uint32 unsafe_type_flags = binlog_unsafe_warning_flags;
 
-  if ((unsafe_type_flags & (1U << LEX::BINLOG_STMT_UNSAFE_LIMIT)) != 0)
-  {
-    if ((lex->sql_command == SQLCOM_DELETE
-         || lex->sql_command == SQLCOM_UPDATE) &&
-        lex->select_lex->select_limit)
-    {
-      ORDER *order= (ORDER *) ((lex->select_lex->order_list.elements) ?
-                               lex->select_lex->order_list.first : NULL);
+  if ((unsafe_type_flags & (1U << LEX::BINLOG_STMT_UNSAFE_LIMIT)) != 0) {
+    if ((lex->sql_command == SQLCOM_DELETE ||
+         lex->sql_command == SQLCOM_UPDATE) &&
+        lex->select_lex->select_limit) {
+      ORDER *order = (ORDER *)((lex->select_lex->order_list.elements)
+                                   ? lex->select_lex->order_list.first
+                                   : nullptr);
       if ((lex->select_lex->select_limit &&
            lex->select_lex->select_limit->fixed &&
            lex->select_lex->select_limit->val_int() == 0) ||
           is_order_deterministic(lex->query_tables,
-                                 lex->select_lex->where_cond(), order))
-      {
-        unsafe_type_flags&= ~(1U << LEX::BINLOG_STMT_UNSAFE_LIMIT);
+                                 lex->select_lex->where_cond(), order)) {
+        unsafe_type_flags &= ~(1U << LEX::BINLOG_STMT_UNSAFE_LIMIT);
       }
     }
     if ((lex->sql_command == SQLCOM_INSERT_SELECT ||
          lex->sql_command == SQLCOM_REPLACE_SELECT) &&
-        order_deterministic)
-    {
-      unsafe_type_flags&= ~(1U << LEX::BINLOG_STMT_UNSAFE_LIMIT);
+        order_deterministic) {
+      unsafe_type_flags &= ~(1U << LEX::BINLOG_STMT_UNSAFE_LIMIT);
     }
-
   }
 
   /*
@@ -11097,10 +11244,9 @@ int THD::binlog_query(THD::enum_binlog_query_type qtype, const char *query_arg,
     the variables.option_bits & OPTION_BIN_LOG is false.
   */
   if ((variables.option_bits & OPTION_BIN_LOG) && sp_runtime_ctx == NULL &&
-      !binlog_evt_union.do_union)
-  {
+      !binlog_evt_union.do_union) {
     issue_unsafe_warnings();
-    order_deterministic= true;
+    order_deterministic = true;
   }
 
   switch (qtype) {
@@ -11201,8 +11347,8 @@ mysql_declare_plugin(binlog){
     NULL,          /* Plugin Check uninstall */
     binlog_deinit, /* Plugin Deinit */
     0x0100 /* 1.0 */,
-    NULL, /* status variables                */
-    NULL, /* system variables                */
-    NULL, /* config options                  */
+    binlog_status_vars_top, /* status variables                */
+    NULL,                   /* system variables                */
+    NULL,                   /* config options                  */
     0,
 } mysql_declare_plugin_end;

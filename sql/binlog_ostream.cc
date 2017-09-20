@@ -76,6 +76,10 @@ bool IO_CACHE_binlog_cache_storage::reset() {
   return false;
 }
 
+my_off_t IO_CACHE_binlog_cache_storage::position() const noexcept {
+  return my_b_tell(&m_io_cache);
+}
+
 size_t IO_CACHE_binlog_cache_storage::disk_writes() const {
   return m_io_cache.disk_writes;
 }
@@ -106,7 +110,7 @@ bool IO_CACHE_binlog_cache_storage::begin(unsigned char **buffer,
 
 bool IO_CACHE_binlog_cache_storage::next(unsigned char **buffer,
                                          my_off_t *length) {
-  my_b_fill(&m_io_cache);
+  if (my_b_bytes_in_cache(&m_io_cache) == 0) my_b_fill(&m_io_cache);
 
   *buffer = m_io_cache.read_pos;
   *length = my_b_bytes_in_cache(&m_io_cache);
