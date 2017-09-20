@@ -1147,7 +1147,57 @@ int Binlog_sender::send_format_description_event(File_reader *reader,
   if (event_checksum_on() && event_updated)
     calc_event_checksum(event_ptr, event_len);
 
-  return send_packet();
+  if (send_packet()) return 1;
+
+  // Let's check if next event is Start encryption event
+  // If we go outside the file read_event will also return an error
+  const auto binlog_pos_after_fdle = reader->position();
+  if (read_event(reader, &event_ptr, &event_len, true)) {
+    reader->seek(binlog_pos_after_fdle);
+    set_last_pos(binlog_pos_after_fdle);
+    return 0;
+  }
+
+  binlog_read_error = binlog_event_deserialize(
+      event_ptr, event_len, reader->format_description_event(), false, &ev,
+      reader->position());
+
+  if (binlog_read_error.has_error()) {
+    set_fatal_error(binlog_read_error.get_str());
+    return 1;
+  }
+
+  if (ev && ev->get_type_code() == binary_log::START_ENCRYPTION_EVENT) {
+    Start_encryption_log_event *sele =
+        down_cast<Start_encryption_log_event *>(ev);
+
+    if (!sele->is_valid()) {
+      set_fatal_error("Start encryption log event is invalid");
+      return 1;
+    }
+
+    if (reader->start_decryption(sele)) {
+      set_fatal_error("Could not decrypt binlog: encryption key error");
+      return 1;
+    }
+
+    if (start_pos <= BIN_LOG_HEADER_SIZE) {
+      const auto log_pos = reader->position();
+      // We have read start encryption event from master binlog, but we have
+      // not sent it to slave. We need to inform slave that master position
+      // has advanced.
+      if (unlikely(send_heartbeat_event(log_pos))) return 1;
+    }
+  } else {
+    reader->seek(binlog_pos_after_fdle);
+    set_last_pos(binlog_pos_after_fdle);
+  }
+
+  if (ev) {
+    delete ev;
+  }
+
+  return 0;
 }
 
 int Binlog_sender::has_previous_gtid_log_event(File_reader *reader,
@@ -1187,7 +1237,8 @@ const char *Binlog_sender::log_read_error_msg(
 }
 
 inline int Binlog_sender::read_event(File_reader *reader, uchar **event_ptr,
-                                     uint32 *event_len) {
+                                     uint32 *event_len,
+                                     bool readahead MY_ATTRIBUTE((unused))) {
   DBUG_TRACE;
 
   if (reset_transmit_packet(0, 0)) return 1;
@@ -1215,17 +1266,18 @@ inline int Binlog_sender::read_event(File_reader *reader, uchar **event_ptr,
 
   /*
     As we pre-allocate the buffer to store the event at reset_transmit_packet,
-    the buffer should not be changed while calling read_log_event, even knowing
-    that it might call functions to replace the buffer by one with the size to
-    fit the event.
+    the buffer should not be changed while calling read_log_event (unless binlog
+    encryption is on), even knowing that it might call functions to replace the
+    buffer by one with the size to fit the event. When encryption is on - the
+    buffer will be replaced with memory allocated for storing decrypted data.
   */
-  assert(reinterpret_cast<char *>(*event_ptr) ==
-         (m_packet.ptr() + event_offset));
+  assert(encrypt_binlog || reinterpret_cast<char *>(*event_ptr) ==
+                               (m_packet.ptr() + event_offset));
 
   DBUG_PRINT("info", ("Read event %s", Log_event::get_type_str(Log_event_type(
                                            (*event_ptr)[EVENT_TYPE_OFFSET]))));
 #ifndef NDEBUG
-  if (check_event_count()) return 1;
+  if (!readahead && check_event_count()) return 1;
 #endif
   return 0;
 }
