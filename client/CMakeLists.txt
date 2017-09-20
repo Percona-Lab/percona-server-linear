@@ -60,7 +60,6 @@ MYSQL_ADD_EXECUTABLE(mysqltest
   mysqltest/regular_expressions.cc
   mysqltest/secondary_engine.cc
   mysqltest/utils.cc
-
   COMPONENT Test
   DEPENDENCIES GenError GenClientError
   ENABLE_EXPORTS
@@ -95,6 +94,8 @@ MYSQL_ADD_EXECUTABLE(mysqlbinlog
   ${CMAKE_SOURCE_DIR}/sql/rpl_gtid_set.cc
   ${CMAKE_SOURCE_DIR}/sql/rpl_gtid_specification.cc
   ${CMAKE_SOURCE_DIR}/sql/rpl_tblmap.cc
+  ${CMAKE_SOURCE_DIR}/sql/event_crypt.cc
+  ${CMAKE_SOURCE_DIR}/sql/binlog_crypt_data.cc
   ${CMAKE_SOURCE_DIR}/sql/basic_istream.cc
   ${CMAKE_SOURCE_DIR}/sql/binlog_istream.cc
   ${CMAKE_SOURCE_DIR}/sql/binlog_reader.cc
@@ -102,7 +103,7 @@ MYSQL_ADD_EXECUTABLE(mysqlbinlog
   ${CMAKE_SOURCE_DIR}/sql/rpl_log_encryption.cc
 
   DEPENDENCIES GenError
-  LINK_LIBRARIES mysqlclient client_base binlogevents_static
+  LINK_LIBRARIES perconaserverclient client_base binlogevents_static
   )
 
 TARGET_COMPILE_DEFINITIONS(mysqlbinlog PRIVATE DISABLE_PSI_MUTEX)
