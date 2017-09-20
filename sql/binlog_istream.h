@@ -70,7 +70,9 @@ class Binlog_read_error {
     INVALID_ENCRYPTION_HEADER,
     CANNOT_GET_FILE_PASSWORD,
     READ_ENCRYPTED_LOG_FILE_IS_NOT_SUPPORTED,
-    ERROR_DECRYPTING_FILE
+    ERROR_DECRYPTING_FILE,
+    // Encrypted event decryption failure
+    DECRYPT
   };
 
   Binlog_read_error() {}

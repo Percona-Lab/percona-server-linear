@@ -45,6 +45,8 @@
 #include "mysql/psi/mysql_mutex.h"
 #include "mysql/udf_registration_types.h"
 #include "mysql_com.h"  // Item_result
+#include "sql/binlog_crypt_data.h"
+#include "sql/rpl_constants.h"
 #include "sql/rpl_trx_tracking.h"
 #include "sql/tc_log.h"            // TC_LOG
 #include "sql/transaction_info.h"  // Transaction_ctx
@@ -410,6 +412,9 @@ class MYSQL_BIN_LOG : public TC_LOG {
   uint file_id;
   uint open_count;  // For replication
 
+  /* binlog encryption data */
+  Binlog_crypt_data crypto;
+
   /* pointer to the sync period variable, for binlog this will be
      sync_binlog_period, for relay log this will be
      sync_relay_log_period
@@ -435,6 +440,8 @@ class MYSQL_BIN_LOG : public TC_LOG {
   int32 get_prep_xids() { return m_atomic_prep_xids; }
 
   inline uint get_sync_period() { return *sync_period_ptr; }
+
+  int write_to_file(Log_event *event);
 
  public:
   /*
@@ -783,7 +790,7 @@ class MYSQL_BIN_LOG : public TC_LOG {
   void stop_union_events(THD *thd);
   bool is_query_in_union(THD *thd, query_id_t query_id_param);
 
-  bool write_buffer(const char *buf, uint len, Master_info *mi);
+  bool write_buffer(uchar *buf, uint len, Master_info *mi);
   bool write_event(Log_event *ev, Master_info *mi);
 
  private:
@@ -816,6 +823,7 @@ class MYSQL_BIN_LOG : public TC_LOG {
   int purge_logs(const char *to_log, bool included, bool need_lock_index,
                  bool need_update_threads, ulonglong *decrease_log_space,
                  bool auto_purge);
+  int purge_logs_maximum_number(ulong max_nr_files);
   int purge_logs_before_date(time_t purge_time, bool auto_purge);
   int set_crash_safe_index_file_name(const char *base_file_name);
   int open_crash_safe_index_file();
@@ -899,6 +907,8 @@ class MYSQL_BIN_LOG : public TC_LOG {
     True while rotating binlog, which is caused by logging Incident_log_event.
   */
   bool is_rotating_caused_by_incident;
+
+  Binlog_crypt_data *get_crypto_data() { return &crypto; }
 
  private:
   void publish_coordinates_for_global_status(void) const;
