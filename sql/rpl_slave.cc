@@ -886,6 +886,7 @@ static enum_read_rotate_from_relay_log_status read_rotate_from_relay_log(
     DBUG_PRINT("info", ("Read event of type %s", ev->get_type_str()));
     switch (ev->get_type_code()) {
       case binary_log::FORMAT_DESCRIPTION_EVENT:
+      case binary_log::START_ENCRYPTION_EVENT:
         break;
       case binary_log::ROTATE_EVENT:
         /*
@@ -4172,7 +4173,8 @@ static int sql_delay_event(Log_event *ev, THD *thd, Relay_log_info *rli) {
       */
       if (type != binary_log::ROTATE_EVENT &&
           type != binary_log::FORMAT_DESCRIPTION_EVENT &&
-          type != binary_log::PREVIOUS_GTIDS_LOG_EVENT) {
+          type != binary_log::PREVIOUS_GTIDS_LOG_EVENT &&
+          type != binary_log::START_ENCRYPTION_EVENT) {
         // Calculate when we should execute the event.
         sql_delay_end = ev->common_header->when.tv_sec +
                         rli->mi->clock_diff_with_master + sql_delay;
@@ -4531,7 +4533,8 @@ apply_event_and_update_pos(Log_event **ptr_ev, THD *thd, Relay_log_info *rli) {
     if (!error && rli->is_mts_recovery() &&
         ev->get_type_code() != binary_log::ROTATE_EVENT &&
         ev->get_type_code() != binary_log::FORMAT_DESCRIPTION_EVENT &&
-        ev->get_type_code() != binary_log::PREVIOUS_GTIDS_LOG_EVENT) {
+        ev->get_type_code() != binary_log::PREVIOUS_GTIDS_LOG_EVENT &&
+        ev->get_type_code() != binary_log::START_ENCRYPTION_EVENT) {
       if (ev->starts_group()) {
         rli->mts_recovery_group_seen_begin = true;
       } else if ((ev->ends_group() || !rli->mts_recovery_group_seen_begin) &&
@@ -5566,8 +5569,8 @@ ignore_log_space_limit=%d",
               thd->killed = THD::KILLED_NO_VALUE;);
       DBUG_EXECUTE_IF(
           "stop_io_after_reading_unknown_event",
-          if (event_buf[EVENT_TYPE_OFFSET] >= binary_log::ENUM_END_EVENT)
-              thd->killed = THD::KILLED_NO_VALUE;);
+          if (static_cast<uchar>(event_buf[EVENT_TYPE_OFFSET]) >=
+              binary_log::MYSQL_END_EVENT) thd->killed = THD::KILLED_NO_VALUE;);
       DBUG_EXECUTE_IF("stop_io_after_queuing_event",
                       thd->killed = THD::KILLED_NO_VALUE;);
       /*
@@ -6089,7 +6092,8 @@ bool mts_recovery_groups(Relay_log_info *rli) {
 
         if (ev->get_type_code() == binary_log::ROTATE_EVENT ||
             ev->get_type_code() == binary_log::FORMAT_DESCRIPTION_EVENT ||
-            ev->get_type_code() == binary_log::PREVIOUS_GTIDS_LOG_EVENT) {
+            ev->get_type_code() == binary_log::PREVIOUS_GTIDS_LOG_EVENT ||
+            ev->get_type_code() == binary_log::START_ENCRYPTION_EVENT) {
           delete ev;
           ev = nullptr;
           continue;
@@ -7218,7 +7222,8 @@ QUEUE_EVENT_RESULT queue_event(Master_info *mi, const char *buf,
   Gtid gtid = {0, 0};
   ulonglong immediate_commit_timestamp = 0;
   ulonglong original_commit_timestamp = 0;
-  Log_event_type event_type = (Log_event_type)buf[EVENT_TYPE_OFFSET];
+  Log_event_type event_type =
+      (Log_event_type) static_cast<uchar>(buf[EVENT_TYPE_OFFSET]);
 
   DBUG_ASSERT(checksum_alg == binary_log::BINLOG_CHECKSUM_ALG_OFF ||
               checksum_alg == binary_log::BINLOG_CHECKSUM_ALG_UNDEF ||
@@ -7256,7 +7261,8 @@ QUEUE_EVENT_RESULT queue_event(Master_info *mi, const char *buf,
   // Emulate the network corruption
   DBUG_EXECUTE_IF(
       "corrupt_queue_event",
-      if (event_type != binary_log::FORMAT_DESCRIPTION_EVENT) {
+      if (event_type != binary_log::FORMAT_DESCRIPTION_EVENT &&
+          event_type != binary_log::START_ENCRYPTION_EVENT) {
         char *debug_event_buf_c = const_cast<char *>(buf);
         int debug_cor_pos = rand() % (event_len - BINLOG_CHECKSUM_LEN);
         debug_event_buf_c[debug_cor_pos] = ~debug_event_buf_c[debug_cor_pos];
@@ -7468,6 +7474,9 @@ QUEUE_EVENT_RESULT queue_event(Master_info *mi, const char *buf,
       }
 
       new_fdle = dynamic_cast<Format_description_log_event *>(ev);
+
+      new_fdle->copy_crypto_data(*(mi->get_mi_description_event()));
+
       if (new_fdle->common_footer->checksum_alg ==
           binary_log::BINLOG_CHECKSUM_ALG_UNDEF)
         new_fdle->common_footer->checksum_alg =
@@ -7527,9 +7536,14 @@ QUEUE_EVENT_RESULT queue_event(Master_info *mi, const char *buf,
         to the last skipped transaction. Note that,
         we update only the positions and not the file names, as a ROTATE
         EVENT from the master prior to this will update the file name.
+
+      When master's binlog is encrypted it will also sent heartbeat
+      event after reading Start_encryption_event from the binlog.
+      As Start_encryption_event is not sent to slave, the master
+      informs the slave to update it's master_log_pos by sending
+      heartbeat event.
       */
-      if (mi->is_auto_position() &&
-          mi->get_master_log_pos() < hb.common_header->log_pos &&
+      if (mi->get_master_log_pos() < hb.common_header->log_pos &&
           mi->get_master_log_name() != nullptr) {
         DBUG_ASSERT(memcmp(const_cast<char *>(mi->get_master_log_name()),
                            hb.get_log_ident(), hb.get_ident_len()) == 0);
@@ -7694,7 +7708,8 @@ QUEUE_EVENT_RESULT queue_event(Master_info *mi, const char *buf,
       "simulate_unknown_ignorable_log_event",
       if (event_type == binary_log::WRITE_ROWS_EVENT ||
           event_type == binary_log::PREVIOUS_GTIDS_LOG_EVENT) {
-        char *event_buf = const_cast<char *>(buf);
+        uchar *event_buf =
+            const_cast<uchar *>(reinterpret_cast<const uchar *>(buf));
         /* Overwrite the log event type with an unknown type. */
         event_buf[EVENT_TYPE_OFFSET] = binary_log::ENUM_END_EVENT + 1;
         /* Set LOG_EVENT_IGNORABLE_F for the log event. */
@@ -7775,7 +7790,9 @@ QUEUE_EVENT_RESULT queue_event(Master_info *mi, const char *buf,
   } else {
     bool is_error = false;
     /* write the event to the relay log */
-    if (likely(rli->relay_log.write_buffer(buf, event_len, mi) == 0)) {
+    if (likely(rli->relay_log.write_buffer(
+                   reinterpret_cast<uchar *>(const_cast<char *>(buf)),
+                   event_len, mi) == 0)) {
       DBUG_SIGNAL_WAIT_FOR(current_thd,
                            "pause_on_queue_event_after_write_buffer",
                            "receiver_reached_pause_on_queue_event",
