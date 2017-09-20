@@ -36,7 +36,7 @@ namespace binary_log_debug {
 bool debug_query_mts_corrupt_db_names = false;
 bool debug_checksum_test = false;
 bool debug_simulate_invalid_address = false;
-
+bool debug_expect_unknown_event = false;
 }  // namespace binary_log_debug
 
 namespace binary_log {
@@ -73,6 +73,7 @@ static const std::unordered_map<Log_event_type, const std::string>
                             {XA_PREPARE_LOG_EVENT, "XA_prepare"},
                             {PARTIAL_UPDATE_ROWS_EVENT, "Update_rows_partial"},
                             {TRANSACTION_PAYLOAD_EVENT, "Transaction_payload"},
+                            {START_ENCRYPTION_EVENT, "Start_encryption"},
                             {UNKNOWN_EVENT, "Unknown"}};
 
 const std::string &get_event_type_as_string(Log_event_type type) {
@@ -178,10 +179,6 @@ bool Log_event_footer::event_checksum_test(unsigned char *event_buf,
     uint32_t computed;
 
     if (event_buf[EVENT_TYPE_OFFSET] == FORMAT_DESCRIPTION_EVENT) {
-#ifndef NDEBUG
-      unsigned char fd_alg = event_buf[event_len - BINLOG_CHECKSUM_LEN -
-                                       BINLOG_CHECKSUM_ALG_DESC_LEN];
-#endif
       /*
         FD event is checksummed and therefore verified w/o
         the binlog-in-use flag.
@@ -190,13 +187,10 @@ bool Log_event_footer::event_checksum_test(unsigned char *event_buf,
       flags = le16toh(flags);
       if (flags & LOG_EVENT_BINLOG_IN_USE_F)
         event_buf[FLAGS_OFFSET] &= ~LOG_EVENT_BINLOG_IN_USE_F;
-        /*
-           The only algorithm currently is CRC32. Zero indicates
-           the binlog file is checksum-free *except* the FD-event.
-        */
-#ifndef NDEBUG
-      BAPI_ASSERT(fd_alg == BINLOG_CHECKSUM_ALG_CRC32 || fd_alg == 0);
-#endif
+      /*
+         The only algorithm currently is CRC32. Zero indicates
+         the binlog file is checksum-free *except* the FD-event.
+      */
       BAPI_ASSERT(alg == BINLOG_CHECKSUM_ALG_CRC32);
       /*
         Compile time guard to watch over the max number of alg
