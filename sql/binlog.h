@@ -54,6 +54,8 @@
 #include "sql/transaction_info.h"  // Transaction_ctx
 #include "thr_mutex.h"
 
+#include "sql/binlog_ostream.h"
+
 class Format_description_log_event;
 class Gtid_monitoring_info;
 class Gtid_set;
@@ -736,6 +738,7 @@ class MYSQL_BIN_LOG : public TC_LOG {
   void slock(void) override {}
   void sunlock(void) override {}
 #endif /* MYSQL_SERVER */
+
   void set_max_size(ulong max_size_arg);
 
   void update_binlog_end_pos(bool need_lock = true);
