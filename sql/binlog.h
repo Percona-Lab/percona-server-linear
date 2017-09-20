@@ -47,10 +47,14 @@
 #include "mysql_com.h"          // Item_result
 #include "sql/binlog_reader.h"  // Binlog_file_reader
 #include "sql/rpl_commit_stage_manager.h"
+#include "sql/binlog_crypt_data.h"
+#include "sql/rpl_constants.h"
 #include "sql/rpl_trx_tracking.h"
 #include "sql/tc_log.h"            // TC_LOG
 #include "sql/transaction_info.h"  // Transaction_ctx
 #include "thr_mutex.h"
+
+#include "sql/binlog_ostream.h"
 
 class Format_description_log_event;
 class Gtid_monitoring_info;
@@ -241,6 +245,9 @@ class MYSQL_BIN_LOG : public TC_LOG {
   // current file sequence number for load data infile binary logging
   uint file_id;
 
+  /* binlog encryption data */
+  Binlog_crypt_data crypto;
+
   /* pointer to the sync period variable, for binlog this will be
      sync_binlog_period, for relay log this will be
      sync_relay_log_period
@@ -266,6 +273,8 @@ class MYSQL_BIN_LOG : public TC_LOG {
   int32 get_prep_xids() { return m_atomic_prep_xids; }
 
   inline uint get_sync_period() { return *sync_period_ptr; }
+
+  int write_to_file(Log_event *event);
 
  public:
   /*
@@ -297,6 +306,7 @@ class MYSQL_BIN_LOG : public TC_LOG {
                                   uint32 new_index_number);
   int generate_new_name(char *new_name, const char *log_name,
                         uint32 new_index_number = 0);
+#if defined(MYSQL_SERVER)
   /**
    * Read binary log stream header and Format_desc event from
    * binlog_file_reader. Check for LOG_EVENT_BINLOG_IN_USE_F flag.
@@ -306,6 +316,7 @@ class MYSQL_BIN_LOG : public TC_LOG {
    *                 while reading log events
    */
   bool read_binlog_in_use_flag(Binlog_file_reader &binlog_file_reader);
+#endif /* defined(MYSQL_SERVER) */
 
  protected:
   /**
@@ -725,6 +736,7 @@ class MYSQL_BIN_LOG : public TC_LOG {
   void slock(void) override {}
   void sunlock(void) override {}
 #endif /* MYSQL_SERVER */
+
   void set_max_size(ulong max_size_arg);
 
   void update_binlog_end_pos(bool need_lock = true);
@@ -834,7 +846,7 @@ class MYSQL_BIN_LOG : public TC_LOG {
   void stop_union_events(THD *thd);
   bool is_query_in_union(THD *thd, query_id_t query_id_param);
 
-  bool write_buffer(const char *buf, uint len, Master_info *mi);
+  bool write_buffer(uchar *buf, uint len, Master_info *mi);
   bool write_event(Log_event *ev, Master_info *mi);
 
   /**
@@ -911,6 +923,7 @@ class MYSQL_BIN_LOG : public TC_LOG {
   int purge_logs(const char *to_log, bool included, bool need_lock_index,
                  bool need_update_threads, ulonglong *decrease_log_space,
                  bool auto_purge);
+  int purge_logs_maximum_number(ulong max_nr_files);
   int purge_logs_before_date(time_t purge_time, bool auto_purge);
   int set_crash_safe_index_file_name(const char *base_file_name);
   int open_crash_safe_index_file();
