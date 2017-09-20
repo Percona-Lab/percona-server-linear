@@ -4601,8 +4601,6 @@ bool MYSQL_BIN_LOG::open_binlog(
 
   DBUG_PRINT("info", ("generated filename: %s", log_file_name));
 
-  DEBUG_SYNC(current_thd, "after_log_file_name_initialized");
-
   if (m_binlog_index_monitor.open_purge_index_file(true) ||
       m_binlog_index_monitor.register_create_index_entry(log_file_name) ||
       m_binlog_index_monitor.sync_purge_index_file() ||
@@ -6070,6 +6068,8 @@ bool MYSQL_BIN_LOG::write_event(Log_event *event_info) {
             thd->first_successful_insert_id_in_prev_stmt_for_binlog,
             event_info->event_cache_type, event_info->event_logging_type);
         if (cache_data->write_event(&e)) goto err;
+        if (event_info->is_using_immediate_logging())
+          thd->binlog_bytes_written += e.header()->data_written;
       }
       if (thd->auto_inc_intervals_in_cur_stmt_for_binlog.nb_elements() > 0) {
         DBUG_PRINT(
@@ -6081,12 +6081,16 @@ bool MYSQL_BIN_LOG::write_event(Log_event *event_info) {
             thd->auto_inc_intervals_in_cur_stmt_for_binlog.minimum(),
             event_info->event_cache_type, event_info->event_logging_type);
         if (cache_data->write_event(&e)) goto err;
+        if (event_info->is_using_immediate_logging())
+          thd->binlog_bytes_written += e.header()->data_written;
       }
       if (thd->rand_used) {
         Rand_log_event e(thd, thd->rand_saved_seed1, thd->rand_saved_seed2,
                          event_info->event_cache_type,
                          event_info->event_logging_type);
         if (cache_data->write_event(&e)) goto err;
+        if (event_info->is_using_immediate_logging())
+          thd->binlog_bytes_written += e.header()->data_written;
       }
       if (!thd->user_var_events.empty()) {
         for (size_t i = 0; i < thd->user_var_events.size(); i++) {
@@ -6104,6 +6108,8 @@ bool MYSQL_BIN_LOG::write_event(Log_event *event_info) {
               user_var_event->type, user_var_event->charset_number, flags,
               event_info->event_cache_type, event_info->event_logging_type);
           if (cache_data->write_event(&e)) goto err;
+          if (event_info->is_using_immediate_logging())
+            thd->binlog_bytes_written += e.header()->data_written;
         }
       }
     }
@@ -6114,6 +6120,8 @@ bool MYSQL_BIN_LOG::write_event(Log_event *event_info) {
     if (cache_data->write_event(event_info)) goto err;
 
     if (DBUG_EVALUATE_IF("injecting_fault_writing", 1, 0)) goto err;
+    if (event_info->is_using_immediate_logging())
+      thd->binlog_bytes_written += event_info->common_header->data_written;
 
     /*
       After writing the event, if the trx-cache was used and any unsafe
@@ -10419,7 +10427,7 @@ void THD::issue_unsafe_warnings() {
         lex->query_block->select_limit) {
       ORDER *order = (ORDER *)((lex->query_block->order_list.elements)
                                    ? lex->query_block->order_list.first
-                                   : NULL);
+                                   : nullptr);
       if ((lex->query_block->select_limit &&
            lex->query_block->select_limit->fixed &&
            lex->query_block->select_limit->val_int() == 0) ||
