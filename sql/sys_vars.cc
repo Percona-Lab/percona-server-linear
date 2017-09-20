@@ -1055,6 +1055,10 @@ static bool check_binlog_row_image(sys_var *self MY_ATTRIBUTE((unused)),
   DBUG_RETURN(false);
 }
 
+static Sys_var_bool Sys_binlog_encryption(
+    "encrypt_binlog", "Encrypt binary logs (including relay logs)",
+    READ_ONLY GLOBAL_VAR(encrypt_binlog), CMD_LINE(OPT_ARG), DEFAULT(false));
+
 static const char *binlog_row_image_names[] = {"MINIMAL", "NOBLOB", "FULL",
                                                NullS};
 static Sys_var_enum Sys_binlog_row_image(

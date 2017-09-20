@@ -359,6 +359,8 @@ extern ulong connection_errors_internal;
 extern ulong connection_errors_peer_addr;
 extern char *opt_log_error_filter_rules;
 extern char *opt_log_error_services;
+extern bool encrypt_binlog;
+extern bool encrypt_tmp_files;
 extern bool opt_log_syslog_enable;
 extern char *opt_log_syslog_tag;
 #ifndef _WIN32

@@ -1121,7 +1121,11 @@ Time_zone *default_tz;
 char *mysql_data_home = const_cast<char *>(".");
 const char *mysql_real_data_home_ptr = mysql_real_data_home;
 char server_version[SERVER_VERSION_LENGTH];
+char server_version_suffix[SERVER_VERSION_LENGTH];
 char *mysqld_unix_port, *opt_mysql_tmpdir;
+bool encrypt_binlog;
+
+bool encrypt_tmp_files;
 
 /** name of reference on left expression in rewritten IN subquery */
 const char *in_left_expr_name = "<left expr>";
@@ -5466,48 +5470,27 @@ static int init_server_components() {
              "default_tmp_storage_engine", default_tmp_storage_engine);
   }
 
-  /*
-    Validate any enforced storage engine
-  */
-  if (enforce_storage_engine && !opt_initialize && !opt_noacl) {
-    LEX_STRING name = {enforce_storage_engine, strlen(enforce_storage_engine)};
-    plugin_ref plugin;
-    if ((plugin = ha_resolve_by_name(nullptr, &name, false))) {
-      handlerton *hton = plugin_data<handlerton *>(plugin);
-      LEX_STRING defname = {default_storage_engine,
-                            strlen(default_storage_engine)};
-      plugin_ref defplugin;
-      handlerton *defhton;
-      if ((defplugin = ha_resolve_by_name(nullptr, &defname, false))) {
-        defhton = plugin_data<handlerton *>(defplugin);
-        if (defhton != hton) {
-          sql_print_warning(
-              "Default storage engine (%s)"
-              " is not the same as enforced storage engine (%s)",
-              default_storage_engine, enforce_storage_engine);
-        }
-      }
-      if (ha_is_storage_engine_disabled(hton)) {
-        sql_print_error(
-            "enforced storage engine %s is among disabled storage "
-            "engines",
-            enforce_storage_engine);
-        unireg_abort(MYSQLD_ABORT_EXIT);
-      }
-      plugin_unlock(nullptr, defplugin);
-      plugin_unlock(nullptr, plugin);
-    } else {
-      sql_print_error("Unknown/unsupported storage engine: %s",
-                      enforce_storage_engine);
-      unireg_abort(MYSQLD_ABORT_EXIT);
-    }
-  }
-
   if (total_ha_2pc > 1 || (1 == total_ha_2pc && opt_bin_log)) {
     if (opt_bin_log)
       tc_log = &mysql_bin_log;
     else
       tc_log = &tc_log_mmap;
+  }
+
+  if (encrypt_binlog) {
+    if (!opt_master_verify_checksum ||
+        binlog_checksum_options == binary_log::BINLOG_CHECKSUM_ALG_OFF ||
+        binlog_checksum_options == binary_log::BINLOG_CHECKSUM_ALG_UNDEF) {
+      sql_print_error(
+          "BINLOG_ENCRYPTION requires MASTER_VERIFY_CHECKSUM = ON and "
+          "BINLOG_CHECKSUM to be turned ON.");
+      unireg_abort(MYSQLD_ABORT_EXIT);
+    }
+    if (!opt_bin_log)
+      sql_print_information(
+          "binlog and relay log encryption enabled without binary logging "
+          "being enabled. "
+          "If relay logs are in use, they will be encrypted.");
   }
 
   if (tc_log->open(opt_bin_log ? opt_bin_logname : opt_tc_log_file)) {
@@ -6332,6 +6315,11 @@ int mysqld_main(int argc, char **argv)
 
     (prev_gtids_ev.common_footer)->checksum_alg =
         static_cast<enum_binlog_checksum_alg>(binlog_checksum_options);
+
+    Binlog_crypt_data *crypto_data = mysql_bin_log.get_crypto_data();
+
+    if (crypto_data->is_enabled())
+      prev_gtids_ev.event_encrypter.enable_encryption(crypto_data);
 
     if (prev_gtids_ev.write(mysql_bin_log.get_log_file()))
       unireg_abort(MYSQLD_ABORT_EXIT);
