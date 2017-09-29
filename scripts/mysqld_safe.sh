@@ -213,10 +213,6 @@ eval_log_error () {
   #echo "Running mysqld: [$cmd]"
   cmd="env MYSQLD_PARENT_PID=$$ $cmd"
   eval "$cmd"
-  ret=$?
-  if [ $ret > 0 ]; then
-    exit $ret
-  fi
 }
 
 shell_quote_string() {
