@@ -2302,7 +2302,8 @@ Item_field::Item_field(Field *f)
       no_const_subst(false),
       have_privileges(0),
       any_privileges(false) {
-  if (f->table->pos_in_table_list != NULL)
+  if (f->table->pos_in_table_list != nullptr &&
+      f->table->pos_in_table_list->select_lex != nullptr)
     context = &(f->table->pos_in_table_list->select_lex->context);
 
   set_field(f);
@@ -5729,7 +5730,8 @@ Field *Item::tmp_table_field_from_field_type(TABLE *table, bool fixed_length) {
             max_length, maybe_null, item_name.ptr(), collation.collation);
         break;
       }
-      /* Fall through to make_string_field() */
+    // fallthrough
+    // to make_string_field()
     case MYSQL_TYPE_ENUM:
     case MYSQL_TYPE_SET:
     case MYSQL_TYPE_VAR_STRING:
