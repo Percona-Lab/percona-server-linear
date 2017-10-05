@@ -496,6 +496,8 @@ struct OSMutex {
     ut_d(m_freed = false);
   }
 
+  OSMutex &operator=(const OSMutex &) = default;
+
   /** Destructor */
   ~OSMutex() {}
 
