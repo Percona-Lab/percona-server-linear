@@ -4016,13 +4016,8 @@ buf_block_t *Buf_fetch<T>::single_page() {
 
     if (is_optimistic()) {
       const auto bpage = &block->page;
-      auto block_mutex = buf_page_get_mutex(bpage);
-
-      mutex_enter(block_mutex);
 
       const auto state = buf_page_get_io_fix_unlocked(bpage);
-
-      mutex_exit(block_mutex);
 
       if (state == BUF_IO_READ) {
         /* The page is being read to buffer pool, but we cannot wait around for
@@ -4090,6 +4085,7 @@ buf_block_t *Buf_fetch<T>::single_page() {
 #endif /* UNIV_DEBUG */
 
   ut_ad(m_mode == Page_fetch::POSSIBLY_FREED ||
+        m_mode == Page_fetch::PEEK_IF_IN_POOL ||
         !block->page.file_page_was_freed);
 
   /* Check if this is the first access to the page */
@@ -4295,11 +4291,7 @@ bool buf_page_optimistic_get(ulint rw_latch, buf_block_t *block,
   ut_a(block->page.buf_fix_count > 0);
   ut_a(buf_block_get_state(block) == BUF_BLOCK_FILE_PAGE);
 #endif /* UNIV_DEBUG || UNIV_BUF_DEBUG */
-
-  ut_d(buf_page_mutex_enter(block));
-  ut_ad(!block->page.file_page_was_freed);
-  ut_d(buf_page_mutex_exit(block));
-
+ 
   if (access_time == 0) {
     /* In the case of a first access, try to apply linear read-ahead */
     buf_read_ahead_linear(block->page.id, block->page.size, ibuf_inside(mtr));
