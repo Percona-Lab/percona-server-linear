@@ -188,7 +188,7 @@ ulint dict_col_get_clust_pos(
 @return position of column in the given index. */
 UNIV_INLINE
 ulint dict_col_get_index_pos(const dict_col_t *col, const dict_index_t *index)
-    MY_ATTRIBUTE((nonnull, warn_unused_result));
+    MY_ATTRIBUTE((warn_unused_result));
 
 /** If the given column name is reserved for InnoDB system columns, return
  TRUE.
