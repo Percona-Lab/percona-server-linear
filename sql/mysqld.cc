@@ -10375,8 +10375,8 @@ static PSI_rwlock_info all_server_rwlocks[]=
   { &key_rwlock_resource_group_mgr_map_lock, "Resource_group_mgr::m_map_rwlock", 0, 0, PSI_DOCUMENT_ME},
 #ifdef _WIN32
   { &key_rwlock_LOCK_named_pipe_full_access_group, "LOCK_named_pipe_full_access_group", PSI_FLAG_SINGLETON, 0,
-     "This lock protects named pipe security attributes, preventing their "
-     "simultaneous application and modification."},
+    "This lock protects named pipe security attributes, preventing their "
+    "simultaneous application and modification."},
 #endif // _WIN32
 };
 /* clang-format on */
