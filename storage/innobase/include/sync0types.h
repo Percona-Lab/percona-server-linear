@@ -494,6 +494,8 @@ struct OSMutex {
     ut_d(m_freed = false);
   }
 
+  OSMutex &operator=(const OSMutex &) = default;
+
   /** Destructor */
   ~OSMutex() {}
 
@@ -1071,7 +1073,7 @@ struct btrsea_sync_check : public sync_check_functor_t {
   /** Called for every latch owned by the calling thread.
   @param[in]	level		Level of the existing latch
   @return true if the predicate check fails */
-  virtual bool operator()(const latch_level_t level) {
+  virtual bool operator()(const latch_level_t level) override {
     /* If calling thread doesn't hold search latch then
     check if there are latch level exception provided.
 
@@ -1110,7 +1112,7 @@ struct btrsea_sync_check : public sync_check_functor_t {
   }
 
   /** @return result from the check */
-  virtual bool result() const { return (m_result); }
+  virtual bool result() const override { return (m_result); }
 
  private:
   /** True if all OK */
@@ -1133,7 +1135,7 @@ struct dict_sync_check : public sync_check_functor_t {
 
   /** Check the latching constraints
   @param[in]	level		The level held by the thread */
-  virtual bool operator()(const latch_level_t level) {
+  virtual bool operator()(const latch_level_t level) override {
     if (!m_dict_mutex_allowed ||
         (level != SYNC_DICT && level != SYNC_UNDO_SPACES &&
          level != SYNC_FTS_CACHE && level != SYNC_DICT_OPERATION &&
@@ -1155,7 +1157,7 @@ struct dict_sync_check : public sync_check_functor_t {
   }
 
   /** @return the result of the check */
-  virtual bool result() const { return (m_result); }
+  virtual bool result() const override { return (m_result); }
 
  private:
   /** True if all OK */
