@@ -59,6 +59,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "os0event.h"
 #include "os0file.h"
 #include "que0types.h"
+#include "sql/system_variables.h"
 #include "srv0conc.h"
 #include "trx0types.h"
 #include "ut0counter.h"
@@ -1113,6 +1114,9 @@ struct export_var_t {
                                              */
 
   ulint innodb_buffered_aio_submitted;
+
+  fragmentation_stats_t innodb_fragmentation_stats; /*!< Fragmentation
+                                           statistics */
 };
 
 #ifndef UNIV_HOTBACKUP
