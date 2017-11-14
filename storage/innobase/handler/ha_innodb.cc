@@ -2901,7 +2901,7 @@ ha_innobase::ha_innobase(handlerton *hton, TABLE_SHARE *table_arg)
           Still, claim support for partial update so that the
           optimizer parts get tested. */
           | HA_BLOB_PARTIAL_UPDATE | HA_SUPPORTS_GEOGRAPHIC_GEOMETRY_COLUMN |
-          HA_SUPPORTS_DEFAULT_EXPRESSION),
+          HA_ONLINE_ANALYZE | HA_SUPPORTS_DEFAULT_EXPRESSION),
       m_start_of_scan(),
       m_stored_select_lock_type(LOCK_NONE_UNSET),
       m_mysql_has_locked() {}
