@@ -184,6 +184,9 @@ enum dberr_t {
   /** Btree level limit exceeded. */
   DB_BTREE_LEVEL_LIMIT_EXCEEDED,
 
+  DB_PAGE_CORRUPTED = 999, /*!< Page read from tablespace is
+                           corrupted. */
+
   /* The following are partial failure codes */
 
   DB_FAIL = 1000,
