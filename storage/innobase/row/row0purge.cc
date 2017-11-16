@@ -519,8 +519,8 @@ static MY_ATTRIBUTE((warn_unused_result)) bool row_purge_remove_sec_if_poss_leaf
           success = false;
         }
       }
-      /* fall through (the index entry is still needed,
-      or the deletion succeeded) */
+      // fallthrough
+      // (the index entry is still needed, or the deletion succeeded)
     case ROW_NOT_DELETED_REF:
       /* The index entry is still needed. */
     case ROW_BUFFERED:
@@ -931,7 +931,7 @@ try_again:
     goto close_exit;
   }
 
-  if (node->table->ibd_file_missing) {
+  if (node->table->file_unreadable) {
     /* We skip purge of missing .ibd files */
 
     if (dict_table_is_sdi(node->table->id)) {

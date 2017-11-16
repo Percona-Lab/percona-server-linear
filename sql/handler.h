@@ -51,6 +51,7 @@
 #include "my_sys.h"
 #include "my_thread_local.h"  // my_errno
 #include "mysql/components/services/psi_table_bits.h"
+#include "mysql_com.h"
 #include "sql/dd/object_id.h"   // dd::Object_id
 #include "sql/dd/properties.h"  // dd::Properties
 #include "sql/dd/string_type.h"
@@ -741,6 +742,8 @@ struct st_handler_tablename {
 
 #define COMPATIBLE_DATA_YES 0
 #define COMPATIBLE_DATA_NO 1
+
+#define HA_CREATE_USED_ENCRYPTION_KEY_ID (1L << 28)
 
 /*
   These structures are used to pass information from a set of SQL commands
@@ -2152,6 +2155,8 @@ struct HA_CREATE_INFO {
   and ignored by the Server layer. */
 
   LEX_STRING encrypt_type;
+  uint32_t encryption_key_id;
+  bool was_encryption_key_id_set;
 
   const char *data_file_name, *index_file_name;
   const char *alias;
@@ -6113,6 +6118,7 @@ void ha_pre_dd_shutdown(void);
 */
 bool ha_flush_logs(handlerton *db_type, bool binlog_group_flush = false);
 void ha_drop_database(char *path);
+class Create_field;
 int ha_create_table(THD *thd, const char *path, const char *db,
                     const char *table_name, HA_CREATE_INFO *create_info,
                     const List<Create_field> *create_fields,

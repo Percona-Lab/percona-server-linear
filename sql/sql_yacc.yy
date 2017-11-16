@@ -1236,6 +1236,7 @@ void warn_about_deprecated_national(THD *thd)
 %token<keyword> TABLE_STATS_SYM
 %token<keyword> THREAD_STATS_SYM
 %token<keyword> USER_STATS_SYM
+%token<keyword> ENCRYPTION_KEY_ID_SYM
 
 /*
    Tokens from Percona Server 8.0
@@ -1314,6 +1315,7 @@ void warn_about_deprecated_national(THD *thd)
         view_check_option
         signed_num
         opt_num_buckets
+
 
 %type <order_direction>
         ordering_direction opt_ordering_direction
@@ -5941,6 +5943,10 @@ create_table_option:
 	  {
             $$= NEW_PTN PT_create_encryption_option($3);
 	  }
+        | ENCRYPTION_KEY_ID_SYM opt_equal real_ulong_num
+          {
+            $$= NEW_PTN PT_create_encryption_key_id_option($3);
+          }
         | AUTO_INC opt_equal ulonglong_num
           {
             $$= NEW_PTN PT_create_auto_increment_option($3);
@@ -6632,9 +6638,9 @@ column_attribute:
             $$= NEW_PTN PT_unique_combo_clustering_key_column_attr(KEYTYPE_CLUSTERING);
           }
         | COMMENT_SYM TEXT_STRING_sys
-          {
+        {
             $$= NEW_PTN PT_comment_column_attr($2);
-          }
+        }
         | COLLATE_SYM collation_name
           {
             $$= NEW_PTN PT_collate_column_attr($2);
@@ -13972,6 +13978,7 @@ role_or_label_keyword:
         | CONTEXT_SYM
         | CPU_SYM
         | ENCRYPTION_SYM
+        | ENCRYPTION_KEY_ID_SYM
         /*
           Although a reserved keyword in SQL:2003 (and :2008),
           not reserved in MySQL per WL#2111 specification.
