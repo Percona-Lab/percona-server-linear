@@ -157,6 +157,21 @@ struct srv_stats_t {
 
   /** Number of log scrub operations */
   ulint_ctr_64_t n_log_scrubs;
+
+  /** Number of times page 0 is read from tablespace */
+  ulint_ctr_64_t page0_read;
+
+  /** Number of encryption_get_latest_key_version calls */
+  ulint_ctr_64_t n_key_requests;
+
+  /** Number of spaces in keyrotation list */
+  ulint_ctr_64_t key_rotation_list_length;
+
+  /* Number of pages encrypted */
+  ulint_ctr_64_t pages_encrypted;
+
+  /* Number of pages decrypted */
+  ulint_ctr_64_t pages_decrypted;
 };
 
 struct Srv_threads {
@@ -183,6 +198,9 @@ struct Srv_threads {
 
   /** true if tablespace alter encrypt thread is created */
   bool m_ts_alter_encrypt_thread_active;
+
+  /** true if there is keyring encryption thread running */
+  bool m_encryption_threads_active;
 };
 
 struct Srv_cpu_usage {
@@ -322,6 +340,9 @@ extern ulong srv_rollback_segments;
 
 /** Maximum size of undo tablespace. */
 extern unsigned long long srv_max_undo_tablespace_size;
+
+extern uint srv_n_fil_crypt_threads;
+extern uint srv_n_fil_crypt_threads_started;
 
 /** Rate at which UNDO records should be purged. */
 extern ulong srv_purge_rseg_truncate_frequency;
@@ -1212,6 +1233,7 @@ struct export_var_t {
   ulint innodb_master_thread_idle_loops;   /*!< srv_main_idle_loops */
   trx_id_t innodb_max_trx_id;
   trx_id_t innodb_oldest_view_low_limit_trx_id;
+  ulint innodb_page0_read; /*!< srv_stats.page0_read */
   trx_id_t innodb_purge_trx_id;
   undo_no_t innodb_purge_undo_no;
   ib_uint64_t
@@ -1235,6 +1257,17 @@ struct export_var_t {
                                            statistics */
 
   int64_t innodb_scrub_log;
+  int64_t innodb_pages_encrypted; /*!< Number of pages
+                                  encrypted */
+  int64_t innodb_pages_decrypted; /*!< Number of pages
+                                  decrypted */
+  ulint innodb_encryption_rotation_pages_read_from_cache;
+  ulint innodb_encryption_rotation_pages_read_from_disk;
+  ulint innodb_encryption_rotation_pages_modified;
+  ulint innodb_encryption_rotation_pages_flushed;
+  ulint innodb_encryption_rotation_estimated_iops;
+  int64_t innodb_encryption_key_requests;
+  int64_t innodb_key_rotation_list_length;
 };
 
 #ifndef UNIV_HOTBACKUP

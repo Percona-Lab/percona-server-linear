@@ -60,6 +60,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "data0type.h"
 #include "dict0dd.h"
 #include "dict0dict.h"
+#include "fil0crypt.h"
 #include "fil0fil.h"
 #include "fsp0fsp.h"
 #include "fsp0sysspace.h"
@@ -200,6 +201,8 @@ mysql_pfs_key_t trx_recovery_rollback_thread_key;
 mysql_pfs_key_t srv_ts_alter_encrypt_thread_key;
 mysql_pfs_key_t log_scrub_thread_key;
 #endif /* UNIV_PFS_THREAD */
+
+int unlock_keyrings(THD *thd);
 
 #ifdef HAVE_PSI_STAGE_INTERFACE
 /** Array of all InnoDB stage events for monitoring activities via
@@ -398,7 +401,7 @@ static dberr_t create_log_files(char *logfilename, size_t dirnamelen, lsn_t lsn,
 
   fil_space_t *log_space = fil_space_create(
       "innodb_redo_log", dict_sys_t::s_log_space_first_id,
-      fsp_flags_set_page_size(0, univ_page_size), FIL_TYPE_LOG);
+      fsp_flags_set_page_size(0, univ_page_size), FIL_TYPE_LOG, nullptr);
 
   ut_ad(fil_validate());
   ut_a(log_space != nullptr);
@@ -688,6 +691,13 @@ static dberr_t srv_undo_tablespace_read_encryption(pfs_os_file_t fh,
   offset = fsp_header_get_encryption_offset(space_page_size);
   ut_ad(offset);
 
+  fil_space_crypt_t *crypt_data = space->crypt_data;
+
+  if (crypt_data == nullptr) {
+    crypt_data = fil_space_read_crypt_data(space_page_size, first_page);
+    space->crypt_data = crypt_data;
+  }
+
   /* Return if the encryption metadata is empty. */
   if (memcmp(first_page + offset, ENCRYPTION_KEY_MAGIC_V3,
              ENCRYPTION_MAGIC_SIZE) != 0) {
@@ -697,7 +707,11 @@ static dberr_t srv_undo_tablespace_read_encryption(pfs_os_file_t fh,
 
   byte key[ENCRYPTION_KEY_LEN];
   byte iv[ENCRYPTION_KEY_LEN];
-  if (fsp_header_get_encryption_key(space->flags, key, iv, first_page)) {
+  if (crypt_data) {
+    fsp_flags_set_encryption(space->flags);
+    err = fil_set_encryption(space->id, Encryption::KEYRING, NULL,
+                             crypt_data->iv);
+  } else if (fsp_header_get_encryption_key(space->flags, key, iv, first_page)) {
     fsp_flags_set_encryption(space->flags);
     err = fil_set_encryption(space->id, Encryption::AES, key, iv);
     ut_ad(err == DB_SUCCESS);
@@ -921,7 +935,8 @@ static dberr_t srv_undo_tablespace_open(undo::Tablespace &undo_space) {
     /* Load the tablespace into InnoDB's internal data structures.
     Set the compressed page size to 0 (non-compressed) */
     flags = fsp_flags_init(univ_page_size, false, false, false, false);
-    space = fil_space_create(undo_name, space_id, flags, FIL_TYPE_TABLESPACE);
+    space = fil_space_create(undo_name, space_id, flags, FIL_TYPE_TABLESPACE,
+                             nullptr);
     ut_a(space != nullptr);
     ut_ad(fil_validate());
 
@@ -1737,6 +1752,10 @@ void srv_shutdown_all_bg_threads() {
       if (log_scrub_thread_active) {
         os_event_set(log_scrub_event);
       }
+
+      if (srv_n_fil_crypt_threads_started) {
+        os_event_set(fil_crypt_threads_event);
+      }
     }
 
     if (srv_start_state_is_set(SRV_START_STATE_IO)) {
@@ -1910,14 +1929,16 @@ static dberr_t srv_sys_enable_encryption(bool create_new_db) {
     const ulint fsp_flags = srv_sys_space.m_files.begin()->flags();
     const bool is_encrypted = FSP_FLAGS_GET_ENCRYPTION(fsp_flags);
 
-    if (is_encrypted && !srv_sys_tablespace_encrypt) {
+    if (is_encrypted && !srv_sys_tablespace_encrypt &&
+        !srv_sys_space.keyring_encryption_info.page0_has_crypt_data) {
       ib::error() << "The system tablespace is encrypted but"
                   << " --innodb_sys_tablespace_encrypt is"
                   << " OFF. Enable the option and start server";
       return (DB_ERROR);
     }
 
-    if (!is_encrypted && srv_sys_tablespace_encrypt) {
+    if (!is_encrypted && srv_sys_tablespace_encrypt &&
+        !srv_sys_space.keyring_encryption_info.page0_has_crypt_data) {
       ib::error() << "The system tablespace is not encrypted but"
                   << " --innodb_sys_tablespace_encrypt is"
                   << " ON. This instance was not bootstrapped"
@@ -1926,7 +1947,8 @@ static dberr_t srv_sys_enable_encryption(bool create_new_db) {
       return (DB_ERROR);
     }
 
-    if (is_encrypted) {
+    if (is_encrypted &&
+        !srv_sys_space.keyring_encryption_info.page0_has_crypt_data) {
       fsp_flags_set_encryption(space->flags);
       srv_sys_space.set_flags(space->flags);
 
@@ -2376,9 +2398,10 @@ dberr_t srv_start(bool create_new_db, const std::string &scan_directories) {
     sprintf(logfilename + dirnamelen, "ib_logfile%u", 0);
 
     /* Disable the doublewrite buffer for log files. */
-    fil_space_t *log_space = fil_space_create(
-        "innodb_redo_log", dict_sys_t::s_log_space_first_id,
-        fsp_flags_set_page_size(0, univ_page_size), FIL_TYPE_LOG);
+    fil_space_t *log_space =
+        fil_space_create("innodb_redo_log", dict_sys_t::s_log_space_first_id,
+                         fsp_flags_set_page_size(0, univ_page_size),
+                         FIL_TYPE_LOG, NULL /* no encryption yet */);
 
     ut_ad(fil_validate());
     ut_a(log_space != nullptr);
@@ -2640,11 +2663,12 @@ files_checked:
 
         fil_space_t *space = fil_space_acquire_silent(dict_sys_t::s_space_id);
         if (space == nullptr) {
-          dberr_t error =
-              fil_ibd_open(true, FIL_TYPE_TABLESPACE, dict_sys_t::s_space_id,
-                           predefined_flags, dict_sys_t::s_dd_space_name,
-                           dict_sys_t::s_dd_space_name,
-                           dict_sys_t::s_dd_space_file_name, true, false);
+          Keyring_encryption_info keyring_encryption_info;
+          dberr_t error = fil_ibd_open(
+              true, FIL_TYPE_TABLESPACE, dict_sys_t::s_space_id,
+              predefined_flags, dict_sys_t::s_dd_space_name,
+              dict_sys_t::s_dd_space_name, dict_sys_t::s_dd_space_file_name,
+              true, false, keyring_encryption_info);
           if (error != DB_SUCCESS) {
             ib::error(ER_IB_MSG_1142);
             return (srv_init_abort(DB_ERROR));
@@ -3101,6 +3125,10 @@ void srv_start_threads(bool bootstrap) {
   /* Create the thread that will optimize the FTS sub-system. */
   fts_optimize_init();
 
+  fil_system_acquire();
+  fil_crypt_threads_init();
+  fil_system_release();
+
   srv_start_state_set(SRV_START_STATE_STAT);
 }
 
@@ -3226,7 +3254,11 @@ void srv_pre_dd_shutdown() {
 
   if (srv_start_state_is_set(SRV_START_STATE_STAT)) {
     dict_stats_thread_deinit();
+    /* Shutdown key rotation threads */
+    fil_crypt_threads_cleanup();
   }
+
+  unlock_keyrings(NULL);
 
   srv_is_being_shutdown = true;
 }

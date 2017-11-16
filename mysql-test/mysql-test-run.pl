@@ -217,8 +217,7 @@ our $DEFAULT_SUITES =
   ."audit_log,keyring_vault,"
   ."tokudb.add_index,tokudb.alter_table,tokudb,tokudb.bugs,tokudb.parts,"
   ."tokudb.rpl,tokudb.perfschema,"
-  ."rocksdb,rocksdb.rpl,rocksdb.sys_vars,"
-  ."keyring_vault,audit_null";
+  ."rocksdb,rocksdb.rpl,rocksdb.sys_vars";
 
 our $opt_big_test                  = 0;
 our $opt_check_testcases           = 1;

@@ -40,8 +40,9 @@
 #include <new>
 #include <string>
 
-#include "keycache.h"                                // dflt_key_cache
-#include "mutex_lock.h"                              // MUTEX_LOCK
+#include "keycache.h"    // dflt_key_cache
+#include "mutex_lock.h"  // MUTEX_LOCK
+#include "my_default.h"
 #include "mysql/components/services/log_builtins.h"  // LogErr
 #include "mysql/plugin.h"                            // st_mysql_plugin
 #include "scope_guard.h"                             // Scope_guard
@@ -1620,6 +1621,19 @@ bool store_create_info(THD *thd, TABLE_LIST *table_list, String *packet,
 
       if (uses_general_tablespace) packet->append(STRING_WITH_LEN(" */"));
     }
+
+    if (share->was_encryption_key_id_set) {
+      DBUG_ASSERT(share->encrypt_type.length == 0 ||
+                  my_strcasecmp(system_charset_info, share->encrypt_type.str,
+                                "KEYRING") != 0 ||
+                  share->encrypt_type.length == strlen("KEYRING"));
+
+      char *end;
+      packet->append(STRING_WITH_LEN(" ENCRYPTION_KEY_ID="));
+      end = longlong10_to_str(table->s->encryption_key_id, buff, 10);
+      packet->append(buff, static_cast<uint>(end - buff));
+    }
+
     table->file->append_create_info(packet);
     if (share->comment.length) {
       packet->append(STRING_WITH_LEN(" COMMENT="));
@@ -4414,6 +4428,25 @@ ST_FIELD_INFO engines_fields_info[] = {
     {"SAVEPOINTS", 3, MYSQL_TYPE_STRING, 0, 1, "Savepoints", 0},
     {0, 0, MYSQL_TYPE_STRING, 0, 0, 0, 0}};
 
+static ST_FIELD_INFO temporary_table_fields_info[] = {
+    {"SESSION_ID", 4, MYSQL_TYPE_LONGLONG, 0, 0, "Session", 0},
+    {"TABLE_SCHEMA", NAME_CHAR_LEN, MYSQL_TYPE_STRING, 0, 0, "Db", 0},
+    {"TABLE_NAME", NAME_CHAR_LEN, MYSQL_TYPE_STRING, 0, 0, "Temp_tables_in_",
+     0},
+    {"ENGINE", NAME_CHAR_LEN, MYSQL_TYPE_STRING, 0, 0, "Engine", 0},
+    {"NAME", FN_REFLEN, MYSQL_TYPE_STRING, 0, 0, "Name", 0},
+    {"TABLE_ROWS", MY_INT64_NUM_DECIMAL_DIGITS, MYSQL_TYPE_LONGLONG, 0,
+     MY_I_S_UNSIGNED, "Rows", 0},
+    {"AVG_ROW_LENGTH", MY_INT64_NUM_DECIMAL_DIGITS, MYSQL_TYPE_LONGLONG, 0,
+     MY_I_S_UNSIGNED, "Avg Row", 0},
+    {"DATA_LENGTH", MY_INT64_NUM_DECIMAL_DIGITS, MYSQL_TYPE_LONGLONG, 0,
+     MY_I_S_UNSIGNED, "Data Length", 0},
+    {"INDEX_LENGTH", MY_INT64_NUM_DECIMAL_DIGITS, MYSQL_TYPE_LONGLONG, 0,
+     MY_I_S_UNSIGNED, "Index Size", 0},
+    {"CREATE_TIME", 0, MYSQL_TYPE_DATETIME, 0, 1, "Create Time", 0},
+    {"UPDATE_TIME", 0, MYSQL_TYPE_DATETIME, 0, 1, "Update Time", 0},
+    {0, 0, MYSQL_TYPE_STRING, 0, 0, 0, 0}};
+
 ST_FIELD_INFO tmp_table_keys_fields_info[] = {
     {"TABLE_NAME", NAME_CHAR_LEN, MYSQL_TYPE_STRING, 0, 0, "Table", 0},
     {"NON_UNIQUE", 1, MYSQL_TYPE_LONGLONG, 0, 0, "Non_unique", 0},
@@ -4449,25 +4482,6 @@ ST_FIELD_INFO schema_privileges_fields_info[] = {
     {"TABLE_SCHEMA", NAME_CHAR_LEN, MYSQL_TYPE_STRING, 0, 0, 0, 0},
     {"PRIVILEGE_TYPE", NAME_CHAR_LEN, MYSQL_TYPE_STRING, 0, 0, 0, 0},
     {"IS_GRANTABLE", 3, MYSQL_TYPE_STRING, 0, 0, 0, 0},
-    {0, 0, MYSQL_TYPE_STRING, 0, 0, 0, 0}};
-
-static ST_FIELD_INFO temporary_table_fields_info[] = {
-    {"SESSION_ID", 4, MYSQL_TYPE_LONGLONG, 0, 0, "Session", 0},
-    {"TABLE_SCHEMA", NAME_CHAR_LEN, MYSQL_TYPE_STRING, 0, 0, "Db", 0},
-    {"TABLE_NAME", NAME_CHAR_LEN, MYSQL_TYPE_STRING, 0, 0, "Temp_tables_in_",
-     0},
-    {"ENGINE", NAME_CHAR_LEN, MYSQL_TYPE_STRING, 0, 0, "Engine", 0},
-    {"NAME", FN_REFLEN, MYSQL_TYPE_STRING, 0, 0, "Name", 0},
-    {"TABLE_ROWS", MY_INT64_NUM_DECIMAL_DIGITS, MYSQL_TYPE_LONGLONG, 0,
-     MY_I_S_UNSIGNED, "Rows", 0},
-    {"AVG_ROW_LENGTH", MY_INT64_NUM_DECIMAL_DIGITS, MYSQL_TYPE_LONGLONG, 0,
-     MY_I_S_UNSIGNED, "Avg Row", 0},
-    {"DATA_LENGTH", MY_INT64_NUM_DECIMAL_DIGITS, MYSQL_TYPE_LONGLONG, 0,
-     MY_I_S_UNSIGNED, "Data Length", 0},
-    {"INDEX_LENGTH", MY_INT64_NUM_DECIMAL_DIGITS, MYSQL_TYPE_LONGLONG, 0,
-     MY_I_S_UNSIGNED, "Index Size", 0},
-    {"CREATE_TIME", 0, MYSQL_TYPE_DATETIME, 0, 1, "Create Time", 0},
-    {"UPDATE_TIME", 0, MYSQL_TYPE_DATETIME, 0, 1, "Update Time", 0},
     {0, 0, MYSQL_TYPE_STRING, 0, 0, 0, 0}};
 
 ST_FIELD_INFO table_privileges_fields_info[] = {
