@@ -53,6 +53,8 @@ direct reference to server header and global variable */
 #include "trx0sys.h"
 #include "ut0new.h"
 
+#include "fil0crypt.h"
+
 /** The control info of the system tablespace. */
 SysTablespace srv_sys_space;
 
@@ -531,12 +533,15 @@ dberr_t SysTablespace::read_lsn_and_check_flags(lsn_t *flushed_lsn) {
 
   ut_a(it->order() == 0);
 
-  buf_dblwr_init_or_load_pages(it->handle(), it->filepath());
+  err = buf_dblwr_init_or_load_pages(it->handle(), it->filepath());
+  if (err != DB_SUCCESS) {
+    return (err);
+  }
 
   /* Check the contents of the first page of the
   first datafile. */
   for (int retry = 0; retry < 2; ++retry) {
-    err = it->validate_first_page(it->m_space_id, flushed_lsn, false);
+    err = it->validate_first_page(it->m_space_id, flushed_lsn, false).error;
 
     if (err != DB_SUCCESS &&
         (retry == 1 || it->restore_from_doublewrite(0) != DB_SUCCESS)) {
@@ -563,6 +568,16 @@ dberr_t SysTablespace::read_lsn_and_check_flags(lsn_t *flushed_lsn) {
   Update the flags of system tablespace to indicate the presence
   of SDI */
   set_flags(it->flags());
+
+  fil_space_crypt_t *crypt_data =
+      fil_space_read_crypt_data(page_size_t(it->m_flags), it->get_first_page());
+
+  if (crypt_data) {
+    keyring_encryption_info.page0_has_crypt_data = true;
+    keyring_encryption_info.keyring_encryption_min_key_version =
+        crypt_data->min_key_version;
+    fil_space_destroy_crypt_data(&crypt_data);
+  }
 
   it->close();
 
@@ -884,9 +899,9 @@ dberr_t SysTablespace::open_or_create(bool is_temp, bool create_new_db,
 
       /* Create the tablespace entry for the multi-file
       tablespace in the tablespace manager. */
-      space =
-          fil_space_create(name(), space_id(), flags(),
-                           is_temp ? FIL_TYPE_TEMPORARY : FIL_TYPE_TABLESPACE);
+      space = fil_space_create(
+          name(), space_id(), flags(),
+          is_temp ? FIL_TYPE_TEMPORARY : FIL_TYPE_TABLESPACE, nullptr);
     }
 
     ut_ad(fil_validate());

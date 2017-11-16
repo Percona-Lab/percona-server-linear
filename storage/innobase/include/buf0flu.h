@@ -39,8 +39,6 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "univ.i"
 #include "ut0byte.h"
 
-#include <atomic>
-
 #ifndef UNIV_HOTBACKUP
 /** Checks if the page_cleaner is in active state. */
 bool buf_flush_page_cleaner_is_active();
@@ -309,6 +307,10 @@ class FlushObserver {
     return (m_estimate.load(std::memory_order_relaxed));
   }
 
+  ulint get_number_of_pages_flushed() const {
+    return m_number_of_pages_flushed;
+  }
+
  private:
   /** Table space id */
   space_id_t m_space_id;
@@ -338,6 +340,8 @@ class FlushObserver {
   /** LSN at which observer started observing. This is
   used to find the dirty blocks that are dirtied before Observer */
   const lsn_t m_lsn;
+
+  ulint m_number_of_pages_flushed;
 };
 
 #endif /* !UNIV_HOTBACKUP */
