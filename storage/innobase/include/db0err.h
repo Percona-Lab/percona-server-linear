@@ -190,6 +190,9 @@ enum dberr_t {
   /** Incomplete cloned directory */
   DB_ABORT_INCOMPLETE_CLONE,
 
+  DB_PAGE_CORRUPTED = 999, /*!< Page read from tablespace is
+                           corrupted. */
+
   /* The following are partial failure codes */
   DB_FAIL = 1000,
   DB_OVERFLOW,

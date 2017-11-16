@@ -84,6 +84,8 @@ struct trx_t;
 struct upd_node_t;
 struct upd_t;
 
+#include "create_info_encryption_key.h"
+
 #ifndef UNIV_HOTBACKUP
 extern ibool row_rollback_on_timeout;
 
@@ -203,7 +205,6 @@ void row_mysql_pad_col(ulint mbminlen, /*!< in: minimum size of a character,
                                        in bytes */
                        byte *pad,      /*!< out: padded buffer */
                        ulint len);     /*!< in: number of bytes to pad */
-
 /** Stores a non-SQL-NULL field given in the MySQL format in the InnoDB format.
  The counterpart of this function is row_sel_field_store_in_mysql_format() in
  row0sel.cc.
@@ -387,8 +388,11 @@ kept in non-LRU list while on failure the 'table' object will be freed.
 @param[in]	compression	compression algorithm to use, can be nullptr
 @param[in,out]	trx		transasction
 @return error code or DB_SUCCESS */
-dberr_t row_create_table_for_mysql(dict_table_t *table, const char *compression,
-                                   trx_t *trx)
+dberr_t row_create_table_for_mysql(
+    dict_table_t *table, const char *compression, trx_t *trx,
+    fil_encryption_t mode, /*!< in: encryption mode */
+    const CreateInfoEncryptionKeyId
+        &create_info_encryption_key_id) /*!< in: encryption key_id */
     MY_ATTRIBUTE((warn_unused_result));
 /** Does an index creation operation for MySQL. TODO: currently failure
  to create an index results in dropping the whole table! This is no problem
@@ -482,7 +486,7 @@ inline dberr_t row_drop_table_for_mysql(const char *name, trx_t *trx) {
 
 /** Discards the tablespace of a table which stored in an .ibd file. Discarding
  means that this function deletes the .ibd file and assigns a new table id for
- the table. Also the flag table->ibd_file_missing is set TRUE.
+ the table. Also the flag table->file_unreadable is set TRUE.
  @return error code or DB_SUCCESS */
 dberr_t row_discard_tablespace_for_mysql(
     const char *name, /*!< in: table name */
@@ -653,14 +657,16 @@ struct row_prebuilt_t {
                                columns through a secondary index
                                and at least one column is not in
                                the secondary index, then this is
-                               set to TRUE */
+                                        set to TRUE; note that sometimes this
+                                        is set but we later optimize out the
+                                        clustered index lookup */
   unsigned templ_contains_blob : 1;        /*!< TRUE if the template contains
-                                     a column with DATA_LARGE_MTYPE(
-                                     get_innobase_type_from_mysql_type())
-                                     is TRUE;
-                                     not to be confused with InnoDB
-                                     externally stored columns
-                                     (VARCHAR can be off-page too) */
+                                               a column with DATA_LARGE_MTYPE(
+                                               get_innobase_type_from_mysql_type())
+                                               is TRUE;
+                                               not to be confused with InnoDB
+                                               externally stored columns
+                                               (VARCHAR can be off-page too) */
   unsigned templ_contains_fixed_point : 1; /*!< TRUE if the
                               template contains a column with
                               DATA_POINT. Since InnoDB regards

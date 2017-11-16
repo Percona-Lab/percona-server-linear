@@ -2673,6 +2673,11 @@ void HA_CREATE_INFO::init_create_options_from_share(const TABLE_SHARE *share,
     DBUG_ASSERT(secondary_engine.str == nullptr);
     secondary_engine = share->secondary_engine;
   }
+
+  if (!(used_fields & HA_CREATE_USED_ENCRYPTION_KEY_ID)) {
+    encryption_key_id = share->encryption_key_id;
+    was_encryption_key_id_set = share->was_encryption_key_id_set;
+  }
 }
 
 /****************************************************************************
@@ -2682,7 +2687,9 @@ handler *handler::clone(const char *name, MEM_ROOT *mem_root) {
   DBUG_ENTER("handler::clone");
 
   handler *new_handler =
-      get_new_handler(table->s, (table->s->m_part_info != NULL), mem_root, ht);
+      table ? get_new_handler(table->s, (table->s->m_part_info != nullptr),
+                              mem_root, ht)
+            : nullptr;
 
   if (!new_handler) DBUG_RETURN(NULL);
   if (new_handler->set_ha_share_ref(ha_share)) goto err;
