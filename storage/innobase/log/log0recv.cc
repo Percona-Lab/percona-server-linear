@@ -1222,9 +1222,11 @@ dberr_t recv_apply_hashed_log_recs(log_t &log, bool allow_ibuf) {
 
     mutex_exit(&recv_sys->mutex);
 
-    /* Stop the recv_writer thread from issuing any LRU
-    flush batches. */
-    mutex_enter(&recv_sys->writer_mutex);
+    os_event_reset(recv_sys->flush_end);
+
+    os_event_set(recv_sys->flush_start);
+
+    os_event_wait(recv_sys->flush_end);
 
     /* Wait for any currently run batch to end. Note that BUF_FLUSH_LIST could
     only be initiated by us in earlier call, but buf_pool_invalidate() waits for
@@ -1232,18 +1234,7 @@ dberr_t recv_apply_hashed_log_recs(log_t &log, bool allow_ibuf) {
     TBD: why is it important to wait for BUF_FLUSH_LRU to finish here? */
     buf_flush_await_no_flushing(nullptr, BUF_FLUSH_LRU);
 
-    os_event_reset(recv_sys->flush_end);
-
-    recv_sys->flush_type = BUF_FLUSH_LIST;
-
-    os_event_set(recv_sys->flush_start);
-
-    os_event_wait(recv_sys->flush_end);
-
     buf_pool_invalidate();
-
-    /* Allow batches from recv_writer thread. */
-    mutex_exit(&recv_sys->writer_mutex);
 
     ut_d(log.disable_redo_writes = false);
 
@@ -1569,6 +1560,7 @@ specified.
 @param[in]      end_ptr         End of buffer
 @param[in]      space_id        Tablespace identifier
 @param[in]      page_no         Page number
+@param[in]	apply		Whether to apply the record
 @param[in,out]  block           Buffer block, or nullptr if
                                 a page log record should not be applied
                                 or if it is a MLOG_FILE_ operation
@@ -2903,7 +2895,6 @@ ulint recv_parse_log_rec(mlog_id_t *type, byte *ptr, byte *end_ptr,
   return new_ptr - ptr;
 }
 
-
 /** Subtracts next number of bytes to ignore before we reach the checkpoint
 or returns information that there was nothing more to skip.
 @param[in]      next_parsed_bytes       number of next bytes that were parsed,
@@ -2913,7 +2904,6 @@ which are supposed to be subtracted from bytes to ignore before checkpoint
 static bool recv_update_bytes_to_ignore_before_checkpoint(
     size_t next_parsed_bytes) {
   auto &to_ignore = recv_sys->bytes_to_ignore_before_checkpoint;
-
 
   if (to_ignore != 0) {
     if (to_ignore >= next_parsed_bytes) {
@@ -3086,8 +3076,8 @@ static bool recv_multi_rec(byte *ptr, byte *end_ptr) {
     page_no_t page_no = 0;
     space_id_t space_id = 0;
 
-    ulint len =
-        recv_parse_log_rec(&type, ptr, end_ptr, &space_id, &page_no, true, &body);
+    ulint len = recv_parse_log_rec(&type, ptr, end_ptr, &space_id, &page_no,
+                                   true, &body);
 
     if (recv_sys->found_corrupt_log) {
       recv_report_corrupt_log(ptr, type, space_id, page_no);
@@ -3157,15 +3147,10 @@ static bool recv_multi_rec(byte *ptr, byte *end_ptr) {
     page_no_t page_no = 0;
 
     mlog_id_t type = MLOG_BIGGEST_TYPE;
+    byte *body;
 
-    byte *body = nullptr;
-    size_t len = 0;
-
-    /* Avoid parsing if we have the record saved already. */
-    if (!recv_sys->get_saved_rec(i, space_id, page_no, type, body, len)) {
-      len = recv_parse_log_rec(&type, ptr, end_ptr, &space_id, &page_no, true,
-                               &body);
-    }
+    ulint len = recv_parse_log_rec(&type, ptr, end_ptr, &space_id, &page_no,
+                                   true, &body);
 
     if (recv_sys->found_corrupt_log &&
         !recv_report_corrupt_log(ptr, type, space_id, page_no)) {

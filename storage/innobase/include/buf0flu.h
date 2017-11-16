@@ -38,8 +38,6 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "univ.i"
 #include "ut0byte.h"
 
-#include <atomic>
-
 #ifndef UNIV_HOTBACKUP
 /** Checks if the page_cleaner is in active state. */
 bool buf_flush_page_cleaner_is_active();
@@ -194,8 +192,8 @@ bool buf_flush_ready_for_replace(buf_page_t *bpage);
 #ifdef UNIV_DEBUG
 struct SYS_VAR;
 
-/** Disables page cleaner threads (coordinator and workers).
-It's used by: SET GLOBAL innodb_page_cleaner_disabled_debug = 1 (0).
+/** Disables page cleaner threads (coordinator and workers) and LRU manager
+threads. It's used by: SET GLOBAL innodb_page_cleaner_disabled_debug = 1 (0).
 @param[in]      thd             thread handle
 @param[in]      var             pointer to system variable
 @param[out]     var_ptr         where the formal string goes
