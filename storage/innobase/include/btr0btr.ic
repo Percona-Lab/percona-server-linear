@@ -48,17 +48,23 @@ trace. */
  assertions in btr_page_set_level and btr_page_get_level */
 constexpr uint32_t BTR_MAX_NODE_LEVEL = 45;
 
-
 #ifndef UNIV_HOTBACKUP
 static inline buf_block_t *btr_block_get_func(
     const page_id_t &page_id, const page_size_t &page_size, ulint mode,
-    ut::Location location, IF_DEBUG(const dict_index_t *index, ) mtr_t *mtr) {
+    ut::Location location, const dict_index_t *index, mtr_t *mtr) {
   buf_block_t *block;
+  dberr_t err = DB_SUCCESS;
 
   block = buf_page_get_gen(page_id, page_size, mode, nullptr,
-                           Page_fetch::NORMAL, location, mtr);
+                           Page_fetch::NORMAL, location, mtr, false, &err);
 
-  SRV_CORRUPT_TABLE_CHECK(block, ; /* do nothing */);
+  if (err == DB_IO_DECRYPT_FAIL) {
+    if (index && index->table) {
+      index->table->set_file_unreadable();
+    }
+  } else {
+    SRV_CORRUPT_TABLE_CHECK(block, ; /* do nothing */);
+  }
 
   if (block && mode != RW_NO_LATCH) {
     buf_block_dbg_add_level(block, index != nullptr && dict_index_is_ibuf(index)

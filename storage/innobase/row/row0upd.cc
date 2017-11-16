@@ -2315,7 +2315,7 @@ code or DB_LOCK_WAIT */
 #ifdef UNIV_DEBUG
       mtr_commit(&mtr);
       mtr_start(&mtr);
-      ut_ad(btr_validate_index(index, nullptr, false));
+      ut_ad(btr_validate_index(index, nullptr, false) == DB_SUCCESS);
       ut_d(ut_error);
 #endif /* UNIV_DEBUG */
       ut_o(break);

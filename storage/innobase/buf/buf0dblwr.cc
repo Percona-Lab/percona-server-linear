@@ -32,6 +32,7 @@ Atomic writes handling. */
 
 #include "buf0buf.h"
 #include "buf0checksum.h"
+#include "fil0crypt.h"
 #include "os0thread-create.h"
 #include "page0zip.h"
 #include "srv0srv.h"
@@ -1088,12 +1089,9 @@ void Double_write::check_block(const buf_block_t *block) noexcept {
       return;
 
     case FIL_PAGE_TYPE_ALLOCATED:
-      if (srv_immediate_scrub_data_uncompressed) {
-        return;
-      }
-      /* Empty pages should never be flushed. Unless we are creating the
-      legacy doublewrite buffer.  */
-      break;
+      /* Empty pages could be flushed by encryption threads
+      and scrubbing */
+      return;
   }
 
   croak(block);
@@ -1681,7 +1679,9 @@ file::Block *dblwr::get_encrypted_frame(buf_page_t *bpage) noexcept {
 
   fil_space_t *space = bpage->get_space();
   if (space->encryption_op_in_progress == Encryption::Progress::DECRYPTION ||
-      !space->is_encrypted()) {
+      (!space->is_encrypted() && (space->crypt_data == nullptr ||
+                                  space->crypt_data->max_key_version ==
+                                      ENCRYPTION_KEY_VERSION_NOT_ENCRYPTED))) {
     return nullptr;
   }
 
@@ -2098,12 +2098,15 @@ static bool is_dblwr_page_corrupted(const byte *page, fil_space_t *space,
 
   BlockReporter dblwr_page(true, page, page_size, is_checksum_disabled);
 
-  if (dblwr_page.is_encrypted()) {
+  if (dblwr_page.is_encrypted() || (space->crypt_data != nullptr &&
+                                    space->crypt_data->max_key_version !=
+                                        ENCRYPTION_KEY_VERSION_NOT_ENCRYPTED)) {
     Encryption en;
     IORequest req_type;
     size_t z_page_size;
 
     space->get_encryption_info(en);
+    req_type.encryption_algorithm(space->encryption_type);
     fil_node_t *node = space->get_file_node(&page_no);
     req_type.block_size(node->block_size);
 
@@ -2219,6 +2222,9 @@ static bool dblwr_recover_page(page_no_t dblwr_page_no, fil_space_t *space,
   /* Is the page read from the data file corrupt? */
   BlockReporter data_file_page(true, buffer.begin(), page_size,
                                fsp_is_checksum_disabled(space->id));
+
+  BlockReporter dblwr_page(true, page, page_size,
+                           fsp_is_checksum_disabled(space->id));
 
   if (data_file_page.is_corrupted()) {
     ib::info(ER_IB_MSG_DBLWR_1315) << "Database page corruption or"
