@@ -1411,6 +1411,22 @@ void warn_on_deprecated_user_defined_collation(
 %token<lexer.keyword> PARSE_TREE_SYM     1205      /* MYSQL */
 
 /*
+   Tokens from Percona Server 5.7 and older
+*/
+%token<lexer.keyword> CLIENT_STATS_SYM 1301
+%token CLUSTERING_SYM 1302
+%token<lexer.keyword> COMPRESSION_DICTIONARY_SYM 1303
+%token<lexer.keyword> INDEX_STATS_SYM 1304
+%token<lexer.keyword> TABLE_STATS_SYM 1305
+%token<lexer.keyword> THREAD_STATS_SYM 1306
+%token<lexer.keyword> USER_STATS_SYM 1307
+
+/*
+   Tokens from Percona Server 8.0
+*/
+%token<lexer.keyword> EFFECTIVE_SYM 1350
+
+/*
   Precedence rules used to resolve the ambiguity when using keywords as idents
   in the case e.g.:
 
@@ -1430,22 +1446,6 @@ void warn_on_deprecated_user_defined_collation(
 %nonassoc TEXT_STRING
 %left KEYWORD_USED_AS_KEYWORD
 
-
-/*
-   Tokens from Percona Server 5.7 and older
-*/
-%token<lexer.keyword> CLIENT_STATS_SYM 1301
-%token CLUSTERING_SYM 1302
-%token<lexer.keyword> COMPRESSION_DICTIONARY_SYM 1303
-%token<lexer.keyword> INDEX_STATS_SYM 1304
-%token<lexer.keyword> TABLE_STATS_SYM 1305
-%token<lexer.keyword> THREAD_STATS_SYM 1306
-%token<lexer.keyword> USER_STATS_SYM 1307
-
-/*
-   Tokens from Percona Server 8.0
-*/
-%token<lexer.keyword> EFFECTIVE_SYM 1350
 
 /*
   Resolve column attribute ambiguity -- force precedence of "UNIQUE KEY" against
@@ -1537,6 +1537,7 @@ void warn_on_deprecated_user_defined_collation(
         view_check_option
         signed_num
         opt_ignore_unknown_user
+
 
 %type <order_direction>
         ordering_direction opt_ordering_direction
@@ -7583,9 +7584,9 @@ column_attribute:
             $$= NEW_PTN PT_unique_combo_clustering_key_column_attr(@$, KEYTYPE_CLUSTERING);
           }
         | COMMENT_SYM TEXT_STRING_sys
-          {
+        {
             $$= NEW_PTN PT_comment_column_attr(@$, to_lex_cstring($2));
-          }
+        }
         | COLLATE_SYM collation_name
           {
             $$= NEW_PTN PT_collate_column_attr(@$, $2);
