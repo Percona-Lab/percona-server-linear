@@ -465,6 +465,9 @@ class Fil_shard {
 
     auto it = m_spaces.find(space_id);
 
+    /* The system tablespace must always be found */
+    ut_ad(it != m_spaces.end() || space_id != 0 || srv_is_being_started);
+
     if (it == m_spaces.end()) {
       return nullptr;
     }
@@ -1927,6 +1930,8 @@ fil_space_t *Fil_shard::space_add(ut::unique_ptr<fil_space_t> space) {
       ib::info(ER_IB_ADDING_SPACE_WITH_NAME_ALREADY_IN_USE, space->name,
                ulong{space->id}, existing_space->name,
                ulong{existing_space->id}, oss.str().c_str());
+
+      ut_ad(space->id != existing_space->id);
 
       mutex_release();
 
@@ -5187,7 +5192,6 @@ dberr_t fil_write_initial_pages(pfs_os_file_t file, const char *path,
   using Create_error = ib::fil::Tablespaces_nodes_interface::Create_error;
 
   ut_ad(!fsp_is_system_tablespace(space_id));
-  ut_ad(!fsp_is_global_temporary(space_id));
   ut_a(fsp_flags_is_valid(flags));
   ut_a(type == FIL_TYPE_TEMPORARY || type == FIL_TYPE_TABLESPACE);
 
@@ -7221,12 +7225,23 @@ dberr_t Fil_shard::do_io(const IORequest::Type type, bool sync,
   }
 #endif /* !UNIV_HOTBACKUP */
 
+  /* Set encryption information. This is done while still holding the shard
+  mutex, because fil_reset_encryption() modifies the space's encryption fields
+  under that same mutex and would otherwise race with the reads here. */
+  if (req_type.are_write_transformations_enabled()) {
+    fil_io_set_encryption(req_type, page_id, space);
+  }
+
   mutex_release();
 
   DEBUG_SYNC_C("innodb_fil_do_io_prepared_io_with_no_mutex");
 
   ut_a(page_size.is_compressed() ||
        page_size.physical() == page_size.logical());
+
+  if (page_size.is_compressed()) {
+    ut_ad(page_size.physical() > 0);
+  }
 
   /* Assert that access is not out of bound of node, that is:
   page_no * page_size + page_size <= file->size * page_size. */
@@ -7245,9 +7260,6 @@ dberr_t Fil_shard::do_io(const IORequest::Type type, bool sync,
 
       req_type.compression_algorithm(space->compression_type);
     }
-
-    /* Set encryption information. */
-    fil_io_set_encryption(req_type, page_id, space);
 
     req_type.block_size(file->get_block_size());
   } else {
@@ -7677,6 +7689,8 @@ static dberr_t fil_iterate(const Fil_page_iterator &iter, buf_block_t *block,
                            !(srv_page_size % iter.block_size);
 
   for (offset = iter.m_start; offset < iter.m_end; offset += n_bytes) {
+    IORequest read_request(read_type);
+
     byte *io_buffer = iter.m_io_buffer;
 
     block->frame = io_buffer;
@@ -7708,7 +7722,6 @@ static dberr_t fil_iterate(const Fil_page_iterator &iter, buf_block_t *block,
     ut_ad(!(n_bytes % iter.m_page_size));
 
     dberr_t err;
-    IORequest read_request(read_type);
     read_request.block_size(iter.block_size);
 
     /* For encrypted table, set encryption information. */
@@ -8249,12 +8262,6 @@ dberr_t fil_set_autoextend_size(space_id_t space_id, uint64_t autoextend_size) {
 
 dberr_t fil_set_encryption(space_id_t space_id, Encryption::Type algorithm,
                            byte *key, byte *iv) {
-  ut_ad(space_id != TRX_SYS_SPACE);
-
-  if (fsp_is_system_or_temp_tablespace(space_id)) {
-    return DB_IO_NO_ENCRYPT_TABLESPACE;
-  }
-
   auto shard = fil_system->shard_by_id(space_id);
 
   shard->mutex_acquire();
@@ -8263,12 +8270,15 @@ dberr_t fil_set_encryption(space_id_t space_id, Encryption::Type algorithm,
 
   if (space == nullptr) {
     shard->mutex_release();
-    return DB_NOT_FOUND;
+    return (DB_NOT_FOUND);
   }
 
   Encryption::set_or_generate(algorithm, key, iv, space->m_encryption_metadata);
 
-  shard->mutex_release();
+  if (space == nullptr) {
+    shard->mutex_release();
+    return DB_NOT_FOUND;
+  }
 
   return DB_SUCCESS;
 }
@@ -8368,6 +8378,13 @@ size_t Fil_shard::encryption_rotate(size_t *rotate_count) {
     if (!needs_encryption_rotate(space)) {
       continue;
     }
+
+    /* Skip the temporary tablespace when it's in default key status,
+    since it's the first server startup after bootstrap, and the
+    server uuid is not ready yet. */
+    if (fsp_is_system_temporary(space->id) &&
+        Encryption::get_master_key_id() == Encryption::DEFAULT_MASTER_KEY_ID)
+      continue;
 
     spaces2rotate.push_back(space);
   }
@@ -8758,20 +8775,6 @@ void test_make_filepath() {
   DISPLAY;
 }
 #endif /* UNIV_ENABLE_UNIT_TEST_MAKE_FILEPATH */
-
-/** Mark space as corrupt
-@param space_id	space id */
-void fil_space_set_corrupt(space_id_t space_id) {
-  auto *const shard = fil_system->shard_by_id(space_id);
-
-  shard->mutex_acquire();
-
-  auto *const space = shard->get_space_by_id(space_id);
-
-  if (space) space->is_corrupt = true;
-
-  shard->mutex_release();
-}
 
 #ifndef UNIV_HOTBACKUP
 
@@ -10449,6 +10452,21 @@ void fil_space_t::bump_version() {
 
   ++m_version;
 }
+
+/** Mark space as corrupt
+    @param space_id	space id */
+void fil_space_set_corrupt(space_id_t space_id) {
+  auto *const shard = fil_system->shard_by_id(space_id);
+
+  shard->mutex_acquire();
+
+  auto *const space = shard->get_space_by_id(space_id);
+
+  if (space) space->is_corrupt = true;
+
+  shard->mutex_release();
+}
+
 #endif /* !UNIV_HOTBACKUP */
 
 dberr_t fil_prepare_file_for_io(space_id_t space_id, page_no_t &page_no,

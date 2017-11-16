@@ -2,6 +2,7 @@
 
 Copyright (c) 1995, 2026, Oracle and/or its affiliates.
 Copyright (c) 2009, Percona Inc.
+Copyright (c) 2009, 2016, Percona Inc.
 
 Portions of this file contain modifications contributed and copyrighted
 by Percona Inc.. Those modifications are
@@ -40,6 +41,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
  *******************************************************/
 
 #include "os0file.h"
+#include "btr0types.h"
 #include "fil0fil.h"
 #include "ha_prototypes.h"
 #include "log0write.h"
@@ -2896,10 +2898,7 @@ static ulint os_file_get_last_error_low(bool report_all_errors,
       }
       break;
     case EINTR:
-      if (srv_use_native_aio) {
-        return OS_FILE_AIO_INTERRUPTED;
-      }
-      break;
+      return OS_FILE_AIO_INTERRUPTED;
     case EACCES:
       return OS_FILE_ACCESS_VIOLATION;
     case ENAMETOOLONG:
@@ -5462,6 +5461,9 @@ dberr_t os_file_read_first_page_func(IORequest &type, const char *file_name,
     ut_ad(read_size > 0);
     err = os_file_read_page(type, file_name, file, buf, 0, read_size, nullptr,
                             true);
+    if (err == DB_SUCCESS) {
+      srv_stats.page0_read.add(1);
+    }
   }
   return (err);
 }

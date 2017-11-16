@@ -1656,11 +1656,6 @@ void Double_write::check_block(const buf_block_t *block) noexcept {
 
       /* TODO: validate also non-index pages */
       return;
-
-    case FIL_PAGE_TYPE_ALLOCATED:
-      /* Empty pages should never be flushed. Unless we are creating the
-      legacy doublewrite buffer.  */
-      break;
   }
 
   croak(block);
@@ -2540,6 +2535,10 @@ file::Block *dblwr::get_encrypted_frame(buf_page_t *bpage,
     return nullptr;
   }
 
+  if (space_id == TRX_SYS_SPACE && page_no == TRX_SYS_PAGE_NO) {
+    return nullptr;
+  }
+
   if (fsp_is_undo_tablespace(space_id) && !srv_undo_log_encrypt) {
     /* It is an undo tablespace and undo encryption is not enabled. */
     return nullptr;
@@ -2548,6 +2547,12 @@ file::Block *dblwr::get_encrypted_frame(buf_page_t *bpage,
   fil_space_t *space = bpage->get_space();
   if (space->encryption_op_in_progress == Encryption::Progress::DECRYPTION ||
       !space->is_encrypted()) {
+    return nullptr;
+  }
+
+  /* Don't encrypt pages of system tablespace upto TRX_SYS_PAGE(including). The
+  doublewrite buffer header is on TRX_SYS_PAGE */
+  if (fsp_is_system_tablespace(space_id) && page_no <= FSP_TRX_SYS_PAGE_NO) {
     return nullptr;
   }
 
@@ -2585,6 +2590,9 @@ file::Block *dblwr::get_encrypted_frame(buf_page_t *bpage,
   }
 
   type.get_encryption_info().set(space->m_encryption_metadata);
+  type.set_encryption_algorithm(Encryption::AES);
+  page_size_t page_size(space->flags);
+
   auto e_block = os_file_encrypt_page(type, frame, n);
 
   if (compressed_block != nullptr) {
@@ -3065,6 +3073,7 @@ it needed.
     size_t z_page_size;
 
     en.set(space.m_encryption_metadata);
+    req_type.set_encryption_algorithm(Encryption::AES);
     const auto node = space.get_node_for_page_no(page_no);
     req_type.block_size(node->get_block_size());
 

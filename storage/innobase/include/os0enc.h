@@ -47,6 +47,11 @@ void deinit_keyring_services(SERVICE_TYPE(registry) * reg_srv);
 class IORequest;
 struct Encryption_key;
 
+enum class Encryption_rotation : std::uint8_t {
+  NO_ROTATION,
+  MASTER_KEY_TO_KEYRING
+};
+
 // Forward declaration.
 struct Encryption_metadata;
 
@@ -205,6 +210,17 @@ class Encryption {
   @param[in]  algorithm  Encryption algorithm to check
   @return true if no algorithm requested */
   [[nodiscard]] static bool is_none(const char *algorithm) noexcept;
+
+  static bool is_master_key_encryption(const char *algorithm) noexcept
+      MY_ATTRIBUTE((warn_unused_result));
+  [[nodiscard]] static bool is_empty(const char *algorithm) noexcept;
+
+  [[nodiscard]] static bool is_keyring(const char *algoritm) noexcept;
+
+  [[nodiscard]] static bool is_online_encryption_on() noexcept;
+
+  static bool should_be_keyring_encrypted(const char *algorithm) noexcept
+      MY_ATTRIBUTE((warn_unused_result));
 
   /** Generate random encryption value for key and iv.
   @param[in,out]  value Encryption value */
