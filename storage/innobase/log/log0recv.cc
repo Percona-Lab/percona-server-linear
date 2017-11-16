@@ -52,6 +52,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "buf0flu.h"
 #include "clone0api.h"
 #include "dict0dd.h"
+#include "fil0crypt.h"
 #include "fil0fil.h"
 #include "ha_prototypes.h"
 #include "ibuf0ibuf.h"
@@ -671,11 +672,7 @@ static
 block.
 @param[in]	block	pointer to a log block
 @return whether the checksum matches */
-#ifndef UNIV_HOTBACKUP
-static
-#endif /* !UNIV_HOTBACKUP */
-    bool
-    log_block_checksum_is_ok(const byte *block) {
+bool log_block_checksum_is_ok(const byte *block) {
   return (!srv_log_checksums ||
           log_block_get_checksum(block) == log_block_calc_checksum(block));
 }
@@ -1084,13 +1081,19 @@ static void recv_apply_log_rec(recv_addr_t *recv_addr) {
     return;
   }
 
-  bool found;
   const page_id_t page_id(recv_addr->space, recv_addr->page_no);
 
-  const page_size_t page_size =
-      fil_space_get_page_size(recv_addr->space, &found);
+  fil_space_t *space = fil_space_acquire_for_io_with_load(recv_addr->space);
+  const page_size_t page_size(space->flags);
 
-  if (!found || recv_sys->missing_ids.find(recv_addr->space) !=
+  if (space && space->is_space_encrypted) {
+    /* found space that cannot be decrypted, abort processing REDO */
+    recv_sys->found_corrupt_log = true;
+    fil_space_release_for_io(space);
+    return;
+  }
+
+  if (!space || recv_sys->missing_ids.find(recv_addr->space) !=
                     recv_sys->missing_ids.end()) {
     /* Tablespace was discarded or dropped after changes were
     made to it. Or, we have ignored redo log for this tablespace
@@ -1133,6 +1136,10 @@ static void recv_apply_log_rec(recv_addr_t *recv_addr) {
 
     mutex_enter(&recv_sys->mutex);
   }
+
+  if (space) {
+    fil_space_release_for_io(space);
+  }
 }
 
 /** Empties the hash table of stored log records, applying them to appropriate
@@ -1149,12 +1156,15 @@ pages.
 void recv_apply_hashed_log_recs(log_t &log, bool allow_ibuf) {
   for (;;) {
     mutex_enter(&recv_sys->mutex);
+    bool abort = recv_sys->found_corrupt_log;
 
     if (!recv_sys->apply_batch_on) {
       break;
     }
 
     mutex_exit(&recv_sys->mutex);
+
+    if (abort) return;
 
     std::this_thread::sleep_for(std::chrono::milliseconds(500));
   }
@@ -1231,7 +1241,12 @@ void recv_apply_hashed_log_recs(log_t &log, bool allow_ibuf) {
   /* Wait until all the pages have been processed */
 
   while (recv_sys->n_addrs != 0) {
+    bool abort = recv_sys->found_corrupt_log;
     mutex_exit(&recv_sys->mutex);
+
+    if (abort) {
+      return;
+    }
 
     std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
@@ -1251,6 +1266,9 @@ void recv_apply_hashed_log_recs(log_t &log, bool allow_ibuf) {
     os_event_set(recv_sys->flush_start);
 
     os_event_wait(recv_sys->flush_end);
+
+    /* Wait for any currently running batch to end. */
+    buf_flush_wait_LRU_batch_end();
 
     buf_pool_invalidate();
 
@@ -1534,6 +1552,7 @@ specified.
 @param[in]	end_ptr		End of buffer
 @param[in]	space_id	Tablespace identifier
 @param[in]	page_no		Page number
+@param[in]	apply		Whether to apply the record
 @param[in,out]	block		Buffer block, or nullptr if
                                 a page log record should not be applied
                                 or if it is a MLOG_FILE_ operation
@@ -1626,13 +1645,30 @@ static byte *recv_parse_or_apply_log_rec_body(
 #ifdef UNIV_HOTBACKUP
       if (recv_recovery_on && meb_is_space_loaded(space_id)) {
 #endif /* UNIV_HOTBACKUP */
-        /* For encrypted tablespace, we need to get the encryption key
-        information before the page 0 is recovered. Otherwise, redo will not
-        find the key to decrypt the data pages. */
+        /* For encrypted tablespace, we need to get the
+        encryption key information before the page 0 is
+        recovered. Otherwise, redo will not find the key
+        to decrypt the data pages. */
+
         if (page_no == 0 && !applying_redo &&
-            !fsp_is_system_or_temp_tablespace(space_id) &&
             /* For cloned db header page has the encryption information. */
             !recv_sys->is_cloned_db) {
+          byte *ptr_copy = ptr;
+          ptr_copy += 2;  // skip offset
+          ulint len = mach_read_from_2(ptr_copy);
+          ptr_copy += 2;
+          if (end_ptr < ptr_copy + len) return nullptr;
+
+          if (memcmp(ptr_copy, Encryption::KEY_MAGIC_PS_V1,
+                     Encryption::MAGIC_SIZE) == 0 &&
+              !recv_sys->apply_log_recs) {
+            return (fil_parse_write_crypt_data(ptr, end_ptr, block, len));
+          }
+
+          if (fsp_is_system_or_temp_tablespace(space_id)) {
+            break;
+          }
+
           ut_ad(LSN_MAX != start_lsn);
           return (fil_tablespace_redo_encryption(ptr, end_ptr, space_id,
                                                  start_lsn));
@@ -1804,7 +1840,9 @@ static byte *recv_parse_or_apply_log_rec_body(
             redo log been written with something
             older than InnoDB Plugin 1.0.4. */
             ut_ad(
-                0 ||
+                0
+                /* fil_crypt_rotate_page() writes this */
+                || offs == FIL_PAGE_SPACE_ID ||
                 offs == IBUF_TREE_SEG_HEADER + IBUF_HEADER + FSEG_HDR_SPACE ||
                 offs == IBUF_TREE_SEG_HEADER + IBUF_HEADER + FSEG_HDR_PAGE_NO ||
                 offs == PAGE_BTR_IBUF_FREE_LIST + PAGE_HEADER /* flst_init */
@@ -2554,7 +2592,7 @@ void recv_recover_page_func(
 
     if (recv->start_lsn >= page_lsn
 #ifndef UNIV_HOTBACKUP
-        && undo::is_active(recv_addr->space)
+        && undo::is_active(recv_addr->space, false)
 #endif /* !UNIV_HOTBACKUP */
     ) {
 
@@ -2743,7 +2781,6 @@ ulint recv_parse_log_rec(mlog_id_t *type, byte *ptr, byte *end_ptr,
   return (new_ptr - ptr);
 }
 
-
 /** Subtracts next number of bytes to ignore before we reach the checkpoint
 or returns information that there was nothing more to skip.
 @param[in]	next_parsed_bytes	number of next bytes that were parsed,
@@ -2753,7 +2790,6 @@ which are supposed to be subtracted from bytes to ignore before checkpoint
 static bool recv_update_bytes_to_ignore_before_checkpoint(
     size_t next_parsed_bytes) {
   auto &to_ignore = recv_sys->bytes_to_ignore_before_checkpoint;
-
 
   if (to_ignore != 0) {
     if (to_ignore >= next_parsed_bytes) {
@@ -2927,8 +2963,8 @@ static bool recv_multi_rec(byte *ptr, byte *end_ptr) {
     page_no_t page_no = 0;
     space_id_t space_id = 0;
 
-    ulint len =
-        recv_parse_log_rec(&type, ptr, end_ptr, &space_id, &page_no, true, &body);
+    ulint len = recv_parse_log_rec(&type, ptr, end_ptr, &space_id, &page_no,
+                                   true, &body);
 
     if (recv_sys->found_corrupt_log) {
       recv_report_corrupt_log(ptr, type, space_id, page_no);
@@ -2998,15 +3034,10 @@ static bool recv_multi_rec(byte *ptr, byte *end_ptr) {
     page_no_t page_no = 0;
 
     mlog_id_t type = MLOG_BIGGEST_TYPE;
+    byte *body;
 
-    byte *body = nullptr;
-    size_t len = 0;
-
-    /* Avoid parsing if we have the record saved already. */
-    if (!recv_sys->get_saved_rec(i, space_id, page_no, type, body, len)) {
-      len = recv_parse_log_rec(&type, ptr, end_ptr, &space_id, &page_no, true,
-                               &body);
-    }
+    ulint len = recv_parse_log_rec(&type, ptr, end_ptr, &space_id, &page_no,
+                                   true, &body);
 
     if (recv_sys->found_corrupt_log &&
         !recv_report_corrupt_log(ptr, type, space_id, page_no)) {

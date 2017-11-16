@@ -133,7 +133,8 @@ ulint buf_read_page_low(dberr_t *err, bool sync, ulint type, ulint mode,
       return (0);
     }
 
-    SRV_CORRUPT_TABLE_CHECK(*err == DB_SUCCESS, bpage->is_corrupt = true;);
+    SRV_CORRUPT_TABLE_CHECK(*err == DB_SUCCESS || *err == DB_IO_DECRYPT_FAIL,
+                            bpage->is_corrupt = true;);
   }
 
   if (sync) {
@@ -280,10 +281,10 @@ read_ahead:
   return (count);
 }
 
-bool buf_read_page(const page_id_t &page_id, const page_size_t &page_size,
-                   trx_t *trx) {
+dberr_t buf_read_page(const page_id_t &page_id, const page_size_t &page_size,
+                      trx_t *trx) {
   ulint count;
-  dberr_t err;
+  dberr_t err = DB_SUCCESS;
 
   count = buf_read_page_low(&err, true, 0, BUF_READ_ANY_PAGE, page_id,
                             page_size, false, trx, false);
@@ -298,7 +299,7 @@ bool buf_read_page(const page_id_t &page_id, const page_size_t &page_size,
   /* Increment number of I/O operations used for LRU policy. */
   buf_LRU_stat_inc_io();
 
-  return (count > 0);
+  return (err);
 }
 
 bool buf_read_page_background(const page_id_t &page_id,
@@ -551,6 +552,10 @@ ulint buf_read_ahead_linear(const page_id_t &page_id,
                                 << page_id_t(page_id.space(), i)
                                 << " in nonexisting or being-dropped"
                                    " tablespace";
+      } else if (err == DB_IO_DECRYPT_FAIL) {
+        ib::error() << "linear readahead failed to"
+                       " read or decrypt "
+                    << page_id_t(page_id.space(), i);
       }
     }
   }
@@ -611,6 +616,9 @@ void buf_read_ibuf_merge_pages(bool sync, const space_id_t *space_ids,
       /* We have deleted or are deleting the single-table
       tablespace: remove the entries for that page */
       ibuf_merge_or_delete_for_page(nullptr, page_id, &page_size, FALSE);
+    } else if (err == DB_IO_DECRYPT_FAIL) {
+      ib::error() << "Failed to read or decrypt " << page_id
+                  << " for change buffer merge";
     }
   }
 
@@ -691,6 +699,13 @@ void buf_read_recv_pages(bool sync, space_id_t space_id,
     } else {
       buf_read_page_low(&err, false, IORequest::DO_NOT_WAKE, BUF_READ_ANY_PAGE,
                         cur_page_id, page_size, true, nullptr, false);
+    }
+
+    if (err == DB_IO_DECRYPT_FAIL) {
+      ib::error() << "Recovery failed to decrypt page " << cur_page_id
+                  << ". Are you using the correct keyring?";
+    } else if (err == DB_PAGE_CORRUPTED) {
+      ib::error() << "Recovery failed due to corrupted page " << cur_page_id;
     }
   }
 

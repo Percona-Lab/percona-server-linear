@@ -1376,6 +1376,10 @@ space_id_t dict_check_sys_tablespaces(bool validate) {
     opened. */
     char *filepath = dict_get_first_path(space_id);
 
+    // We do not need to validate tablespace for online encryption as encryption
+    // threads do not work in 5.7. Only ENCRYPTION='KEYRING' works.
+    Keyring_encryption_info keyring_encryption_info;
+
     /* Check that this ibd is in a known location. If not, allow this
     but make some noise. */
     if (!fil_path_is_known(filepath)) {
@@ -1384,7 +1388,8 @@ space_id_t dict_check_sys_tablespaces(bool validate) {
 
     /* Check that the .ibd file exists. */
     dberr_t err = fil_ibd_open(validate, FIL_TYPE_TABLESPACE, space_id,
-                               fsp_flags, space_name, filepath, true, true);
+                               fsp_flags, space_name, filepath, true, true,
+                               keyring_encryption_info);
 
     if (err != DB_SUCCESS) {
       ib::warn(ER_IB_MSG_191) << "Ignoring tablespace " << id_name_t(space_name)
@@ -1641,8 +1646,11 @@ space_id_t dict_check_sys_tables(bool validate) {
     }
 
     /* Check that the .ibd file exists. */
+    Keyring_encryption_info keyring_encryption_info;
+
     dberr_t err = fil_ibd_open(validate, FIL_TYPE_TABLESPACE, space_id,
-                               fsp_flags, space_name, filepath, true, true);
+                               fsp_flags, space_name, filepath, true, true,
+                               keyring_encryption_info);
 
     if (err != DB_SUCCESS) {
       ib::warn(ER_IB_MSG_194) << "Ignoring tablespace " << id_name_t(space_name)
@@ -2116,7 +2124,7 @@ static const char *dict_load_table_low(table_name_t &name, const rec_t *rec,
                                  n_v_col, 0, flags, flags2);
 
   (*table)->id = table_id;
-  (*table)->ibd_file_missing = FALSE;
+  (*table)->set_file_readable();
 
   return (nullptr);
 }
@@ -2294,7 +2302,7 @@ void dict_load_tablespace(dict_table_t *table, mem_heap_t *heap,
   if (table->flags2 & DICT_TF2_DISCARDED) {
     ib::warn(ER_IB_MSG_204)
         << "Tablespace for table " << table->name << " is set as discarded.";
-    table->ibd_file_missing = TRUE;
+    table->set_file_unreadable();
     return;
   }
 
@@ -2384,13 +2392,17 @@ void dict_load_tablespace(dict_table_t *table, mem_heap_t *heap,
 
   /* This dict_load_tablespace() is only used on old 5.7 database during
   upgrade */
+  Keyring_encryption_info keyring_encryption_info;
   dberr_t err = fil_ibd_open(true, FIL_TYPE_TABLESPACE, table->space, fsp_flags,
-                             space_name, filepath, true, true);
+                             space_name, filepath, true, true,
+                             keyring_encryption_info);
 
   if (err != DB_SUCCESS) {
     /* We failed to find a sensible tablespace file */
-    table->ibd_file_missing = TRUE;
+    table->set_file_unreadable();
   }
+
+  table->keyring_encryption_info = keyring_encryption_info;
 
   ut_free(shared_space_name);
   ut_free(filepath);

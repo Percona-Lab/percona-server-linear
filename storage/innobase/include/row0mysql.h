@@ -86,6 +86,8 @@ struct trx_t;
 struct upd_node_t;
 struct upd_t;
 
+#include "keyring_encryption_key_info.h"
+
 #ifndef UNIV_HOTBACKUP
 extern ibool row_rollback_on_timeout;
 
@@ -392,9 +394,12 @@ kept in non-LRU list while on failure the 'table' object will be freed.
 @param[in]	create_info     HA_CREATE_INFO object
 @param[in,out]	trx		transaction
 @return error code or DB_SUCCESS */
-dberr_t row_create_table_for_mysql(dict_table_t *table, const char *compression,
-                                   const HA_CREATE_INFO *create_info,
-                                   trx_t *trx)
+dberr_t row_create_table_for_mysql(
+    dict_table_t *table, const char *compression,
+    const HA_CREATE_INFO *create_info, trx_t *trx,
+    const fil_encryption_t mode, /*!< in: encryption mode */
+    const KeyringEncryptionKeyIdInfo
+        &keyring_encryption_key_id) /*!< in: encryption key_id */
     MY_ATTRIBUTE((warn_unused_result));
 
 /** Does an index creation operation for MySQL. TODO: currently failure
@@ -661,14 +666,16 @@ struct row_prebuilt_t {
                                columns through a secondary index
                                and at least one column is not in
                                the secondary index, then this is
-                               set to TRUE */
+                                        set to TRUE; note that sometimes this
+                                        is set but we later optimize out the
+                                        clustered index lookup */
   unsigned templ_contains_blob : 1;        /*!< TRUE if the template contains
-                                     a column with DATA_LARGE_MTYPE(
-                                     get_innobase_type_from_mysql_type())
-                                     is TRUE;
-                                     not to be confused with InnoDB
-                                     externally stored columns
-                                     (VARCHAR can be off-page too) */
+                                               a column with DATA_LARGE_MTYPE(
+                                               get_innobase_type_from_mysql_type())
+                                               is TRUE;
+                                               not to be confused with InnoDB
+                                               externally stored columns
+                                               (VARCHAR can be off-page too) */
   unsigned templ_contains_fixed_point : 1; /*!< TRUE if the
                               template contains a column with
                               DATA_POINT. Since InnoDB regards

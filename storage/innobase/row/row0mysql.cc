@@ -51,6 +51,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "dict0priv.h"
 #include "dict0stats.h"
 #include "dict0stats_bg.h"
+#include "fil0crypt.h"
 #include "fil0fil.h"
 #include "fsp0file.h"
 #include "fsp0sysspace.h"
@@ -78,6 +79,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "trx0undo.h"
 #include "ut0cpu_cache.h"
 #include "ut0new.h"
+#include "zlib.h"
 
 #include "current_thd.h"
 #include "my_dbug.h"
@@ -1140,6 +1142,7 @@ handle_new_error:
     case DB_FTS_INVALID_DOCID:
     case DB_INTERRUPTED:
     case DB_CANT_CREATE_GEOMETRY_OBJECT:
+    case DB_IO_DECRYPT_FAIL:
     case DB_COMPUTE_VALUE_FAILED:
     case DB_LOCK_NOWAIT:
     case DB_BTREE_LEVEL_LIMIT_EXCEEDED:
@@ -1953,6 +1956,42 @@ static dberr_t row_insert_for_mysql_using_cursor(const byte *mysql_rec,
   return (err);
 }
 
+/** Determine is tablespace encrypted but decryption failed, is table corrupted
+or is tablespace .ibd file missing.
+@param[in] table                Table
+@param[in] trx                  Transaction
+@param[in] push_warning         true if we should push warning to user
+@retval DB_IO_DECRYPT_FAIL    table is encrypted but decryption failed
+@retval DB_CORRUPTION           table is corrupted
+@retval DB_TABLESPACE_NOT_FOUND tablespace .ibd file not found */
+static dberr_t row_mysql_get_table_status(const dict_table_t *table, trx_t *trx,
+                                          bool push_warning = true) {
+  dberr_t err;
+  if (fil_space_t *space = fil_space_acquire_silent(table->space)) {
+    if (space->is_space_encrypted) {
+      if (push_warning) {
+        ib::warn(ER_XB_MSG_4, table->name);
+      }
+      err = DB_IO_DECRYPT_FAIL;
+    } else {
+      if (push_warning) {
+        push_warning_printf(trx->mysql_thd, Sql_condition::SL_WARNING,
+                            HA_ERR_CRASHED,
+                            "Table %s in tablespace %u corrupted.",
+                            table->name.m_name, table->space);
+      }
+      err = DB_CORRUPTION;
+    }
+    fil_space_release(space);
+  } else {
+    ib::error(ER_IB_MSG_977)
+        << ".ibd file is missing for table " << table->name;
+    err = DB_TABLESPACE_NOT_FOUND;
+  }
+
+  return (err);
+}
+
 /** Does an insert for MySQL using INSERT graph. This function will run/execute
 INSERT graph.
 @param[in]	mysql_rec	row in the MySQL format
@@ -1983,12 +2022,8 @@ static dberr_t row_insert_for_mysql_using_ins_graph(const byte *mysql_rec,
 
     return (DB_TABLESPACE_DELETED);
 
-  } else if (prebuilt->table->ibd_file_missing) {
-    ib::error(ER_IB_MSG_977)
-        << ".ibd file is missing for table " << prebuilt->table->name;
-
-    return (DB_TABLESPACE_NOT_FOUND);
-
+  } else if (!prebuilt->table->is_readable()) {
+    return (row_mysql_get_table_status(prebuilt->table, trx, true));
   } else if (srv_force_recovery &&
              !(srv_force_recovery < SRV_FORCE_NO_UNDO_LOG_SCAN &&
                dict_sys_t::is_dd_table_id(prebuilt->table->id))) {
@@ -3216,9 +3251,21 @@ void row_mysql_unlock_data_dictionary(trx_t *trx) /*!< in/out: transaction */
   trx->dict_operation_lock_mode = 0;
 }
 
-dberr_t row_create_table_for_mysql(dict_table_t *table, const char *compression,
-                                   const HA_CREATE_INFO *create_info,
-                                   trx_t *trx) {
+/** Creates a table for MySQL. On success the in-memory table could be
+kept in non-LRU list while on failure the 'table' object will be freed.
+@param[in]	table		table definition(will be freed, or on
+                                DB_SUCCESS added to the data dictionary cache)
+@param[in]	compression	compression algorithm to use, can be nullptr
+@param[in]	create_info     HA_CREATE_INFO object
+@param[in,out]	trx		transaction
+@param[in]      fil_encryption_t mode,  in: encryption mode
+@param[in]      const KeyringEncryptionKeyIdInfo &keyring_encryption_key_id
+in: encryption key_id
+@return error code or DB_SUCCESS */
+dberr_t row_create_table_for_mysql(
+    dict_table_t *table, const char *compression,
+    const HA_CREATE_INFO *create_info, trx_t *trx, const fil_encryption_t mode,
+    const KeyringEncryptionKeyIdInfo &keyring_encryption_key_id) {
   mem_heap_t *heap;
   dberr_t err;
 
@@ -3247,7 +3294,8 @@ dberr_t row_create_table_for_mysql(dict_table_t *table, const char *compression,
   }
 
   /* Assign table id and build table space. */
-  err = dict_build_table_def(table, create_info, trx);
+  err = dict_build_table_def(table, create_info, trx, mode,
+                             keyring_encryption_key_id);
   if (err != DB_SUCCESS) {
     trx->error_state = err;
     goto error_handling;
@@ -3981,7 +4029,7 @@ static dberr_t row_discard_tablespace(trx_t *trx, dict_table_t *table,
       /* All persistent operations successful, update the
       data dictionary memory cache. */
 
-      table->ibd_file_missing = TRUE;
+      table->set_file_unreadable();
 
       table->flags2 |= DICT_TF2_DISCARDED;
 
@@ -3999,7 +4047,7 @@ static dberr_t row_discard_tablespace(trx_t *trx, dict_table_t *table,
       {
         dict_table_t *sdi_table = dict_sdi_get_table(table->space, true, false);
         if (sdi_table) {
-          sdi_table->ibd_file_missing = true;
+          sdi_table->set_file_unreadable();
           dict_sdi_close_table(sdi_table);
         }
       }
@@ -4828,11 +4876,9 @@ dberr_t row_rename_table_for_mysql(const char *old_name, const char *new_name,
     /* Check whether virtual column or stored column affects
     the foreign key constraint of the table. */
 
-
     if (dict_foreigns_has_s_base_col(table->foreign_set, table)) {
       err = DB_NO_FK_ON_S_BASE_COL;
       dberr_t error = dict_table_rename_in_cache(table, old_name, FALSE);
-
 
       ut_a(error == DB_SUCCESS);
       goto funct_exit;
@@ -5198,7 +5244,8 @@ loop:
                                   " table "
                                << index->table->name << " returned " << ret;
     }
-    /* fall through (this error is ignored by CHECK TABLE) */
+      /* Fall through */
+      /* (this error is ignored by CHECK TABLE) */
     case DB_END_OF_INDEX:
       ret = DB_SUCCESS;
     func_exit:
