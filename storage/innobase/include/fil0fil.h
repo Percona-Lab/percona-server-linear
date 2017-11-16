@@ -2236,6 +2236,8 @@ void fil_adjust_name_import(dict_table_t *table, const char *path,
 @param space_id	space id */
 void fil_space_set_corrupt(space_id_t space_id);
 
+void fil_space_set_encrypted(space_id_t space_id);
+
 using space_id_vec = std::vector<space_id_t>;
 
 /** Rotate the tablespace keys of the given tablespaces by the new master key.

@@ -538,7 +538,7 @@ class IORequest {
   }
 
   /** Set encryption key and iv
-  @param[in] key        The encryption key to use
+  @param[in] key                The encryption key to use
   @param[in] key_len    length of the encryption key
   @param[in] iv         The encryption iv to use */
   void encryption_key(const byte *key, ulint key_len, const byte *iv) {
