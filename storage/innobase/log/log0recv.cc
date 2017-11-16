@@ -1610,6 +1610,7 @@ specified.
 @param[in]      end_ptr         End of buffer
 @param[in]      space_id        Tablespace identifier
 @param[in]      page_no         Page number
+@param[in]	apply		Whether to apply the record
 @param[in,out]  block           Buffer block, or nullptr if
                                 a page log record should not be applied
                                 or if it is a MLOG_FILE_ operation
@@ -2810,7 +2811,6 @@ ulint recv_parse_log_rec(mlog_id_t *type, const byte *ptr,
   return new_ptr - ptr;
 }
 
-
 /** Subtracts next number of bytes to ignore before we reach the checkpoint
 or returns information that there was nothing more to skip.
 @param[in]      next_parsed_bytes       number of next bytes that were parsed,
@@ -2820,7 +2820,6 @@ which are supposed to be subtracted from bytes to ignore before checkpoint
 static bool recv_update_bytes_to_ignore_before_checkpoint(
     size_t next_parsed_bytes) {
   auto &to_ignore = recv_sys->bytes_to_ignore_before_checkpoint;
-
 
   if (to_ignore != 0) {
     if (to_ignore >= next_parsed_bytes) {
