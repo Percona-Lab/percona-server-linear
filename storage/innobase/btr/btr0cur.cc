@@ -239,6 +239,9 @@ btr_latch_leaves_t btr_cur_latch_leaves(buf_block_t *block,
         get_block =
             btr_block_get(page_id_t(page_id.space(), left_page_no), page_size,
                           RW_X_LATCH, UT_LOCATION_HERE, cursor->index, mtr);
+
+        SRV_CORRUPT_TABLE_CHECK(get_block, return latch_leaves;);
+
         latch_leaves.blocks[0] = get_block;
 
         if (spatial) {
@@ -5142,6 +5145,12 @@ static int64_t btr_estimate_n_rows_in_range_low(
   }
 
   mtr_commit(&mtr);
+
+#ifdef UNIV_DEBUG
+  if (!strcmp(index->name, "iC")) {
+    DEBUG_SYNC_C("btr_estimate_n_rows_in_range_between_dives");
+  }
+#endif
 
   mtr_start(&mtr);
 

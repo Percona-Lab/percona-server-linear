@@ -81,6 +81,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "trx0undo.h"
 #include "ut0cpu_cache.h"
 #include "ut0new.h"
+#include "zlib.h"
 
 #include "current_thd.h"
 #include "my_dbug.h"
