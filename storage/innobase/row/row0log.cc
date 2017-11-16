@@ -2990,8 +2990,8 @@ next_block:
       goto func_exit;
     }
 
-    IORequest request(IORequest::READ | IORequest::ROW_LOG);
-    ;
+    IORequest request(
+        IORequest::READ | IORequest::ROW_LOG | IORequest::NO_ENCRYPTION);
 
     byte *buf = index->online_log->head.block;
 
@@ -3782,7 +3782,8 @@ next_block:
       goto func_exit;
     }
 
-    IORequest request(IORequest::READ | IORequest::ROW_LOG);
+    IORequest request(
+        IORequest::READ | IORequest::ROW_LOG | IORequest::NO_ENCRYPTION);
 
     byte *buf = index->online_log->head.block;
 

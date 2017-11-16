@@ -186,7 +186,7 @@ page_t *btr_root_get(const dict_index_t *index, /*!< in: index tree */
 @return block */
 static inline buf_block_t *btr_block_get_func(
     const page_id_t &page_id, const page_size_t &page_size, ulint mode,
-    ut::Location location, IF_DEBUG(const dict_index_t *index, ) mtr_t *mtr);
+    ut::Location location, const dict_index_t *index, mtr_t *mtr);
 
 /** Gets a buffer page and declares its latching order level.
 @param page_id Tablespace/page identifier
@@ -202,7 +202,7 @@ static inline buf_block_t *btr_block_get(const page_id_t &page_id,
                                          const dict_index_t *index,
                                          mtr_t *mtr) {
   return btr_block_get_func(page_id, page_size, mode, location,
-                            IF_DEBUG(index, ) mtr);
+                            index, mtr);
 }
 
 #endif /* !UNIV_HOTBACKUP */
@@ -545,8 +545,8 @@ the index.
                                should print hex dump of
                                record and page on error */
 /** Checks the consistency of an index tree.
- @return true if ok */
-[[nodiscard]] bool btr_validate_index(
+@return	DB_SUCCESS if ok, error code if not */
+[[nodiscard]] dberr_t btr_validate_index(
     dict_index_t *index, /*!< in: index */
     const trx_t *trx,    /*!< in: transaction or 0 */
     bool lockout);       /*!< in: true if X-latch index is intended */

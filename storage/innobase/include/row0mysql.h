@@ -87,6 +87,8 @@ struct trx_t;
 struct upd_node_t;
 struct upd_t;
 
+#include "keyring_encryption_key_info.h"
+
 #ifndef UNIV_HOTBACKUP
 extern bool row_rollback_on_timeout;
 
@@ -371,7 +373,10 @@ kept in non-LRU list while on failure the 'table' object will be freed.
 @return error code or DB_SUCCESS */
 [[nodiscard]] dberr_t row_create_table_for_mysql(
     dict_table_t *&table, const char *compression,
-    const HA_CREATE_INFO *create_info, trx_t *trx, mem_heap_t *heap);
+    const HA_CREATE_INFO *create_info, trx_t *trx, mem_heap_t *heap,
+    const fil_encryption_t mode, /*!< in: encryption mode */
+    const KeyringEncryptionKeyIdInfo
+        &keyring_encryption_key_id); /*!< in: encryption key_id */
 
 /** Does an index creation operation for MySQL. TODO: currently failure
  to create an index results in dropping the whole table! This is no problem
@@ -622,7 +627,9 @@ struct row_prebuilt_t {
                                columns through a secondary index
                                and at least one column is not in
                                the secondary index, then this is
-                               set to true */
+                               set to true; note that sometimes this
+                               is set but we later optimize out the
+                               clustered index lookup */
   unsigned templ_contains_blob : 1;        /*!< true if the template contains
                                      a column with DATA_LARGE_MTYPE(
                                      get_innobase_type_from_mysql_type())

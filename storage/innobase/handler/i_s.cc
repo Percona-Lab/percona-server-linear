@@ -57,6 +57,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "dict0load.h"
 #include "dict0mem.h"
 #include "dict0types.h"
+#include "fil0crypt.h"
 #include "fsp0sysspace.h"
 #include "fts0opt.h"
 #include "fts0priv.h"
@@ -1508,7 +1509,6 @@ static int i_s_cmpmem_fill_low(THD *thd, TABLE_LIST *tables, bool reset) {
     }
 
     mutex_exit(&buf_pool->zip_free_mutex);
-
 
     for (uint x = 0; x <= BUF_BUDDY_SIZES; x++) {
       const buf_buddy_stat_t::snapshot_t *buddy_stat = &buddy_stat_local[x];
@@ -7288,7 +7288,7 @@ struct st_mysql_plugin i_s_innodb_cached_indexes = {
 
 /**  INNODB_SESSION_TEMPORARY TABLESPACES   ***********************/
 /* Fields of the dynamic table
-INFORMATION_SCHEMA.INNODB_SESSION_TEMPORARY_TABLESPACES */
+   INFORMATION_SCHEMA.INNODB_SESSION_TEMPORARY_TABLESPACES */
 static ST_FIELD_INFO innodb_session_temp_tablespaces_fields_info[] = {
 #define INNODB_SESSION_TEMP_TABLESPACES_ID 0
     {STRUCT_FLD(field_name, "ID"),
@@ -7403,10 +7403,10 @@ static int i_s_innodb_session_temp_tablespaces_fill(THD *thd,
   }
 
   /* Allocate one session temp tablespace to avoid allocating a session
-  temp tabelspaces during iteration of session temp tablespaces.
-  This is because we have already acquired session pool mutex and iterating.
-  After acquiring mutex, the I_S query tries to acquire session temp pool
-  mutex again */
+     temp tabelspaces during iteration of session temp tablespaces.
+     This is because we have already acquired session pool mutex and iterating.
+     After acquiring mutex, the I_S query tries to acquire session temp pool
+     mutex again */
   check_trx_exists(thd);
   innodb_session_t *innodb_session = thd_to_innodb_session(thd);
   innodb_session->get_instrinsic_temp_tblsp();
