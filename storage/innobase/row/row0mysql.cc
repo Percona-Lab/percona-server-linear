@@ -80,6 +80,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "trx0undo.h"
 #include "ut0cpu_cache.h"
 #include "ut0new.h"
+#include "zlib.h"
 
 #include "current_thd.h"
 #include "my_dbug.h"
@@ -4783,11 +4784,9 @@ dberr_t row_rename_table_for_mysql(const char *old_name, const char *new_name,
     /* Check whether virtual column or stored column affects
     the foreign key constraint of the table. */
 
-
     if (dict_foreigns_has_s_base_col(table->foreign_set, table)) {
       err = DB_NO_FK_ON_S_BASE_COL;
       dberr_t error = dict_table_rename_in_cache(table, old_name, false);
-
 
       ut_a(error == DB_SUCCESS);
       goto funct_exit;

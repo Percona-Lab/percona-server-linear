@@ -1511,7 +1511,6 @@ static int i_s_cmpmem_fill_low(THD *thd, Table_ref *tables, bool reset) {
 
     mutex_exit(&buf_pool->zip_free_mutex);
 
-
     for (uint x = 0; x <= BUF_BUDDY_SIZES; x++) {
       const buf_buddy_stat_t::snapshot_t *buddy_stat = &buddy_stat_local[x];
 
