@@ -1691,7 +1691,6 @@ class buf_page_t {
   bool old;
 
   bool is_corrupt;
-
 #ifdef UNIV_DEBUG
   /** This is set to true when fsp frees a page in buffer pool;
   protected by buf_pool->zip_mutex or buf_block_t::mutex. */

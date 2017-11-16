@@ -2938,8 +2938,10 @@ void HA_CREATE_INFO::init_create_options_from_share(const TABLE_SHARE *share,
 handler *handler::clone(const char *name, MEM_ROOT *mem_root) {
   DBUG_TRACE;
 
-  handler *new_handler = get_new_handler(
-      table->s, (table->s->m_part_info != nullptr), mem_root, ht);
+  handler *new_handler =
+      table ? get_new_handler(table->s, (table->s->m_part_info != nullptr),
+                              mem_root, ht)
+            : nullptr;
 
   if (!new_handler) return nullptr;
   if (new_handler->set_ha_share_ref(ha_share)) goto err;
