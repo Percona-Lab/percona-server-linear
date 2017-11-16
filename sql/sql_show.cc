@@ -51,6 +51,7 @@
 #include "my_bitmap.h"
 #include "my_command.h"
 #include "my_dbug.h"
+#include "my_default.h"
 #include "my_dir.h"  // MY_DIR
 #include "my_io.h"
 #include "my_loglevel.h"
@@ -1690,6 +1691,19 @@ int store_create_info(THD *thd, TABLE_LIST *table_list, String *packet,
       append_unescaped(packet, share->encrypt_type.str,
                        share->encrypt_type.length);
     }
+
+    if (share->was_encryption_key_id_set) {
+      DBUG_ASSERT(share->encrypt_type.length == 0 ||
+                  my_strcasecmp(system_charset_info, share->encrypt_type.str,
+                                "KEYRING") != 0 ||
+                  share->encrypt_type.length == strlen("KEYRING"));
+
+      char *end;
+      packet->append(STRING_WITH_LEN(" ENCRYPTION_KEY_ID="));
+      end = longlong10_to_str(table->s->encryption_key_id, buff, 10);
+      packet->append(buff, static_cast<uint>(end - buff));
+    }
+
     table->file->append_create_info(packet);
     if (share->comment.length) {
       packet->append(STRING_WITH_LEN(" COMMENT="));
@@ -3793,6 +3807,7 @@ end:
   close_thread_tables(thd);
   /*
     Release metadata lock we might have acquired.
+
     Without this step metadata locks acquired for each table processed
     will be accumulated. In situation when a lot of tables are processed
     by I_S query this will result in transaction with too many metadata
@@ -5406,6 +5421,28 @@ ST_FIELD_INFO engines_fields_info[] = {
     {"SAVEPOINTS", 3, MYSQL_TYPE_STRING, 0, 1, "Savepoints", SKIP_OPEN_TABLE},
     {0, 0, MYSQL_TYPE_STRING, 0, 0, 0, SKIP_OPEN_TABLE}};
 
+static ST_FIELD_INFO temporary_table_fields_info[] = {
+    {"SESSION_ID", 4, MYSQL_TYPE_LONGLONG, 0, 0, "Session", SKIP_OPEN_TABLE},
+    {"TABLE_SCHEMA", NAME_CHAR_LEN, MYSQL_TYPE_STRING, 0, 0, "Db",
+     SKIP_OPEN_TABLE},
+    {"TABLE_NAME", NAME_CHAR_LEN, MYSQL_TYPE_STRING, 0, 0, "Temp_tables_in_",
+     SKIP_OPEN_TABLE},
+    {"ENGINE", NAME_CHAR_LEN, MYSQL_TYPE_STRING, 0, 0, "Engine", OPEN_FRM_ONLY},
+    {"NAME", FN_REFLEN, MYSQL_TYPE_STRING, 0, 0, "Name", SKIP_OPEN_TABLE},
+    {"TABLE_ROWS", MY_INT64_NUM_DECIMAL_DIGITS, MYSQL_TYPE_LONGLONG, 0,
+     MY_I_S_UNSIGNED, "Rows", OPEN_FULL_TABLE},
+    {"AVG_ROW_LENGTH", MY_INT64_NUM_DECIMAL_DIGITS, MYSQL_TYPE_LONGLONG, 0,
+     MY_I_S_UNSIGNED, "Avg Row", OPEN_FULL_TABLE},
+    {"DATA_LENGTH", MY_INT64_NUM_DECIMAL_DIGITS, MYSQL_TYPE_LONGLONG, 0,
+     MY_I_S_UNSIGNED, "Data Length", OPEN_FULL_TABLE},
+    {"INDEX_LENGTH", MY_INT64_NUM_DECIMAL_DIGITS, MYSQL_TYPE_LONGLONG, 0,
+     MY_I_S_UNSIGNED, "Index Size", OPEN_FULL_TABLE},
+    {"CREATE_TIME", 0, MYSQL_TYPE_DATETIME, 0, 1, "Create Time",
+     OPEN_FULL_TABLE},
+    {"UPDATE_TIME", 0, MYSQL_TYPE_DATETIME, 0, 1, "Update Time",
+     OPEN_FULL_TABLE},
+    {0, 0, MYSQL_TYPE_STRING, 0, 0, 0, SKIP_OPEN_TABLE}};
+
 ST_FIELD_INFO tmp_table_keys_fields_info[] = {
     {"TABLE_NAME", NAME_CHAR_LEN, MYSQL_TYPE_STRING, 0, 0, "Table",
      OPEN_FRM_ONLY},
@@ -5448,28 +5485,6 @@ ST_FIELD_INFO schema_privileges_fields_info[] = {
     {"PRIVILEGE_TYPE", NAME_CHAR_LEN, MYSQL_TYPE_STRING, 0, 0, 0,
      SKIP_OPEN_TABLE},
     {"IS_GRANTABLE", 3, MYSQL_TYPE_STRING, 0, 0, 0, SKIP_OPEN_TABLE},
-    {0, 0, MYSQL_TYPE_STRING, 0, 0, 0, SKIP_OPEN_TABLE}};
-
-static ST_FIELD_INFO temporary_table_fields_info[] = {
-    {"SESSION_ID", 4, MYSQL_TYPE_LONGLONG, 0, 0, "Session", SKIP_OPEN_TABLE},
-    {"TABLE_SCHEMA", NAME_CHAR_LEN, MYSQL_TYPE_STRING, 0, 0, "Db",
-     SKIP_OPEN_TABLE},
-    {"TABLE_NAME", NAME_CHAR_LEN, MYSQL_TYPE_STRING, 0, 0, "Temp_tables_in_",
-     SKIP_OPEN_TABLE},
-    {"ENGINE", NAME_CHAR_LEN, MYSQL_TYPE_STRING, 0, 0, "Engine", OPEN_FRM_ONLY},
-    {"NAME", FN_REFLEN, MYSQL_TYPE_STRING, 0, 0, "Name", SKIP_OPEN_TABLE},
-    {"TABLE_ROWS", MY_INT64_NUM_DECIMAL_DIGITS, MYSQL_TYPE_LONGLONG, 0,
-     MY_I_S_UNSIGNED, "Rows", OPEN_FULL_TABLE},
-    {"AVG_ROW_LENGTH", MY_INT64_NUM_DECIMAL_DIGITS, MYSQL_TYPE_LONGLONG, 0,
-     MY_I_S_UNSIGNED, "Avg Row", OPEN_FULL_TABLE},
-    {"DATA_LENGTH", MY_INT64_NUM_DECIMAL_DIGITS, MYSQL_TYPE_LONGLONG, 0,
-     MY_I_S_UNSIGNED, "Data Length", OPEN_FULL_TABLE},
-    {"INDEX_LENGTH", MY_INT64_NUM_DECIMAL_DIGITS, MYSQL_TYPE_LONGLONG, 0,
-     MY_I_S_UNSIGNED, "Index Size", OPEN_FULL_TABLE},
-    {"CREATE_TIME", 0, MYSQL_TYPE_DATETIME, 0, 1, "Create Time",
-     OPEN_FULL_TABLE},
-    {"UPDATE_TIME", 0, MYSQL_TYPE_DATETIME, 0, 1, "Update Time",
-     OPEN_FULL_TABLE},
     {0, 0, MYSQL_TYPE_STRING, 0, 0, 0, SKIP_OPEN_TABLE}};
 
 ST_FIELD_INFO table_privileges_fields_info[] = {

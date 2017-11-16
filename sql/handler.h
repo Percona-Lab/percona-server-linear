@@ -52,6 +52,7 @@
 #include "my_sys.h"
 #include "my_thread_local.h"  // my_errno
 #include "mysql/components/services/psi_table_bits.h"
+#include "mysql_com.h"
 #include "sql/dd/object_id.h"   // dd::Object_id
 #include "sql/dd/properties.h"  // dd::Properties
 #include "sql/dd/string_type.h"
@@ -752,6 +753,8 @@ struct st_handler_tablename {
 #define COMPATIBLE_DATA_YES 0
 #define COMPATIBLE_DATA_NO 1
 
+#define HA_CREATE_USED_ENCRYPTION_KEY_ID (1L << 28)
+
 /*
   These structures are used to pass information from a set of SQL commands
   on add/drop/change tablespace definitions to the proper hton.
@@ -804,8 +807,6 @@ class st_alter_tablespace {
   uint nodegroup_id = UNDEF_NODEGROUP;
   bool wait_until_completed = true;
   const char *ts_comment = nullptr;
-  bool encrypt;
-  LEX_STRING encrypt_type;
 
   bool is_tablespace_command() {
     return ts_cmd_type == CREATE_TABLESPACE ||
@@ -2198,6 +2199,8 @@ struct HA_CREATE_INFO {
   and ignored by the Server layer. */
 
   LEX_STRING encrypt_type;
+  uint32_t encryption_key_id;
+  bool was_encryption_key_id_set;
 
   /**
    * Secondary engine of the table.
@@ -6229,6 +6232,7 @@ void ha_pre_dd_shutdown(void);
 */
 bool ha_flush_logs(bool binlog_group_flush = false);
 void ha_drop_database(char *path);
+class Create_field;
 int ha_create_table(THD *thd, const char *path, const char *db,
                     const char *table_name, HA_CREATE_INFO *create_info,
                     const List<Create_field> *create_fields,
