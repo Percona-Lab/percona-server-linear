@@ -46,6 +46,11 @@ void deinit_keyring_services(SERVICE_TYPE(registry) * reg_srv);
 class IORequest;
 struct Encryption_key;
 
+enum class Encryption_rotation : std::uint8_t {
+  NO_ROTATION,
+  MASTER_KEY_TO_KEYRING
+};
+
 // Forward declaration.
 struct Encryption_metadata;
 
@@ -108,6 +113,8 @@ class Encryption {
   /** Encryption magic bytes for 8.0.5+, it's for checking the encryption
   information version. */
   static constexpr char KEY_MAGIC_V3[] = "lCC";
+
+  static constexpr char KEY_MAGIC_PS_V1[] = "PSA";
 
   /** Encryption master key prifix */
   static constexpr char MASTER_KEY_PREFIX[] = "INNODBKey";
@@ -216,6 +223,17 @@ class Encryption {
   @param[in]      algorithm       Encryption algorithm to check
   @return true if no algorithm explicitly requested */
   static bool none_explicitly_specified(const char *algorithm) noexcept
+      MY_ATTRIBUTE((warn_unused_result));
+
+  static bool is_master_key_encryption(
+      const char *algorithm) noexcept MY_ATTRIBUTE((warn_unused_result));
+  MY_NODISCARD static bool is_empty(const char *algorithm) noexcept;
+
+  MY_NODISCARD static bool is_keyring(const char *algoritm) noexcept;
+
+  MY_NODISCARD static bool is_online_encryption_on() noexcept;
+
+  static bool should_be_keyring_encrypted(const char *algorithm) noexcept
       MY_ATTRIBUTE((warn_unused_result));
 
   /** Generate random encryption value for key and iv.

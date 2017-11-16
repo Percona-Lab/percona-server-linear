@@ -61,6 +61,7 @@
 #include "my_table_map.h"
 #include "my_thread_local.h"  // my_errno
 #include "mysql/components/services/bits/psi_table_bits.h"
+#include "mysql_com.h"
 #include "sql/dd/object_id.h"  // dd::Object_id
 #include "sql/dd/string_type.h"
 #include "sql/dd/types/object_table.h"  // dd::Object_table
@@ -3089,6 +3090,8 @@ struct HA_CREATE_INFO {
   and ignored by the Server layer. */
 
   LEX_STRING encrypt_type{nullptr, 0};
+  uint32_t encryption_key_id{0};
+  bool was_encryption_key_id_set{false};
 
   /**
    * Secondary engine of the table.
@@ -7431,6 +7434,7 @@ void ha_pre_dd_shutdown(void);
 */
 bool ha_flush_logs(bool binlog_group_flush = false);
 void ha_drop_database(char *path);
+class Create_field;
 int ha_create_table(THD *thd, const char *path, const char *db,
                     const char *table_name, HA_CREATE_INFO *create_info,
                     const List<Create_field> *create_fields,

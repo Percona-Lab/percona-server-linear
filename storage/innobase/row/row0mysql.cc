@@ -79,6 +79,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "trx0undo.h"
 #include "ut0cpu_cache.h"
 #include "ut0new.h"
+#include "zlib.h"
 
 #include "current_thd.h"
 #include "my_dbug.h"
@@ -1990,12 +1991,8 @@ static dberr_t row_insert_for_mysql_using_ins_graph(const byte *mysql_rec,
 
     return (DB_TABLESPACE_DELETED);
 
-  } else if (prebuilt->table->ibd_file_missing) {
-    ib::error(ER_IB_MSG_977)
-        << ".ibd file is missing for table " << prebuilt->table->name;
-
-    return (DB_TABLESPACE_NOT_FOUND);
-
+  } else if (!prebuilt->table->is_readable()) {
+    return (row_mysql_get_table_status(prebuilt->table, trx, true));
   } else if (srv_force_recovery &&
              !(srv_force_recovery < SRV_FORCE_NO_UNDO_LOG_SCAN &&
                dict_sys_t::is_dd_table_id(prebuilt->table->id))) {
@@ -4786,11 +4783,9 @@ dberr_t row_rename_table_for_mysql(const char *old_name, const char *new_name,
     /* Check whether virtual column or stored column affects
     the foreign key constraint of the table. */
 
-
     if (dict_foreigns_has_s_base_col(table->foreign_set, table)) {
       err = DB_NO_FK_ON_S_BASE_COL;
       dberr_t error = dict_table_rename_in_cache(table, old_name, false);
-
 
       ut_a(error == DB_SUCCESS);
       goto funct_exit;
