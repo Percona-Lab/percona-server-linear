@@ -68,6 +68,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "row0upd.h"
 #include "row0vers.h"
 #include "srv0mon.h"
+#include "srv0start.h"
 #include "trx0trx.h"
 #include "trx0undo.h"
 #include "ut0new.h"
@@ -1045,7 +1046,7 @@ retry:
 
         cur_block = buf_page_get_gen(
             page_id, dict_table_page_size(index->table), RW_X_LATCH, NULL,
-            Page_fetch::NORMAL, __FILE__, __LINE__, mtr);
+            Page_fetch::NORMAL, __FILE__, __LINE__, mtr, false, &err);
       } else {
         mtr_start(mtr);
         goto func_end;
@@ -4139,8 +4140,15 @@ dberr_t row_search_no_mvcc(byte *buf, page_cur_mode_t mode,
                                  pcur, 0, mtr);
 
     } else if (mode == PAGE_CUR_G || mode == PAGE_CUR_L) {
-      btr_pcur_open_at_index_side(mode == PAGE_CUR_G, index, BTR_SEARCH_LEAF,
-                                  pcur, false, 0, mtr);
+      err = btr_pcur_open_at_index_side(mode == PAGE_CUR_G, index,
+                                        BTR_SEARCH_LEAF, pcur, false, 0, mtr);
+      if (err != DB_SUCCESS) {
+        if (err == DB_IO_DECRYPT_FAIL) {
+          ib::warn(ER_XB_MSG_4, index->table_name);
+          index->table->set_file_unreadable();
+        }
+        return (err);
+      }
     }
   }
 
@@ -4513,9 +4521,10 @@ dberr_t row_search_mvcc(byte *buf, page_cur_mode_t mode,
   if (dict_table_is_discarded(prebuilt->table)) {
     return DB_TABLESPACE_DELETED;
 
-  } else if (prebuilt->table->ibd_file_missing) {
-    return DB_TABLESPACE_NOT_FOUND;
-
+  } else if (prebuilt->table->file_unreadable) {
+    return fil_space_get(prebuilt->table->space)
+                    ? DB_IO_DECRYPT_FAIL
+                    : DB_TABLESPACE_NOT_FOUND;
   } else if (!prebuilt->index_usable) {
     return DB_MISSING_HISTORY;
 
@@ -4908,8 +4917,13 @@ dberr_t row_search_mvcc(byte *buf, page_cur_mode_t mode,
       }
     }
 
-    btr_pcur_open_with_no_init(index, search_tuple, mode, BTR_SEARCH_LEAF, pcur,
-                               0, &mtr);
+    err = btr_pcur_open_with_no_init(index, search_tuple, mode, BTR_SEARCH_LEAF,
+                                     pcur, 0, &mtr);
+
+    if (err != DB_SUCCESS) {
+      rec = NULL;
+      goto lock_wait_or_error;
+    }
 
     pcur->m_trx_if_known = trx;
 
@@ -4942,8 +4956,16 @@ dberr_t row_search_mvcc(byte *buf, page_cur_mode_t mode,
       }
     }
   } else if (mode == PAGE_CUR_G || mode == PAGE_CUR_L) {
-    btr_pcur_open_at_index_side(mode == PAGE_CUR_G, index, BTR_SEARCH_LEAF,
-                                pcur, false, 0, &mtr);
+    err = btr_pcur_open_at_index_side(mode == PAGE_CUR_G, index,
+                                      BTR_SEARCH_LEAF, pcur, false, 0, &mtr);
+    if (err != DB_SUCCESS) {
+      if (err == DB_IO_DECRYPT_FAIL) {
+        ib::warn(ER_XB_MSG_4, index->table_name);
+        index->table->set_file_unreadable();
+      }
+      rec = NULL;
+      goto lock_wait_or_error;
+    }
   }
 
 rec_loop:
@@ -4963,6 +4985,11 @@ rec_loop:
   /* PHASE 4: Look for matching records in a loop */
 
   rec = btr_pcur_get_rec(pcur);
+
+  if (!index->table->is_readable() && !index->table->is_corrupt) {
+    err = DB_IO_DECRYPT_FAIL;
+    goto lock_wait_or_error;
+  }
 
   SRV_CORRUPT_TABLE_CHECK(rec, {
     err = DB_CORRUPTION;
@@ -5970,6 +5997,9 @@ lock_wait_or_error:
   /*-------------------------------------------------------------*/
   if (!dict_index_is_spatial(index)) {
     btr_pcur_store_position(pcur, &mtr);
+    if (rec) {
+      btr_pcur_store_position(pcur, &mtr);
+    }
   }
 
 lock_table_wait:
@@ -6285,13 +6315,16 @@ func_exit:
 @param[in,out]	mtr	mini-transaction (may be committed and restarted)
 @return maximum record, page s-latched in mtr
 @retval NULL if there are no records, or if all of them are delete-marked */
-static const rec_t *row_search_get_max_rec(dict_index_t *index, mtr_t *mtr) {
+static const rec_t *row_search_get_max_rec(dict_index_t *index, mtr_t *mtr,
+                                           dberr_t &error) {
   btr_pcur_t pcur;
   const rec_t *rec;
 
   /* Open at the high/right end (false), and init cursor */
-  btr_pcur_open_at_index_side(false, index, BTR_SEARCH_LEAF, &pcur, true, 0,
-                              mtr);
+  dberr_t err = btr_pcur_open_at_index_side(false, index, BTR_SEARCH_LEAF,
+                                            &pcur, true, 0, mtr);
+
+  if (err != DB_SUCCESS) return NULL;
 
   do {
     const page_t *page;
@@ -6332,7 +6365,7 @@ dberr_t row_search_max_autoinc(
 
     mtr_start(&mtr);
 
-    rec = row_search_get_max_rec(index, &mtr);
+    rec = row_search_get_max_rec(index, &mtr, error);
 
     if (rec != NULL) {
       ibool unsigned_type = (dfield->col->prtype & DATA_UNSIGNED);

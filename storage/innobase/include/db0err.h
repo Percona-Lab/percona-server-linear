@@ -186,6 +186,9 @@ enum dberr_t {
   /* Schema mismatch between the metadata and data being imported. */
   DB_SCHEMA_MISMATCH,
 
+  DB_PAGE_CORRUPTED = 999, /*!< Page read from tablespace is
+                           corrupted. */
+
   /* The following are partial failure codes */
 
   DB_FAIL = 1000,
