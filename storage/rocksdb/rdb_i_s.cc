@@ -77,6 +77,13 @@ static int rdb_i_s_cfstats_fill_table(
   DBUG_ASSERT(tables->table->field != nullptr);
 
   int ret = 0;
+  Rdb_hton_init_state::Scoped_lock state_lock(*rdb_get_hton_init_state(),
+                                              false);
+  if (!rdb_get_hton_init_state()->initialized()) {
+    ret = ER_PLUGIN_IS_NOT_LOADED;
+    my_error(ret, MYF(0), rocksdb_hton_name);
+    DBUG_RETURN(ret);
+  }
   uint64_t val;
 
   const std::vector<std::pair<const std::string, std::string>> cf_properties = {
@@ -172,6 +179,13 @@ static int rdb_i_s_dbstats_fill_table(
   DBUG_ASSERT(tables->table->field != nullptr);
 
   int ret = 0;
+  Rdb_hton_init_state::Scoped_lock state_lock(*rdb_get_hton_init_state(),
+                                              false);
+  if (!rdb_get_hton_init_state()->initialized()) {
+    ret = ER_PLUGIN_IS_NOT_LOADED;
+    my_error(ret, MYF(0), rocksdb_hton_name);
+    DBUG_RETURN(ret);
+  }
   uint64_t val;
 
   const std::vector<std::pair<std::string, std::string>> db_properties = {
@@ -269,6 +283,14 @@ static int rdb_i_s_perf_context_fill_table(
   DBUG_ASSERT(tables->table != nullptr);
 
   int ret = 0;
+  Rdb_hton_init_state::Scoped_lock state_lock(*rdb_get_hton_init_state(),
+                                              false);
+  if (!rdb_get_hton_init_state()->initialized()) {
+    ret = ER_PLUGIN_IS_NOT_LOADED;
+    my_error(ret, MYF(0), rocksdb_hton_name);
+    DBUG_RETURN(ret);
+  }
+
   Field **field = tables->table->field;
   DBUG_ASSERT(field != nullptr);
 
@@ -367,6 +389,13 @@ static int rdb_i_s_perf_context_global_fill_table(
   DBUG_ASSERT(tables->table->field != nullptr);
 
   int ret = 0;
+  Rdb_hton_init_state::Scoped_lock state_lock(*rdb_get_hton_init_state(),
+                                              false);
+  if (!rdb_get_hton_init_state()->initialized()) {
+    ret = ER_PLUGIN_IS_NOT_LOADED;
+    my_error(ret, MYF(0), rocksdb_hton_name);
+    DBUG_RETURN(ret);
+  }
 
   rocksdb::DB *const rdb = rdb_get_rocksdb_db();
 
@@ -433,6 +462,13 @@ static int rdb_i_s_cfoptions_fill_table(
   DBUG_ASSERT(tables != nullptr);
 
   int ret = 0;
+  Rdb_hton_init_state::Scoped_lock state_lock(*rdb_get_hton_init_state(),
+                                              false);
+  if (!rdb_get_hton_init_state()->initialized()) {
+    ret = ER_PLUGIN_IS_NOT_LOADED;
+    my_error(ret, MYF(0), rocksdb_hton_name);
+    DBUG_RETURN(ret);
+  }
 
   rocksdb::DB *const rdb = rdb_get_rocksdb_db();
 
@@ -728,6 +764,13 @@ static int rdb_i_s_global_info_fill_table(
   static const uint32_t CF_ID_INDEX_BUF_LEN = 60;
 
   int ret = 0;
+  Rdb_hton_init_state::Scoped_lock state_lock(*rdb_get_hton_init_state(),
+                                              false);
+  if (!rdb_get_hton_init_state()->initialized()) {
+    ret = ER_PLUGIN_IS_NOT_LOADED;
+    my_error(ret, MYF(0), rocksdb_hton_name);
+    DBUG_RETURN(ret);
+  }
 
   /* max index info */
   const Rdb_dict_manager *const dict_manager = rdb_get_dict_manager();
@@ -807,6 +850,14 @@ static int rdb_i_s_compact_stats_fill_table(
   DBUG_ENTER_FUNC();
 
   int ret = 0;
+  Rdb_hton_init_state::Scoped_lock state_lock(*rdb_get_hton_init_state(),
+                                              false);
+  if (!rdb_get_hton_init_state()->initialized()) {
+    ret = ER_PLUGIN_IS_NOT_LOADED;
+    my_error(ret, MYF(0), rocksdb_hton_name);
+    DBUG_RETURN(ret);
+  }
+
   rocksdb::DB *rdb = rdb_get_rocksdb_db();
 
   if (!rdb) {
@@ -974,6 +1025,14 @@ static int rdb_i_s_ddl_fill_table(my_core::THD *const thd,
   DBUG_ASSERT(tables->table != nullptr);
 
   int ret = 0;
+  Rdb_hton_init_state::Scoped_lock state_lock(*rdb_get_hton_init_state(),
+                                              false);
+  if (!rdb_get_hton_init_state()->initialized()) {
+    ret = ER_PLUGIN_IS_NOT_LOADED;
+    my_error(ret, MYF(0), rocksdb_hton_name);
+    DBUG_RETURN(ret);
+  }
+
   rocksdb::DB *const rdb = rdb_get_rocksdb_db();
 
   if (!rdb) {
@@ -1118,6 +1177,14 @@ static int rdb_i_s_index_file_map_fill_table(
   DBUG_ASSERT(tables->table != nullptr);
 
   int ret = 0;
+  Rdb_hton_init_state::Scoped_lock state_lock(*rdb_get_hton_init_state(),
+                                              false);
+  if (!rdb_get_hton_init_state()->initialized()) {
+    ret = ER_PLUGIN_IS_NOT_LOADED;
+    my_error(ret, MYF(0), rocksdb_hton_name);
+    DBUG_RETURN(ret);
+  }
+
   Field **field = tables->table->field;
   DBUG_ASSERT(field != nullptr);
 
@@ -1255,6 +1322,13 @@ static int rdb_i_s_lock_info_fill_table(
   DBUG_ASSERT(tables->table->field != nullptr);
 
   int ret = 0;
+  Rdb_hton_init_state::Scoped_lock state_lock(*rdb_get_hton_init_state(),
+                                              false);
+  if (!rdb_get_hton_init_state()->initialized()) {
+    ret = ER_PLUGIN_IS_NOT_LOADED;
+    my_error(ret, MYF(0), rocksdb_hton_name);
+    DBUG_RETURN(ret);
+  }
 
   rocksdb::TransactionDB *const rdb = rdb_get_rocksdb_db();
 
@@ -1369,6 +1443,14 @@ static int rdb_i_s_trx_info_fill_table(
   DBUG_ASSERT(tables->table->field != nullptr);
 
   int ret = 0;
+  Rdb_hton_init_state::Scoped_lock state_lock(*rdb_get_hton_init_state(),
+                                              false);
+  if (!rdb_get_hton_init_state()->initialized()) {
+    ret = ER_PLUGIN_IS_NOT_LOADED;
+    my_error(ret, MYF(0), rocksdb_hton_name);
+    DBUG_RETURN(ret);
+  }
+
   rocksdb::DB *const rdb = rdb_get_rocksdb_db();
 
   if (!rdb) {
@@ -1486,6 +1568,14 @@ static int rdb_i_s_deadlock_info_fill_table(
   static const std::string str_shared("SHARED");
 
   int ret = 0;
+  Rdb_hton_init_state::Scoped_lock state_lock(*rdb_get_hton_init_state(),
+                                              false);
+  if (!rdb_get_hton_init_state()->initialized()) {
+    ret = ER_PLUGIN_IS_NOT_LOADED;
+    my_error(ret, MYF(0), rocksdb_hton_name);
+    DBUG_RETURN(ret);
+  }
+
   rocksdb::DB *const rdb = rdb_get_rocksdb_db();
 
   if (!rdb) {
