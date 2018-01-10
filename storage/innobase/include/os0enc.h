@@ -192,6 +192,12 @@ class Encryption {
   static bool is_none(const char *algorithm) noexcept
       MY_ATTRIBUTE((warn_unused_result));
 
+  /** Check if the NO algorithm was explicitly specified.
+  @param[in]      algorithm       Encryption algorithm to check
+  @return true if no algorithm explicitly requested */
+  static bool none_explicitly_specified(const char *algorithm) noexcept
+      MY_ATTRIBUTE((warn_unused_result));
+
   /** Generate random encryption value for key and iv.
   @param[in,out]  value Encryption value */
   static void random_value(byte *value) noexcept;
