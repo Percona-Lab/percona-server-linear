@@ -34,7 +34,6 @@ ENDIF()
  
 # Compiler options
 IF(UNIX)  
-
   # Default GCC flags
   IF(CMAKE_COMPILER_IS_GNUCC)
     SET(COMMON_C_FLAGS               "-g -fno-omit-frame-pointer")
