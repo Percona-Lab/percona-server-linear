@@ -134,6 +134,7 @@ void remove_ssl_err_thread_state();
 int thd_command(const void * thd);
 long long thd_start_time(const void * thd);
 void thd_kill(unsigned long id);
+int thd_get_ft_query_extra_word_chars(void);
 #include "plugin_auth_common.h"
 struct MYSQL_PLUGIN_VIO_INFO {
   enum {

@@ -932,6 +932,15 @@ void remove_ssl_err_thread_state();
 int thd_command(const MYSQL_THD thd);
 long long thd_start_time(const MYSQL_THD thd);
 void thd_kill(unsigned long id);
+
+/**
+  Check whether ft_query_extra_word_chars server variable is enabled for the
+  current session
+
+  @return ft_query_extra_word_chars value
+*/
+int thd_get_ft_query_extra_word_chars(void);
+
 #ifdef __cplusplus
 }
 #endif
