@@ -1267,6 +1267,17 @@ extern "C" void thd_kill(ulong id) {
 }
 
 /**
+   Check whether ft_query_extra_word_chars server variable is enabled for the
+   current session
+
+   @return ft_query_extra_word_chars value
+*/
+extern "C" int thd_get_ft_query_extra_word_chars(void) {
+  const THD *thd = current_thd;
+  return thd ? thd->variables.ft_query_extra_word_chars : 0;
+}
+
+/**
   Close the Vio associated this session.
 
   @remark LOCK_thd_data is taken due to the fact that
