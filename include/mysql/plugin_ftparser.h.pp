@@ -134,6 +134,7 @@ void remove_ssl_err_thread_state();
 int thd_command(const void * thd);
 long long thd_start_time(const void * thd);
 void thd_kill(unsigned long id);
+int thd_get_ft_query_extra_word_chars(void);
 enum enum_ftparser_mode {
   MYSQL_FTPARSER_SIMPLE_MODE = 0,
   MYSQL_FTPARSER_WITH_STOPWORDS = 1,
