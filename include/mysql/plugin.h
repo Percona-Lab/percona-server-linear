@@ -857,6 +857,14 @@ void remove_ssl_err_thread_state();
 */
 unsigned int thd_get_num_vcpus();
 
+/**
+  Check whether ft_query_extra_word_chars server variable is enabled for the
+  current session
+
+  @return ft_query_extra_word_chars value
+*/
+int thd_get_ft_query_extra_word_chars(void);
+
 typedef bool (*ssl_reload_callback_t)(void *);
 bool register_ssl_reload_callback(ssl_reload_callback_t);
 bool deregister_ssl_reload_callback(ssl_reload_callback_t);
