@@ -135,6 +135,7 @@ unsigned int thd_get_num_vcpus();
 int thd_command(const void * thd);
 long long thd_start_time(const void * thd);
 void thd_kill(unsigned long id);
+int thd_get_ft_query_extra_word_chars(void);
 struct st_mysql_keyring {
   int interface_version;
   bool (*mysql_key_store)(const char *key_id, const char *key_type,
