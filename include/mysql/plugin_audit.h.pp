@@ -144,6 +144,7 @@ unsigned int thd_get_num_vcpus();
 int thd_command(const void * thd);
 long long thd_start_time(const void * thd);
 void thd_kill(unsigned long id);
+int thd_get_ft_query_extra_word_chars(void);
 #include "my_command.h"
 enum enum_server_command {
   COM_SLEEP,
