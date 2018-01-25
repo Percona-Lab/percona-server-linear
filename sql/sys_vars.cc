@@ -132,11 +132,9 @@
 #include "storage/perfschema/pfs_server.h"
 #endif /* WITH_PERFSCHEMA_STORAGE_ENGINE */
 
-
 #define MAX_CONNECTIONS 100000
 
 TYPELIB bool_typelib = {array_elements(bool_values) - 1, "", bool_values, 0};
-
 
 static bool update_buffer_size(THD *, KEY_CACHE *key_cache,
                                ptrdiff_t offset MY_ATTRIBUTE((unused)),
@@ -4630,12 +4628,18 @@ static char *server_version_ptr;
 static Sys_var_version Sys_version(
     "version", "Server version",
     READ_ONLY NON_PERSIST GLOBAL_VAR(server_version_ptr), NO_CMD_LINE,
-    IN_SYSTEM_CHARSET, DEFAULT(server_version));
+    IN_SYSTEM_CHARSET, DEFAULT(MYSQL_SERVER_VERSION));
+
+static char *server_version_suffix_ptr;
+static Sys_var_charptr Sys_version_suffix("version_suffix", "version_suffix",
+                                          GLOBAL_VAR(server_version_suffix_ptr),
+                                          NO_CMD_LINE, IN_SYSTEM_CHARSET,
+                                          DEFAULT(server_version_suffix));
 
 static char *server_version_comment_ptr;
 static Sys_var_charptr Sys_version_comment(
     "version_comment", "version_comment",
-    READ_ONLY NON_PERSIST GLOBAL_VAR(server_version_comment_ptr), NO_CMD_LINE,
+    GLOBAL_VAR(server_version_comment_ptr), NO_CMD_LINE,
     IN_SYSTEM_CHARSET, DEFAULT(MYSQL_COMPILATION_COMMENT));
 
 static char *server_version_compile_machine_ptr;
