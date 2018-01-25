@@ -1542,6 +1542,7 @@ const char *mysql_real_data_home_ptr = mysql_real_data_home;
 char *opt_protocol_compression_algorithms;
 char server_version[SERVER_VERSION_LENGTH];
 char server_version_with_update[SERVER_VERSION_LENGTH];
+char server_version_suffix[SERVER_VERSION_LENGTH];
 const char *mysqld_unix_port;
 char *opt_mysql_tmpdir;
 
@@ -13510,11 +13511,15 @@ static void set_server_version(void) {
     if (SERVER_VERSION_LENGTH - (end - buf) > static_cast<int>(sizeof("-tsan")))
       end = my_stpcpy(end, "-tsan");
 #endif
+    assert(end < buf + SERVER_VERSION_LENGTH);
   };
 
   append_runtime_version_suffixes(server_version, MYSQL_SERVER_VERSION);
   append_runtime_version_suffixes(server_version_with_update,
                                   MYSQL_SERVER_VERSION_WITH_UPDATE);
+
+  my_stpcpy(server_version_suffix,
+            server_version + strlen(MYSQL_SERVER_VERSION));
 }
 
 static const char *get_relative_path(const char *path) {
