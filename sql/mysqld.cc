@@ -10799,6 +10799,10 @@ static void set_server_version(void) {
       static_cast<int>(sizeof("-tsan")))
     end = my_stpcpy(end, "-tsan");
 #endif
+
+  assert(end < server_version + SERVER_VERSION_LENGTH);
+  my_stpcpy(server_version_suffix,
+            server_version + strlen(MYSQL_SERVER_VERSION));
 }
 
 static const char *get_relative_path(const char *path) {
