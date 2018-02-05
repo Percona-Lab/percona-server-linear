@@ -796,8 +796,8 @@ ENDIF()
 
 OPTION(WITH_MSAN "Enable memory sanitizer" OFF)
 IF(WITH_MSAN)
-  MY_SANITIZER_CHECK("-fsanitize=memory -fsanitize-memory-track-origins"
-    TRUE WITH_MSAN_OK)
+  MY_SANITIZER_CHECK("-fsanitize=memory -fsanitize-memory-track-origins -fsanitize-blacklist=${CMAKE_CURRENT_SOURCE_DIR}/cmake/msan-blacklist.txt"
+                     TRUE WITH_MSAN_OK)
   IF(NOT WITH_MSAN_OK)
     MESSAGE(FATAL_ERROR "Do not know how to enable memory sanitizer")
   ELSE()
