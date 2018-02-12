@@ -3019,7 +3019,8 @@ bool JOIN::get_best_combination() {
 
   // sjm is no longer needed, trash it. To reuse it, reset its members!
   for (TABLE_LIST *sj_nest : query_block->sj_nests) {
-    TRASH(&sj_nest->nested_join->sjm, sizeof(sj_nest->nested_join->sjm));
+    TRASH(static_cast<void *>(&sj_nest->nested_join->sjm),
+          sizeof(sj_nest->nested_join->sjm));
   }
 
   return false;
