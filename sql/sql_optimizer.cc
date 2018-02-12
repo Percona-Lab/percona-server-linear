@@ -2760,7 +2760,8 @@ bool JOIN::get_best_combination() {
   List_iterator<TABLE_LIST> sj_list_it(select_lex->sj_nests);
   TABLE_LIST *sj_nest;
   while ((sj_nest = sj_list_it++))
-    TRASH(&sj_nest->nested_join->sjm, sizeof(sj_nest->nested_join->sjm));
+    TRASH(static_cast<void *>(&sj_nest->nested_join->sjm),
+          sizeof(sj_nest->nested_join->sjm));
 
   DBUG_RETURN(false);
 }
@@ -5896,7 +5897,7 @@ static bool optimize_semijoin_nests_for_materialization(JOIN *join) {
       if (!(sj_nest->nested_join->sjm.positions =
                 (POSITION *)join->thd->alloc(sizeof(POSITION) * n_tables)))
         DBUG_RETURN(true);
-      memcpy(sj_nest->nested_join->sjm.positions,
+      memcpy(static_cast<void *>(sj_nest->nested_join->sjm.positions),
              join->best_positions + join->const_tables,
              sizeof(POSITION) * n_tables);
     }
