@@ -4045,6 +4045,7 @@ sub run_query {
 sub do_before_run_mysqltest($) {
   my $tinfo = shift;
 
+  $ENV{'MYSQL_CURRENT_TEST_DIR'} = dirname($tinfo->{'path'});
   # Remove old files produced by mysqltest
   my $base_file =
     mtr_match_extension($tinfo->{result_file}, "result");    # Trim extension
