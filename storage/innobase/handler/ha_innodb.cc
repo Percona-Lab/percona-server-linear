@@ -7623,7 +7623,11 @@ int innobase_fts_text_case_cmp(const void *cs, /*!< in: Character set */
   const fts_string_t *s2 = (const fts_string_t *)p2;
   ulint newlen;
 
-  my_casedn_str(charset, (char *)s2->f_str);
+
+  if (!my_binary_compare(charset)) {
+    my_casedn_str(charset, (char *)s2->f_str);
+  }
+
 
   newlen = strlen((const char *)s2->f_str);
 
