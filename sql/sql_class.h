@@ -5218,7 +5218,9 @@ void my_eof(THD *thd);
 
 bool add_item_to_list(THD *thd, Item *item);
 
+
 /*************************************************************************/
+
 
 /**
   Check if engine substitution is allowed in the current thread context.
