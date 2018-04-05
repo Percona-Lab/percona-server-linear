@@ -4361,7 +4361,9 @@ inline LEX_STRING *lex_string_copy(MEM_ROOT *root, LEX_STRING *dst,
 bool add_item_to_list(THD *thd, Item *item);
 void add_order_to_list(THD *thd, ORDER *order);
 
+
 /*************************************************************************/
+
 
 /**
   The function re-attaches the engine ha_data (which was previously detached by
