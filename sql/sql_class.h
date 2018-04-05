@@ -4565,7 +4565,9 @@ void my_eof(THD *thd);
 
 bool add_item_to_list(THD *thd, Item *item);
 
+
 /*************************************************************************/
+
 
 /**
   The function re-attaches the engine ha_data (which was previously detached by
