@@ -9626,6 +9626,9 @@ ER_COMPRESSION_DICTIONARY_DATA_TOO_LONG
 ER_COMPRESSION_DICTIONARY_IS_REFERENCED
   eng "Compression dictionary '%-.192s' is in use"
 
+ER_RPL_FAILED_TO_RECREATE_CACHE_FOR_INFO_FILE
+  eng "Failed to recreate a cache on info file (file '%s')"
+
 #
 # End of Percona Server error messages
 #
