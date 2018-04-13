@@ -1,6 +1,5 @@
 --source include/have_rocksdb.inc
 --source include/have_myisam.inc
---source include/not_embedded.inc
 --source include/not_threadpool.inc
 
 # This test verifies that *all* MyRocks system variables are tested by the
@@ -39,3 +38,5 @@ select variable_name as `There should be *no* variables listed below:` from t2
 
 drop table t1;
 drop table t2;
+
+--remove_file $MYSQLTEST_VARDIR/tmp/rocksdb_sys_vars.all_vars.txt
