@@ -373,7 +373,7 @@ static MY_ATTRIBUTE((warn_unused_result)) bool row_log_block_allocate(
 
     log_buf.block =
         ut_allocator<byte>(mem_key_row_log_buf)
-            .allocate_large(srv_sort_buf_size, &log_buf.block_pfx);
+            .allocate_large(srv_sort_buf_size, &log_buf.block_pfx, false);
 
     if (log_buf.block == NULL) {
       DBUG_RETURN(false);
@@ -3262,9 +3262,9 @@ bool row_log_allocate(
   index->online_log = log;
 
   if (log_tmp_is_encrypted()) {
-    ulint size = srv_sort_buf_size;
-    log->crypt_head = static_cast<byte *>(os_mem_alloc_large(&size));
-    log->crypt_tail = static_cast<byte *>(os_mem_alloc_large(&size));
+    auto size = srv_sort_buf_size;
+    log->crypt_head = static_cast<byte *>(os_mem_alloc_large(&size, false));
+    log->crypt_tail = static_cast<byte *>(os_mem_alloc_large(&size, false));
 
     if (!log->crypt_head || !log->crypt_tail) {
       row_log_free(log);
