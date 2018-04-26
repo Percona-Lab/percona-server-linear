@@ -847,14 +847,14 @@ class ut_allocator {
   objects of type 'T' and trace the allocation.
   @param[in]	n_elements	number of elements
   @return pointer to the allocated memory or NULL */
-  pointer allocate_large(size_type n_elements) {
+  pointer allocate_large(size_type n_elements, bool populate) {
     if (n_elements == 0 || n_elements > max_size()) {
       return (nullptr);
     }
 
     ulint n_bytes = n_elements * sizeof(T) + CPU_PAGE_SIZE;
 
-    auto ptr = os_mem_alloc_large(&n_bytes);
+    auto ptr = os_mem_alloc_large(&n_bytes, populate);
     if (unlikely(!ptr)) return nullptr;
 
 #ifdef UNIV_PFS_MEMORY

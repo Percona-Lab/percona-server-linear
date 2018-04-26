@@ -52,7 +52,7 @@ extern std::atomic<ulint> os_total_large_mem_allocated;
 extern bool os_use_large_pages;
 
 /** Large page size. This may be a boot-time option on some platforms */
-extern uint os_large_page_size;
+extern ulint os_large_page_size;
 
 /** Converts the current process id to a number.
 @return process id as a number */
@@ -60,8 +60,9 @@ ulint os_proc_get_number(void);
 
 /** Allocates large pages memory.
 @param[in,out]	n	Number of bytes to allocate
+@param[in] populate virtual page preallocation
 @return allocated memory */
-void *os_mem_alloc_large(ulint *n);
+void *os_mem_alloc_large(ulint *n, bool populate);
 
 /** Frees large pages memory.
 @param[in]	ptr	pointer returned by os_mem_alloc_large()
