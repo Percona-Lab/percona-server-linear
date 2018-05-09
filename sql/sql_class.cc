@@ -834,7 +834,6 @@ void THD::init(void) {
   rpl_thd_ctx.dependency_tracker_ctx().set_last_session_sequence_number(0);
 }
 
-
 void THD::init_query_mem_roots() {
   mem_root->set_block_size(variables.query_alloc_block_size);
   get_transaction()->init_mem_root_defaults(variables.trans_alloc_block_size,
@@ -1972,7 +1971,6 @@ void THD::begin_attachable_rw_transaction() {
   m_attachable_trx = new Attachable_trx_rw(this);
 }
 
-
 /****************************************************************************
   Handling of statement states in functions and triggers.
 
@@ -2339,7 +2337,6 @@ void THD::set_query(const LEX_CSTRING &query_arg) {
   PSI_THREAD_CALL(set_thread_info)(query_arg.str, query_arg.length);
 #endif
 }
-
 
 /**
   Leave explicit LOCK TABLES or prelocked mode and restore value of
