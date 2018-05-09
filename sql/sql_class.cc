@@ -1235,7 +1235,6 @@ void THD::init(void) {
   m_disable_password_validation = false;
 }
 
-
 void THD::init_query_mem_roots() {
   mem_root->set_block_size(variables.query_alloc_block_size);
   get_transaction()->init_mem_root_defaults(variables.trans_alloc_block_size,
@@ -2447,7 +2446,6 @@ void THD::begin_attachable_rw_transaction() {
   m_attachable_trx = new Attachable_trx_rw(this);
 }
 
-
 /****************************************************************************
   Handling of statement states in functions and triggers.
 
@@ -2801,7 +2799,6 @@ void THD::set_query(LEX_CSTRING query_arg) {
   m_query_string = query_arg;
   mysql_mutex_unlock(&LOCK_thd_query);
 }
-
 
 /**
   Leave explicit LOCK TABLES or prelocked mode and restore value of
