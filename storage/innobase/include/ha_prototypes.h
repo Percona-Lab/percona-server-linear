@@ -480,7 +480,7 @@ trx_t *innobase_get_trx(void);
 InnoDB extended statistics should be collected.
 @return transaction object if statistics should be collected, or NULL. */
 [[nodiscard]]
-trx_t *innobase_get_trx_for_slow_log(void);
+trx_t *innobase_get_trx_for_slow_log(void) noexcept;
 
 /** Return the number of read threads for this session.
 @param[in]      thd       Session instance, or nullptr to query the global
