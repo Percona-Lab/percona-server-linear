@@ -191,7 +191,6 @@ que_thr_t *que_thr_end_lock_wait(trx_t *trx) /*!< in: transaction with que_state
                                              in QUE_THR_LOCK_WAIT */
 {
   ut_ad(locksys::owns_lock_shard(trx->lock.wait_lock));
-  ib_uint64_t now;
 
   ut_ad(trx_mutex_own(trx));
 
@@ -207,10 +206,7 @@ que_thr_t *que_thr_end_lock_wait(trx_t *trx) /*!< in: transaction with que_state
 
   que_thr_move_to_run_state(thr);
 
-  if (UNIV_UNLIKELY(trx->take_stats)) {
-    now = ut_time_monotonic_us();
-    trx->lock_que_wait_timer += (ulint)(now - trx->lock_que_wait_ustarted);
-  }
+  trx->stats.stop_lock_wait(*trx);
 
   trx->lock.que_state = TRX_QUE_RUNNING;
 
