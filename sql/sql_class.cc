@@ -93,6 +93,9 @@ using std::max;
 using std::min;
 using std::unique_ptr;
 
+bool opt_log_slow_admin_statements = false;
+ulong opt_log_slow_sp_statements = 0;
+
 ulong kill_idle_transaction_timeout = 0;
 
 /*
@@ -438,6 +441,7 @@ THD::THD(bool enable_plugins)
   thread_stack = 0;
   m_catalog.str = "std";
   m_catalog.length = 3;
+  event_scheduler.data = nullptr;
   m_security_ctx = &m_main_security_ctx;
   password = 0;
   query_start_usec_used = false;
@@ -798,6 +802,7 @@ void THD::init(void) {
     variables.option_bits |= OPTION_BIN_LOG;
   else
     variables.option_bits &= ~OPTION_BIN_LOG;
+  reset_stats();
 
 #if defined(ENABLED_DEBUG_SYNC)
   /* Initialize the Debug Sync Facility. See debug_sync.cc. */
@@ -1111,6 +1116,37 @@ THD::~THD() {
   DBUG_VOID_RETURN;
 }
 
+extern "C" void thd_report_innodb_stat(THD *thd, unsigned long long trx_id,
+                                       enum mysql_trx_stat_type type,
+                                       unsigned long long value) {
+  thd->mark_innodb_used(trx_id);
+  switch (type) {
+    case MYSQL_TRX_STAT_IO_READ_BYTES:
+      DBUG_ASSERT(value > 0);
+      thd->innodb_io_read += value;
+      thd->innodb_io_reads++;
+      break;
+    case MYSQL_TRX_STAT_IO_READ_WAIT_USECS:
+      thd->innodb_io_reads_wait_timer += value;
+      break;
+    case MYSQL_TRX_STAT_LOCK_WAIT_USECS:
+      thd->innodb_lock_que_wait_timer += value;
+      break;
+    case MYSQL_TRX_STAT_INNODB_QUEUE_WAIT_USECS:
+      thd->innodb_innodb_que_wait_timer += value;
+      break;
+    case MYSQL_TRX_STAT_ACCESS_PAGE_ID:
+      thd->access_distinct_page(value);
+      break;
+  }
+}
+
+extern "C" unsigned long thd_log_slow_verbosity(const THD *thd) {
+  return (unsigned long)thd->variables.log_slow_verbosity;
+}
+
+extern "C" int thd_opt_slow_log() { return (int)opt_slow_log; }
+
 /**
   Check whether given connection handle is associated with a background thread.
 
@@ -1374,7 +1410,7 @@ void THD::restore_globals() {
 
 // Resets stats in a THD.
 void THD::reset_stats(void) noexcept {
-  current_connect_time = my_getsystime();
+  current_connect_time = time(nullptr);
   last_global_update_time = current_connect_time;
   reset_diff_stats();
 }
@@ -1443,8 +1479,8 @@ void THD::update_stats(bool ran_command) noexcept {
      are already store in diff_total_*.
   */
 
-  busy_time = 0.0;
-  cpu_time = 0.0;
+  busy_time = 0;
+  cpu_time = 0;
   bytes_received = 0;
   bytes_sent = 0;
   binlog_bytes_written = 0;
@@ -1540,6 +1576,7 @@ void THD::cleanup_after_query() {
     lex->mi.repl_ignore_server_ids.clear();
   }
   if (rli_slave) rli_slave->cleanup_after_query();
+  approx_distinct_pages.clear();
   // Set the default "cute" mode for the execution environment:
   check_for_truncated_fields = CHECK_FIELD_IGNORE;
 }
@@ -1729,7 +1766,7 @@ void THD::shutdown_active_vio() {
   DBUG_VOID_RETURN;
 }
 
-const char *get_client_host(const THD &client) {
+const char *get_client_host(const THD &client) noexcept {
   return client.security_context()->host_or_ip().length
              ? client.security_context()->host_or_ip().str
              : client.security_context()->host().length
@@ -2126,6 +2163,7 @@ void THD::clear_slow_extended() noexcept {
   innodb_io_reads_wait_timer = 0;
   innodb_lock_que_wait_timer = 0;
   innodb_innodb_que_wait_timer = 0;
+  approx_distinct_pages.clear();
   innodb_page_access = 0;
   query_plan_flags = QPLAN_NONE;
   query_plan_fsort_passes = 0;
