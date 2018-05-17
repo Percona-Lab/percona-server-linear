@@ -38,6 +38,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include <sql_thd_internal_api.h>
 
 #include "btr0sea.h"
+#include "btr0types.h"
 #include "clone0clone.h"
 #include "dict0dd.h"
 #include "fsp0sysspace.h"
@@ -168,6 +169,9 @@ static void trx_init(trx_t *trx) {
 
   trx->ddl_operation = false;
 
+  trx->idle_start = 0;
+  trx->last_stmt_start = 0;
+
   trx->error_state = DB_SUCCESS;
 
   trx->error_key_num = ULINT_UNDEFINED;
@@ -213,14 +217,7 @@ static void trx_init(trx_t *trx) {
 
   trx->error_index = nullptr;
 
-  trx->io_reads = 0;
-  trx->io_read = 0;
-  trx->io_reads_wait_timer = 0;
-  trx->lock_que_wait_timer = 0;
-  trx->innodb_que_wait_timer = 0;
-  trx->distinct_page_access = 0;
-  trx->distinct_page_access_hash = NULL;
-  trx->take_stats = false;
+  trx->stats.set(false);
 
   /* During asynchronous rollback, we should reset forced rollback flag
   only after rollback is complete to avoid race with the thread owning
@@ -541,11 +538,6 @@ trx_t *trx_allocate_for_mysql(void) {
 
   trx_sys_mutex_exit();
 
-  if (UNIV_UNLIKELY(trx->take_stats)) {
-    trx->distinct_page_access_hash = static_cast<byte *>(
-        ut_zalloc(DPAH_SIZE, mem_key_trx_distinct_page_access_hash));
-  }
-
   return (trx);
 }
 
@@ -631,11 +623,6 @@ finally freed.
 @param[in]	prepared	boolean value to specify whether trx is
                                 for recovery or not. */
 inline void trx_disconnect_from_mysql(trx_t *trx, bool prepared) {
-  if (trx->distinct_page_access_hash) {
-    ut_free(trx->distinct_page_access_hash);
-    trx->distinct_page_access_hash = NULL;
-  }
-
   trx_sys_mutex_enter();
 
   ut_ad(trx->in_mysql_trx_list);
@@ -1192,8 +1179,8 @@ void trx_assign_rseg_durable(trx_t *trx) {
   trx->rsegs.m_redo.rseg = srv_read_only_mode ? nullptr : get_next_redo_rseg();
 }
 
-/** Assign a temp-tablespace bound rollback-segment to a transaction.
-@param[in,out]	trx	transaction that involves write to temp-table. */
+/** Assign an id for this RW transaction and insert it into trx_sys->rw_trx_ids
+@param trx	transaction to assign an id for */
 static void trx_assign_id_for_rw(trx_t *trx) {
   ut_ad(mutex_own(&trx_sys->mutex));
 
@@ -2000,11 +1987,6 @@ written */
     trx->state = TRX_STATE_NOT_STARTED;
   }
 
-  if (UNIV_LIKELY_NULL(trx->distinct_page_access_hash)) {
-    ut_free(trx->distinct_page_access_hash);
-    trx->distinct_page_access_hash = NULL;
-  }
-
   /* trx->in_mysql_trx_list would hold between
   trx_allocate_for_mysql() and trx_free_for_mysql(). It does not
   hold for recovered transactions or system transactions. */
@@ -2250,17 +2232,11 @@ void trx_commit_or_rollback_prepare(trx_t *trx) /*!< in/out: transaction */
       query thread to the suspended state */
 
       if (trx->lock.que_state == TRX_QUE_LOCK_WAIT) {
-        ib_uint64_t now;
-
         ut_a(trx->lock.wait_thr != NULL);
         trx->lock.wait_thr->state = QUE_THR_SUSPENDED;
         trx->lock.wait_thr = NULL;
 
-        if (UNIV_UNLIKELY(trx->take_stats)) {
-          now = ut_time_monotonic_us();
-          trx->lock_que_wait_timer +=
-              (ulint)(now - trx->lock_que_wait_ustarted);
-        }
+        trx->stats.stop_lock_wait(*trx);
 
         trx->lock.que_state = TRX_QUE_RUNNING;
       }
