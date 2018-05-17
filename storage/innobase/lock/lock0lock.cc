@@ -382,6 +382,8 @@ void lock_sys_close(void) {
     lock_latest_err_file = nullptr;
   }
 
+  if (!lock_sys) return;
+
   ut::delete_(lock_sys->rec_hash);
   ut::delete_(lock_sys->prdt_hash);
   ut::delete_(lock_sys->prdt_page_hash);
@@ -1491,11 +1493,7 @@ void RecLock::set_wait_state(lock_t *lock) {
 
   m_trx->lock.was_chosen_as_deadlock_victim = false;
 
-  if (UNIV_UNLIKELY(m_trx->take_stats)) {
-    m_trx->lock_que_wait_ustarted = std::chrono::duration_cast<std::chrono::microseconds>(
-        std::chrono::steady_clock::now().time_since_epoch())
-        .count();
-  }
+  m_trx->stats.start_lock_wait();
 
   bool stopped = que_thr_stop(m_thr);
   ut_a(stopped);
@@ -3644,11 +3642,7 @@ static dberr_t lock_table_enqueue_waiting(ulint mode, dict_table_t *table,
       std::chrono::system_clock::from_time_t(time(nullptr));
   trx->lock.was_chosen_as_deadlock_victim = false;
 
-  if (UNIV_UNLIKELY(trx->take_stats)) {
-    trx->lock_que_wait_ustarted = std::chrono::duration_cast<std::chrono::microseconds>(
-        std::chrono::steady_clock::now().time_since_epoch())
-        .count();
-  }
+  trx->stats.start_lock_wait();
 
   auto stopped = que_thr_stop(thr);
   ut_a(stopped);
@@ -5361,6 +5355,7 @@ dberr_t lock_rec_insert_check_and_lock(
   ut_ad(block->frame == page_align(rec));
   ut_ad(!dict_index_is_online_ddl(index) || index->is_clustered() ||
         (flags & BTR_CREATE_FLAG));
+  ut_ad((flags & BTR_NO_LOCKING_FLAG) || thr);
 
   if (flags & BTR_NO_LOCKING_FLAG) {
     return (DB_SUCCESS);
