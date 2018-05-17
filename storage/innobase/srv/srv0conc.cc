@@ -187,6 +187,7 @@ static void srv_conc_enter_innodb_with_atomics(
     }
 
     os_thread_sleep(sleep_in_us);
+    trx->stats.bump_innodb_enter_wait(*trx, sleep_in_us);
 
     trx->op_info = "";
 
