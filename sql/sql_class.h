@@ -38,11 +38,13 @@
 #include <stdio.h>
 #include <string.h>
 
+#include <bitset>
 #include <memory>
 
 #include "m_ctype.h"
 #include "my_alloc.h"
 #include "my_compiler.h"
+#include "my_pointer_arithmetic.h"
 #include "mysql/components/services/mysql_cond_bits.h"
 #include "mysql/components/services/mysql_mutex_bits.h"
 #include "mysql/components/services/psi_idle_bits.h"
@@ -345,6 +347,15 @@ class Query_arena {
     if ((ptr = alloc_root(mem_root, size))) memset(ptr, 0, size);
     return ptr;
   }
+  inline void *mem_aligned_calloc(size_t size, size_t alignment) {
+    size_t unaligned_size = size + alignment;
+    void *ptr = alloc_root(mem_root, unaligned_size);
+    if (!ptr) return nullptr;
+    ptr = reinterpret_cast<void *>(
+        MY_ALIGN(reinterpret_cast<std::uintptr_t>(ptr), alignment));
+    memset(ptr, 0, size);
+    return ptr;
+  }
   template <typename T>
   T *alloc_typed() {
     void *m = alloc(sizeof(T));
@@ -380,6 +391,7 @@ class Prepared_statement;
 
 /**
   Container for all prepared statements created/used in a connection.
+
   Prepared statements in Prepared_statement_map have unique id
   (guaranteed by id assignment in Prepared_statement::Prepared_statement).
 
@@ -517,7 +529,6 @@ class Open_tables_state {
     intermediate tables used in ALTER TABLE implementation.
   */
   TABLE *temporary_tables;
-
   /*
     During a MySQL session, one can lock tables in two modes: automatic
     or manual. In automatic mode all necessary tables are locked just before
@@ -838,6 +849,64 @@ static inline void my_micro_time_to_timeval(ulonglong micro_time,
 struct QUERY_START_TIME_INFO {
   struct timeval start_time;
   ulonglong start_utime;
+};
+
+/**
+   A single-hash-function bloom filter for approximate accessed page
+   counter.
+*/
+class Bloom_filter final {
+ private:
+  /** Bloom filter size, and a prime number for the calculation below */
+  static const constexpr auto SIZE = 8191;
+
+  typedef std::bitset<SIZE> Bit_set;
+
+  /** The bit set, which is allocated in a MEM_ROOT */
+  Bit_set *bit_set;
+
+  // Non-copyable
+  Bloom_filter(const Bloom_filter &);
+  Bloom_filter &operator=(const Bloom_filter &);
+
+ public:
+  Bloom_filter() : bit_set(nullptr) {}
+
+  ~Bloom_filter() {
+    // Do not delete, just destruct, due to MEM_ROOT allocation
+    bit_set->~bitset();
+  }
+
+  void clear() noexcept {
+    // Do not delete, just force new MEM_ROOT allocation on the next use
+    bit_set = nullptr;
+  }
+
+  /**
+     Check whether key is maybe a member of a set
+
+     @param[in, out]    mem_root        MEM_ROOT to allocate the bit set in, if
+      not allocated already
+     @param[in]         key             key whose presence to check
+
+     @return if true, the key might be a member of the set. If false, the key
+     is definitely not a member of the set.
+  */
+  bool test_and_set(MEM_ROOT *mem_root, ulong key) {
+    if (!bit_set) {
+      void *bit_set_place = alloc_root(mem_root, sizeof(Bit_set));
+      // FIXME: memory allocation failure is eaten silently. Nonexact stats are
+      // the least of the concerns then.
+      if (!bit_set_place) return false;
+      bit_set = new (bit_set_place) Bit_set();
+    }
+    // Duplicating ut_hash_ulint calculation
+    const ulong pos = (key ^ 1653893711) % SIZE;
+    DBUG_ASSERT(pos < SIZE);
+    if (bit_set->test(pos)) return false;
+    bit_set->set(pos);
+    return true;
+  }
 };
 
 /**
@@ -1403,11 +1472,38 @@ class THD : public MDL_context_owner,
   ulong innodb_io_reads_wait_timer;
   ulong innodb_lock_que_wait_timer;
   ulong innodb_innodb_que_wait_timer;
-  ulong innodb_page_access;
+
+ private:
   /*
     Variable innodb_was_used shows used or not InnoDB engine in current query.
   */
   bool innodb_was_used;
+  Bloom_filter approx_distinct_pages;
+
+ public:
+  ulong innodb_page_access;
+
+  void mark_innodb_used(ulonglong trx_id) noexcept {
+    DBUG_ASSERT(innodb_trx_id == 0 || innodb_trx_id == trx_id ||
+                is_attachable_transaction_active());
+    if (trx_id && !is_attachable_transaction_active()) innodb_trx_id = trx_id;
+    innodb_was_used = true;
+  }
+
+  void access_distinct_page(ulong page_id) {
+    if (approx_distinct_pages.test_and_set(mem_root, page_id))
+      innodb_page_access++;
+  }
+
+  bool innodb_slow_log_enabled() const noexcept {
+    return variables.log_slow_verbosity & (1ULL << SLOG_V_INNODB);
+  }
+
+  bool innodb_slow_log_data_logged() const noexcept {
+    DBUG_ASSERT(!innodb_was_used || innodb_slow_log_enabled());
+    return innodb_was_used;
+  }
+
   /*
     Variable query_plan_flags collects information about query plan entites
     used on query execution.
@@ -1504,7 +1600,7 @@ class THD : public MDL_context_owner,
     mysql_mutex_unlock(&this->LOCK_thd_data);
   }
 
-  bool order_deterministic;
+  bool order_deterministic{false};
 
   /*
     Position of first event in Binlog
@@ -2516,9 +2612,9 @@ class THD : public MDL_context_owner,
     variables are reset to 0.
   */
   // Time when the current thread connected to MySQL.
-  ulonglong current_connect_time;
+  time_t current_connect_time;
   // Last time when THD stats were updated in global_user_stats.
-  ulonglong last_global_update_time;
+  time_t last_global_update_time;
   // Busy (non-idle) time for just one command.
   double busy_time{0.0};
   // Busy time not updated in global_user_stats yet.
@@ -2667,6 +2763,7 @@ class THD : public MDL_context_owner,
   inline void set_active_vio(Vio *vio) {
     mysql_mutex_lock(&LOCK_thd_data);
     active_vio = vio;
+    vio_set_thread_id(vio, pthread_self());
     mysql_mutex_unlock(&LOCK_thd_data);
   }
 
@@ -4244,7 +4341,7 @@ class Internal_error_handler_holder {
 /* Returns string as 'IP' for the client-side of the connection represented by
    'client'. Does not allocate memory. May return "".
 */
-const char *get_client_host(const THD &client);
+const char *get_client_host(const THD &client) noexcept;
 
 /**
   A simple holder for the Prepared Statement Query_arena instance in THD.
@@ -4351,9 +4448,7 @@ inline LEX_STRING *lex_string_copy(MEM_ROOT *root, LEX_STRING *dst,
 bool add_item_to_list(THD *thd, Item *item);
 void add_order_to_list(THD *thd, ORDER *order);
 
-
 /*************************************************************************/
-
 
 /**
   The function re-attaches the engine ha_data (which was previously detached by

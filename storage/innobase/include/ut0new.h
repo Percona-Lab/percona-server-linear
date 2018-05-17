@@ -1,6 +1,7 @@
 /*****************************************************************************
 
 Copyright (c) 2014, 2018, Oracle and/or its affiliates. All Rights Reserved.
+Copyright (c) 2016, Percona Inc. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -187,12 +188,11 @@ extern PSI_memory_key mem_key_undo_spaces;
 extern PSI_memory_key mem_key_ut_lock_free_hash_t;
 /* Please obey alphabetical order in the definitions above. */
 
-extern PSI_memory_key	mem_key_log_online_modified_pages;
-extern PSI_memory_key	mem_key_log_online_sys;
-extern PSI_memory_key	mem_key_log_online_read_buf;
-extern PSI_memory_key	mem_key_log_online_iterator_files;
-extern PSI_memory_key	mem_key_log_online_iterator_page;
-extern PSI_memory_key	mem_key_trx_distinct_page_access_hash;
+extern PSI_memory_key mem_key_log_online_modified_pages;
+extern PSI_memory_key mem_key_log_online_sys;
+extern PSI_memory_key mem_key_log_online_read_buf;
+extern PSI_memory_key mem_key_log_online_iterator_files;
+extern PSI_memory_key mem_key_log_online_iterator_page;
 extern PSI_memory_key mem_key_parallel_doublewrite;
 
 /** Setup the internal objects needed for UT_NEW() to operate.
