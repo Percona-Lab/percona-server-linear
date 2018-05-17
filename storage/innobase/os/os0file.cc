@@ -5321,7 +5321,6 @@ static MY_ATTRIBUTE((warn_unused_result)) dberr_t
 @param[out]	buf		buffer where to read
 @param[in]	offset		file offset from the start where to read
 @param[in]	n		number of bytes to read, starting from offset
-@param[in,out]	trx		transaction to account the read to, or NULL
 @param[out]	err		DB_SUCCESS or error code
 @return number of bytes read, -1 if error */
 static MY_ATTRIBUTE((warn_unused_result)) ssize_t
@@ -5332,32 +5331,19 @@ static MY_ATTRIBUTE((warn_unused_result)) ssize_t
 
   meb_mutex.lock();
 #endif /* UNIV_HOTBACKUP */
-  ib_uint64_t start_time;
-  ib_uint64_t finish_time;
-
   ++os_n_file_reads;
 #ifdef UNIV_HOTBACKUP
   meb_mutex.unlock();
 #endif /* UNIV_HOTBACKUP */
 
-  if (UNIV_LIKELY_NULL(trx)) {
-    ut_ad(trx->take_stats);
-    trx->io_reads++;
-    trx->io_read += n;
-    start_time = ut_time_monotonic_us();
-  } else {
-    start_time = 0;
-  }
+  const ib_time_monotonic_us_t start_time = trx_stats::start_io_read(trx, n);
 
   (void)os_atomic_increment_ulint(&os_n_pending_reads, 1);
   MONITOR_ATOMIC_INC(MONITOR_OS_PENDING_READS);
 
   ssize_t n_bytes = os_file_io(type, file, buf, n, offset, err);
 
-  if (UNIV_UNLIKELY(start_time != 0)) {
-    finish_time = ut_time_monotonic_us();
-    trx->io_reads_wait_timer += (ulint)(finish_time - start_time);
-  }
+  trx_stats::end_io_read(trx, start_time);
 
   (void)os_atomic_decrement_ulint(&os_n_pending_reads, 1);
   MONITOR_ATOMIC_DEC(MONITOR_OS_PENDING_READS);
@@ -5388,7 +5374,6 @@ static MY_ATTRIBUTE((warn_unused_result)) dberr_t
 
   meb_mutex.lock();
 #endif /* UNIV_HOTBACKUP */
-  ut_ad(!trx || trx->take_stats);
 
   os_bytes_read_since_printout += n;
 #ifdef UNIV_HOTBACKUP
@@ -5816,7 +5801,6 @@ Requests a synchronous positioned read operation.
 dberr_t os_file_read_func(IORequest &type, const char *file_name, os_file_t file, void *buf,
                           os_offset_t offset, ulint n, trx_t *trx) {
   ut_ad(type.is_read());
-  ut_ad(!trx || trx->take_stats);
 
   return (os_file_read_page(type, file_name, file, buf, offset, n, nullptr, true, trx));
 }
@@ -7343,13 +7327,11 @@ try_again:
 
   Slot *slot;
 
-  slot = array->reserve_slot(type, m1, m2, file, name, buf, offset, n, space_id);
+  slot =
+      array->reserve_slot(type, m1, m2, file, name, buf, offset, n, space_id);
 
   if (type.is_read()) {
-    if (trx) {
-      trx->io_reads++;
-      trx->io_read += n;
-    }
+    trx_stats::bump_io_read(trx, n);
 
     if (srv_use_native_aio) {
       ++os_n_file_reads;
