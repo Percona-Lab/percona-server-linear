@@ -850,8 +850,7 @@ bool File_query_log::write_slow(THD *thd, ulonglong current_utime,
   thd->profiling->print_current(&log_file);
 #endif
 
-  if ((thd->variables.log_slow_verbosity & (1ULL << SLOG_V_INNODB)) &&
-      thd->innodb_was_used) {
+  if (thd->innodb_slow_log_data_logged()) {
     char buf[20];
     snprintf(buf, 20, "%llX", thd->innodb_trx_id);
     if (my_b_printf(&log_file, "# InnoDB_trx_id: %s\n", buf) == (uint)-1)
@@ -873,8 +872,8 @@ bool File_query_log::write_slow(THD *thd, ulonglong current_utime,
           thd->query_plan_fsort_passes) == (uint)-1)
     goto err;
 
-  if (thd->variables.log_slow_verbosity & (1ULL << SLOG_V_INNODB)) {
-    if (thd->innodb_was_used) {
+  if (thd->innodb_slow_log_enabled()) {
+    if (thd->innodb_slow_log_data_logged()) {
       char buf[3][20];
       snprintf(buf[0], 20, "%.6f", thd->innodb_io_reads_wait_timer / 1000000.0);
       snprintf(buf[1], 20, "%.6f", thd->innodb_lock_que_wait_timer / 1000000.0);
@@ -2036,6 +2035,7 @@ bool log_slow_applicable(THD *thd, int sp_sql_command) {
   @param thd                 thread handle
 */
 void log_slow_do(THD *thd) {
+  thd_proc_info(thd, "logging slow query");
   THD_STAGE_INFO(thd, stage_logging_slow_query);
 
   if (thd->rewritten_query().length())
