@@ -1065,7 +1065,6 @@ bool relay_log_recovery;
 bool opt_allow_suspicious_udfs;
 const char *opt_secure_file_priv;
 bool opt_log_slow_admin_statements = 0;
-ulong opt_log_slow_sp_statements = 0;
 bool opt_log_slow_slave_statements = 0;
 bool lower_case_file_system = 0;
 bool opt_large_pages = 0;
