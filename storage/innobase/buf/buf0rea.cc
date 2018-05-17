@@ -196,8 +196,6 @@ ulint buf_read_ahead_random(const page_id_t &page_id,
   page_no_t i;
   const page_no_t buf_read_ahead_random_area = BUF_READ_AHEAD_AREA(buf_pool);
 
-  ut_ad(!trx || trx->take_stats);
-
   if (!srv_random_read_ahead) {
     /* Disabled by user */
     return (0);
@@ -299,7 +297,6 @@ read_ahead:
       }
     }
   }
-  os_aio_dispatch_read_array_submit();
 
   /* In simulated aio we wake the aio handler threads only after
   queuing all aio requests, in native aio the following call does
@@ -333,8 +330,6 @@ ibool buf_read_page(const page_id_t &page_id, const page_size_t &page_size,
                     trx_t *trx) {
   ulint count;
   dberr_t err;
-
-  ut_ad(!trx || trx->take_stats);
 
   count = buf_read_page_low(&err, true, 0, BUF_READ_ANY_PAGE, page_id,
                             page_size, false, trx, false);
