@@ -256,7 +256,6 @@ read_ahead:
       }
     }
   }
-  os_aio_dispatch_read_array_submit();
 
   /* In simulated aio we wake the aio handler threads only after
   queuing all aio requests.  */
@@ -286,8 +285,6 @@ bool buf_read_page(const page_id_t &page_id, const page_size_t &page_size,
   count =
       buf_read_page_low(&err, true, IORequest::Type::UNSET, BUF_READ_ANY_PAGE,
                         page_id, page_size, false, trx, false);
-  ut_ad(!trx || trx->take_stats);
-
 
   srv_stats.buf_pool_reads.add(count);
 

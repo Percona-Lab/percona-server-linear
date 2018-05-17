@@ -4994,37 +4994,19 @@ NUM_RETRIES_ON_PARTIAL_IO times to read/write the complete data.
 
   meb_mutex.lock();
 #endif /* UNIV_HOTBACKUP */
-  uint64_t start_time;
-  uint64_t finish_time;
-
   ++os_n_file_reads;
 #ifdef UNIV_HOTBACKUP
   meb_mutex.unlock();
 #endif /* UNIV_HOTBACKUP */
 
-  trx_t *const trx = type.trx();
-  if (UNIV_LIKELY_NULL(trx)) {
-    ut_ad(trx->take_stats);
-    trx->io_reads++;
-    trx->io_read += n;
-    start_time = std::chrono::duration_cast<std::chrono::microseconds>(
-                     std::chrono::steady_clock::now().time_since_epoch())
-                     .count();
-  } else {
-    start_time = 0;
-  }
+  const auto start_time = trx_stats::start_io_read(type.trx(), n);
 
   os_n_pending_reads.fetch_add(1);
   MONITOR_ATOMIC_INC(MONITOR_OS_PENDING_READS);
 
   ssize_t n_bytes = os_file_io(type, file, buf, n, offset, err);
 
-  if (UNIV_UNLIKELY(start_time != 0)) {
-    finish_time = std::chrono::duration_cast<std::chrono::microseconds>(
-                      std::chrono::steady_clock::now().time_since_epoch())
-                      .count();
-    trx->io_reads_wait_timer += (ulint)(finish_time - start_time);
-  }
+  trx_stats::end_io_read(type.trx(), start_time);
 
   os_n_pending_reads.fetch_sub(1);
   MONITOR_ATOMIC_DEC(MONITOR_OS_PENDING_READS);
@@ -6739,9 +6721,8 @@ dberr_t os_aio_func(IORequest &type, AIO_mode aio_mode, const char *name,
   bool io_dispatched = false;
   while (!io_dispatched) {
     {
-      if (type.is_read() && type.trx() != nullptr) {
-        type.trx()->io_reads++;
-        type.trx()->io_read += n;
+      if (type.is_read()) {
+        trx_stats::bump_io_read(type.trx(), n);
       }
       /* The slot is visible to the simulated-AIO thread once reserve_slot()
       drops the array mutex. A completion read goes through os_file_pread(),

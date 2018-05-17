@@ -2916,6 +2916,22 @@ ulonglong innobase_next_autoinc(
   return (next_value);
 }
 
+/**
+Check whether given connection should log stats for slow query log InnoDB
+extensions.
+
+@param[in]	thd	connection handle
+@return whether stats for slow query log InnoDB extensions should be logged
+*/
+static bool innobase_slow_log_verbose(THD *thd) noexcept {
+  /* The background thread check has to come first: internal THDs created for
+  the parallel DDL scan workers have their THD::variables poisoned (see
+  ddl::Parallel_cursor::scan()), so reading log_slow_verbosity out of them
+  trips AddressSanitizer. Such threads never log slow queries anyway. */
+  return thd && thd_opt_slow_log() && !thd_is_background_thread(thd) &&
+         unlikely(thd_log_slow_verbosity(thd) & (1ULL << SLOG_V_INNODB));
+}
+
 /** Initializes some fields in an InnoDB transaction object. */
 static void innobase_trx_init(
     THD *thd,   /*!< in: user thread handle */
@@ -2929,6 +2945,8 @@ static void innobase_trx_init(
 
   trx->check_unique_secondary =
       !thd_test_options(thd, OPTION_RELAXED_UNIQUE_CHECKS);
+
+  trx->stats.set(innobase_slow_log_verbose(thd));
 }
 
 /** Allocates an InnoDB transaction for a MySQL handler object for DML.
@@ -2999,10 +3017,11 @@ trx_t *innobase_get_trx(void) {
 /** Get the transaction of the current connection handle if slow query log
 InnoDB extended statistics should be collected.
 @return transaction object if statistics should be collected, or NULL. */
-trx_t *innobase_get_trx_for_slow_log(void) {
+trx_t *innobase_get_trx_for_slow_log(void) noexcept {
   THD *thd = current_thd;
-  trx_t *trx = thd ? thd_to_trx(thd) : nullptr;
-  if (trx && UNIV_UNLIKELY(trx->take_stats)) return (trx);
+  if (UNIV_LIKELY(!innobase_slow_log_verbose(thd))) return (nullptr);
+  trx_t *trx = thd_to_trx(thd);
+  if (trx && UNIV_UNLIKELY(trx->stats.enabled())) return (trx);
   return (nullptr);
 }
 
