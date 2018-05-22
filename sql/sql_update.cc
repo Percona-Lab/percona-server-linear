@@ -684,8 +684,9 @@ bool Sql_cmd_update::update_single_table(THD *thd) {
             (IO_CACHE *)my_malloc(key_memory_TABLE_sort_io_cache,
                                   sizeof(IO_CACHE), MYF(MY_FAE | MY_ZEROFILL));
 
-        if (open_cached_file(tempfile, mysql_tmpdir, TEMP_PREFIX,
-                             DISK_BUFFER_SIZE, MYF(MY_WME))) {
+        if (open_cached_file_encrypted(tempfile, mysql_tmpdir, TEMP_PREFIX,
+                                       DISK_BUFFER_SIZE, MYF(MY_WME),
+                                       encrypt_tmp_files)) {
           my_free(tempfile);
           return true;
         }
@@ -832,7 +833,7 @@ bool Sql_cmd_update::update_single_table(THD *thd) {
         table->clear_partial_update_diffs();
 
         store_record(table, record[1]);
-      bool is_row_changed = false;
+        bool is_row_changed = false;
         if (fill_record_n_invoke_before_triggers(
                 thd, &update, *update_field_list, *update_value_list, table,
                 TRG_EVENT_UPDATE, 0, false, &is_row_changed)) {
@@ -852,26 +853,26 @@ bool Sql_cmd_update::update_single_table(THD *thd) {
               break;
             }
           }
-        /*
-          Existing rows in table should normally satisfy CHECK constraints. So
-          it should be safe to check constraints only for rows that has really
-          changed (i.e. after compare_records()).
+          /*
+            Existing rows in table should normally satisfy CHECK constraints. So
+            it should be safe to check constraints only for rows that has really
+            changed (i.e. after compare_records()).
 
-          In future, once addition/enabling of CHECK constraints without their
-          validation is supported, we might encounter old rows which do not
-          satisfy CHECK constraints currently enabled. However, rejecting no-op
-          updates to such invalid pre-existing rows won't make them valid and is
-          probably going to be confusing for users. So it makes sense to stick
-          to current behavior.
-        */
-        if (invoke_table_check_constraints(thd, table)) {
-          if (thd->is_error()) {
-            error = 1;
-            break;
+            In future, once addition/enabling of CHECK constraints without their
+            validation is supported, we might encounter old rows which do not
+            satisfy CHECK constraints currently enabled. However, rejecting
+            no-op updates to such invalid pre-existing rows won't make them
+            valid and is probably going to be confusing for users. So it makes
+            sense to stick to current behavior.
+          */
+          if (invoke_table_check_constraints(thd, table)) {
+            if (thd->is_error()) {
+              error = 1;
+              break;
+            }
+            // continue when IGNORE clause is used.
+            continue;
           }
-          // continue when IGNORE clause is used.
-          continue;
-        }
 
           if (will_batch) {
             /*
