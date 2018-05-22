@@ -685,8 +685,9 @@ bool Sql_cmd_update::update_single_table(THD *thd) {
             (IO_CACHE *)my_malloc(key_memory_TABLE_sort_io_cache,
                                   sizeof(IO_CACHE), MYF(MY_FAE | MY_ZEROFILL));
 
-        if (open_cached_file(tempfile, mysql_tmpdir, TEMP_PREFIX,
-                             DISK_BUFFER_SIZE, MYF(MY_WME))) {
+        if (open_cached_file_encrypted(tempfile, mysql_tmpdir, TEMP_PREFIX,
+                                       DISK_BUFFER_SIZE, MYF(MY_WME),
+                                       encrypt_tmp_files)) {
           my_free(tempfile);
           return true;
         }
@@ -833,7 +834,7 @@ bool Sql_cmd_update::update_single_table(THD *thd) {
         table->clear_partial_update_diffs();
 
         store_record(table, record[1]);
-      bool is_row_changed = false;
+        bool is_row_changed = false;
         if (fill_record_n_invoke_before_triggers(
                 thd, &update, *update_field_list, *update_value_list, table,
                 TRG_EVENT_UPDATE, 0, false, &is_row_changed)) {
@@ -852,132 +853,133 @@ bool Sql_cmd_update::update_single_table(THD *thd) {
               break;
             }
           }
-        /*
-          Existing rows in table should normally satisfy CHECK constraints. So
-          it should be safe to check constraints only for rows that has really
-          changed (i.e. after compare_records()).
-
-          In future, once addition/enabling of CHECK constraints without their
-          validation is supported, we might encounter old rows which do not
-          satisfy CHECK constraints currently enabled. However, rejecting no-op
-          updates to such invalid pre-existing rows won't make them valid and is
-          probably going to be confusing for users. So it makes sense to stick
-          to current behavior.
-        */
-        if (invoke_table_check_constraints(thd, table)) {
-          if (thd->is_error()) {
-            error = 1;
-            break;
-          }
-          // continue when IGNORE clause is used.
-          continue;
-        }
-
-        if (will_batch) {
           /*
-            Typically a batched handler can execute the batched jobs when:
-            1) When specifically told to do so
-            2) When it is not a good idea to batch anymore
-            3) When it is necessary to send batch for other reasons
-            (One such reason is when READ's must be performed)
+            Existing rows in table should normally satisfy CHECK constraints. So
+            it should be safe to check constraints only for rows that has really
+            changed (i.e. after compare_records()).
 
-            1) is covered by exec_bulk_update calls.
-            2) and 3) is handled by the bulk_update_row method.
-
-            bulk_update_row can execute the updates including the one
-            defined in the bulk_update_row or not including the row
-            in the call. This is up to the handler implementation and can
-            vary from call to call.
-
-            The dup_key_found reports the number of duplicate keys found
-            in those updates actually executed. It only reports those if
-            the extra call with HA_EXTRA_IGNORE_DUP_KEY have been issued.
-            If this hasn't been issued it returns an error code and can
-            ignore this number. Thus any handler that implements batching
-            for UPDATE IGNORE must also handle this extra call properly.
-
-            If a duplicate key is found on the record included in this
-            call then it should be included in the count of dup_key_found
-            and error should be set to 0 (only if these errors are ignored).
+            In future, once addition/enabling of CHECK constraints without their
+            validation is supported, we might encounter old rows which do not
+            satisfy CHECK constraints currently enabled. However, rejecting
+            no-op updates to such invalid pre-existing rows won't make them
+            valid and is probably going to be confusing for users. So it makes
+            sense to stick to current behavior.
           */
-          error = table->file->ha_bulk_update_row(
-              table->record[1], table->record[0], &dup_key_found);
-          limit += dup_key_found;
-          updated_rows -= dup_key_found;
-        } else {
-          /* Non-batched update */
-          error =
-              table->file->ha_update_row(table->record[1], table->record[0]);
-        }
-        if (error == 0)
-          updated_rows++;
-        else if (error == HA_ERR_RECORD_IS_THE_SAME)
-          error = 0;
-        else {
-          if (table->file->is_fatal_error(error)) error_flags |= ME_FATALERROR;
+          if (invoke_table_check_constraints(thd, table)) {
+            if (thd->is_error()) {
+              error = 1;
+              break;
+            }
+            // continue when IGNORE clause is used.
+            continue;
+          }
 
-          table->file->print_error(error, error_flags);
-
-          // The error can have been downgraded to warning by IGNORE.
-          if (thd->is_error()) break;
-        }
-      }
-
-      if (!error && has_after_triggers &&
-          table->triggers->process_triggers(thd, TRG_EVENT_UPDATE,
-                                            TRG_ACTION_AFTER, true)) {
-        error = 1;
-        break;
-      }
-
-      if (!--limit && using_limit) {
-        /*
-          We have reached end-of-file in most common situations where no
-          batching has occurred and if batching was supposed to occur but
-          no updates were made and finally when the batch execution was
-          performed without error and without finding any duplicate keys.
-          If the batched updates were performed with errors we need to
-          check and if no error but duplicate key's found we need to
-          continue since those are not counted for in limit.
-        */
-        if (will_batch &&
-            ((error = table->file->exec_bulk_update(&dup_key_found)) ||
-             dup_key_found)) {
-          if (error) {
-            /* purecov: begin inspected */
-            DBUG_ASSERT(false);
+          if (will_batch) {
             /*
-              The handler should not report error of duplicate keys if they
-              are ignored. This is a requirement on batching handlers.
+              Typically a batched handler can execute the batched jobs when:
+              1) When specifically told to do so
+              2) When it is not a good idea to batch anymore
+              3) When it is necessary to send batch for other reasons
+              (One such reason is when READ's must be performed)
+
+              1) is covered by exec_bulk_update calls.
+              2) and 3) is handled by the bulk_update_row method.
+
+              bulk_update_row can execute the updates including the one
+              defined in the bulk_update_row or not including the row
+              in the call. This is up to the handler implementation and can
+              vary from call to call.
+
+              The dup_key_found reports the number of duplicate keys found
+              in those updates actually executed. It only reports those if
+              the extra call with HA_EXTRA_IGNORE_DUP_KEY have been issued.
+              If this hasn't been issued it returns an error code and can
+              ignore this number. Thus any handler that implements batching
+              for UPDATE IGNORE must also handle this extra call properly.
+
+              If a duplicate key is found on the record included in this
+              call then it should be included in the count of dup_key_found
+              and error should be set to 0 (only if these errors are ignored).
             */
+            error = table->file->ha_bulk_update_row(
+                table->record[1], table->record[0], &dup_key_found);
+            limit += dup_key_found;
+            updated_rows -= dup_key_found;
+          } else {
+            /* Non-batched update */
+            error =
+                table->file->ha_update_row(table->record[1], table->record[0]);
+          }
+          if (error == 0)
+            updated_rows++;
+          else if (error == HA_ERR_RECORD_IS_THE_SAME)
+            error = 0;
+          else {
             if (table->file->is_fatal_error(error))
               error_flags |= ME_FATALERROR;
 
             table->file->print_error(error, error_flags);
-            error = 1;
-            break;
-            /* purecov: end */
+
+            // The error can have been downgraded to warning by IGNORE.
+            if (thd->is_error()) break;
           }
+        }
+
+        if (!error && has_after_triggers &&
+            table->triggers->process_triggers(thd, TRG_EVENT_UPDATE,
+                                              TRG_ACTION_AFTER, true)) {
+          error = 1;
+          break;
+        }
+
+        if (!--limit && using_limit) {
           /*
-            Either an error was found and we are ignoring errors or there
-            were duplicate keys found. In both cases we need to correct
-            the counters and continue the loop.
+            We have reached end-of-file in most common situations where no
+            batching has occurred and if batching was supposed to occur but
+            no updates were made and finally when the batch execution was
+            performed without error and without finding any duplicate keys.
+            If the batched updates were performed with errors we need to
+            check and if no error but duplicate key's found we need to
+            continue since those are not counted for in limit.
           */
-          limit = dup_key_found;  // limit is 0 when we get here so need to +
-          updated_rows -= dup_key_found;
-        } else {
-          error = -1;  // Simulate end of file
+          if (will_batch &&
+              ((error = table->file->exec_bulk_update(&dup_key_found)) ||
+               dup_key_found)) {
+            if (error) {
+              /* purecov: begin inspected */
+              DBUG_ASSERT(false);
+              /*
+                The handler should not report error of duplicate keys if they
+                are ignored. This is a requirement on batching handlers.
+              */
+              if (table->file->is_fatal_error(error))
+                error_flags |= ME_FATALERROR;
+
+              table->file->print_error(error, error_flags);
+              error = 1;
+              break;
+              /* purecov: end */
+            }
+            /*
+              Either an error was found and we are ignoring errors or there
+              were duplicate keys found. In both cases we need to correct
+              the counters and continue the loop.
+            */
+            limit = dup_key_found;  // limit is 0 when we get here so need to +
+            updated_rows -= dup_key_found;
+          } else {
+            error = -1;  // Simulate end of file
+            break;
+          }
+        }
+
+        thd->get_stmt_da()->inc_current_row_for_condition();
+        DBUG_ASSERT(!thd->is_error());
+        if (thd->is_error()) {
+          error = 1;
           break;
         }
       }
-
-      thd->get_stmt_da()->inc_current_row_for_condition();
-      DBUG_ASSERT(!thd->is_error());
-      if (thd->is_error()) {
-        error = 1;
-        break;
-      }
-    }
     end_semi_consistent_read.rollback();
 
     dup_key_found = 0;
