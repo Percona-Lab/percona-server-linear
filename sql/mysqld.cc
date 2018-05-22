@@ -8260,6 +8260,12 @@ static int handle_early_options() {
     remaining_argv--;
 
     if (opt_initialize_insecure) opt_initialize = true;
+
+    if (opt_debugging) {
+      /* Allow break with SIGINT, no core or stack trace */
+      test_flags |= TEST_SIGINT | TEST_NO_STACKTRACE;
+      test_flags &= ~TEST_CORE_ON_SIGNAL;
+    }
   }
 
   // Swap with an empty vector, i.e. delete elements and free allocated space.
@@ -8439,6 +8445,15 @@ struct my_option my_long_early_options[] = {
      "Validate the server configuration specified by the user.",
      &opt_validate_config, &opt_validate_config, nullptr, GET_BOOL, NO_ARG, 0,
      0, 0, nullptr, 0, nullptr},
+    {"core-file", OPT_WANT_CORE, "Write core on errors.", 0, 0, nullptr,
+     GET_NO_ARG, NO_ARG, 0, 0, 0, nullptr, 0, nullptr},
+    {"skip-stack-trace", OPT_SKIP_STACK_TRACE,
+     "Don't print a stack trace on failure.", 0, 0, nullptr, GET_NO_ARG, NO_ARG,
+     0, 0, 0, nullptr, 0, nullptr},
+    /* We must always support the next option to make scripts like mysqltest
+       easier to do */
+    {"gdb", 0, "Set up signals usable for debugging.", &opt_debugging,
+     &opt_debugging, nullptr, GET_BOOL, NO_ARG, 0, 0, 0, nullptr, 0, nullptr},
     {nullptr, 0, nullptr, nullptr, nullptr, nullptr, GET_NO_ARG, NO_ARG, 0, 0,
      0, nullptr, 0, nullptr}};
 
@@ -8504,8 +8519,6 @@ struct my_option my_long_options[] = {
      "windows.",
      &opt_console, &opt_console, nullptr, GET_BOOL, NO_ARG, 0, 0, 0, nullptr, 0,
      nullptr},
-    {"core-file", OPT_WANT_CORE, "Write core on errors.", nullptr, nullptr,
-     nullptr, GET_NO_ARG, NO_ARG, 0, 0, 0, nullptr, 0, nullptr},
     /* default-storage-engine should have "MyISAM" as def_value. Instead
        of initializing it here it is done in init_common_variables() due
        to a compiler bug in Sun Studio compiler. */
@@ -8533,10 +8546,6 @@ struct my_option my_long_options[] = {
      "--skip-external-locking.",
      &opt_external_locking, &opt_external_locking, nullptr, GET_BOOL, NO_ARG, 0,
      0, 0, nullptr, 0, nullptr},
-    /* We must always support the next option to make scripts like mysqltest
-       easier to do */
-    {"gdb", 0, "Set up signals usable for debugging.", &opt_debugging,
-     &opt_debugging, nullptr, GET_BOOL, NO_ARG, 0, 0, 0, nullptr, 0, nullptr},
 #if defined(HAVE_LINUX_LARGE_PAGES) || defined(HAVE_SOLARIS_LARGE_PAGES)
     {"super-large-pages", 0, "Enable support for super large pages.",
      &opt_super_large_pages, &opt_super_large_pages, nullptr, GET_BOOL, OPT_ARG,
@@ -8699,9 +8708,6 @@ struct my_option my_long_options[] = {
     {"skip-slave-start", 0, "If set, slave is not autostarted.",
      &opt_skip_slave_start, &opt_skip_slave_start, nullptr, GET_BOOL, NO_ARG, 0,
      0, 0, nullptr, 0, nullptr},
-    {"skip-stack-trace", OPT_SKIP_STACK_TRACE,
-     "Don't print a stack trace on failure.", nullptr, nullptr, nullptr,
-     GET_NO_ARG, NO_ARG, 0, 0, 0, nullptr, 0, nullptr},
 #if defined(_WIN32)
     {"slow-start-timeout", 0,
      "Maximum number of milliseconds that the service control manager should "
@@ -9729,7 +9735,7 @@ static int mysql_init_variables() {
   mqh_used = false;
   cleanup_done = 0;
   server_id_supplied = false;
-  test_flags = select_errors = ha_open_options = 0;
+  select_errors = ha_open_options = 0;
   atomic_slave_open_temp_tables = 0;
   opt_endinfo = using_udf_functions = false;
   opt_using_transactions = false;
@@ -10622,11 +10628,6 @@ static int get_options(int *argc_ptr, char ***argv_ptr) {
 
   if (!my_enable_symlinks) have_symlink = SHOW_OPTION_DISABLED;
 
-  if (opt_debugging) {
-    /* Allow break with SIGINT, no core or stack trace */
-    test_flags |= TEST_SIGINT | TEST_NO_STACKTRACE;
-    test_flags &= ~TEST_CORE_ON_SIGNAL;
-  }
   /* Set global MyISAM variables from delay_key_write_options */
   fix_delay_key_write(nullptr, nullptr, OPT_GLOBAL);
 
