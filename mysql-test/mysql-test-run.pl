@@ -218,8 +218,8 @@ our $opt_gterm;
 our $DEFAULT_SUITES = "auth_sec,binlog_gtid,binlog_nogtid,clone,collations,connection_control,encryption,federated,funcs_2,gcol,sysschema,gis,innodb,innodb_fts,innodb_gis,innodb_undo,innodb_zip,json,main,opt_trace,parts,perfschema,query_rewrite_plugins,rpl,rpl_gtid,rpl_nogtid,secondary_engine,service_status_var_registration,service_sys_var_registration,service_udf_registration,sys_vars,binlog,test_service_sql_api,test_services,x,"
   # Percona suites
   ."funcs_1,jp,stress,engines/iuds,engines/funcs,group_replication,audit_null,"
-  ."interactive_utilities,innodb_stress,"
-  ."audit_log,keyring_vault,"
+  ."interactive_utilities,"
+  ."audit_log,"
   ."tokudb.add_index,tokudb.alter_table,tokudb,tokudb.bugs,tokudb.parts,"
   ."tokudb.rpl,tokudb.perfschema,"
   ."rocksdb,rocksdb.rpl,rocksdb.sys_vars,"
@@ -2790,6 +2790,7 @@ sub environment_setup {
   $ENV{'MYSQL_TMP_DIR'}       = $opt_tmpdir;
   $ENV{'MYSQLTEST_VARDIR'}    = $opt_vardir;
   $ENV{'USE_RUNNING_SERVER'}  = using_extern();
+  $ENV{'MTR_REPEAT'}          = $opt_repeat;
 
   if (IS_WINDOWS) {
     $ENV{'SECURE_LOAD_PATH'}      = $glob_mysql_test_dir . "\\std_data";
