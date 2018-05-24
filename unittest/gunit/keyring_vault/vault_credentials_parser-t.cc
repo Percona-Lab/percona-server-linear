@@ -18,13 +18,6 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 #include <fstream>
-#include <memory>
-#include "i_keys_container.h"
-#include "mock_logger.h"
-#include "test_utils.h"
-#include "vault_credentials_parser.h"
-
-std::unique_ptr<keyring::IKeys_container> keys(nullptr);
 
 #include "mock_logger.h"
 #include "vault_credentials.h"
