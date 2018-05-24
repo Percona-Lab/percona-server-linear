@@ -74,7 +74,6 @@ class Keyring_vault_api_test : public Vault_test_base {
 
     Vault_test_base::TearDown();
   }
-  virtual void TearDown() { keyring_deinit_with_mock_logger(); }
 
  protected:
   static char plugin_name[];
