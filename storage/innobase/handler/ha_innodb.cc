@@ -3358,10 +3358,12 @@ void ha_innobase::reset_template(void) {
       "free_table_in_fts_query",
       if (m_prebuilt->in_fts_query) { table->invalidate_dict(); });
 
+
   m_prebuilt->keep_other_fields_on_keyread = 0;
   m_prebuilt->read_just_key = 0;
   m_prebuilt->in_fts_query = false;
   m_prebuilt->m_end_range = false;
+
 
   /* Reset index condition pushdown state. */
   if (m_prebuilt->idx_cond) {
