@@ -221,6 +221,7 @@ our $opt_suite_opt;
 our $opt_summary_report;
 our $opt_vardir;
 our $opt_xml_report;
+our $opt_gterm;
 
 #
 # Suites run by default (i.e. when invoking ./mtr without parameters)
@@ -1639,6 +1640,8 @@ sub command_line_setup {
     'debugger=s'           => \$opt_debugger,
     'gdb'                  => \$opt_gdb,
     'gdb-secondary-engine' => \$opt_gdb_secondary_engine,
+    # For using gnome-terminal when using --gdb option
+    'gterm'                => \$opt_gterm,
     'lldb'                 => \$opt_lldb,
     'manual-boot-gdb'      => \$opt_manual_boot_gdb,
     'manual-dbx'           => \$opt_manual_dbx,
@@ -7117,9 +7120,16 @@ sub gdb_arguments {
   }
 
   $$args = [];
-  mtr_add_arg($$args, "-title");
-  mtr_add_arg($$args, "$type");
-  mtr_add_arg($$args, "-e");
+  if ($opt_gterm) {
+    mtr_add_arg($$args, "--title");
+    mtr_add_arg($$args, "$type");
+    mtr_add_arg($$args, "--wait");
+    mtr_add_arg($$args, "--");
+  } else {
+    mtr_add_arg($$args, "-title");
+    mtr_add_arg($$args, "$type");
+    mtr_add_arg($$args, "-e");
+  }
 
   if ($exe_libtool) {
     mtr_add_arg($$args, $exe_libtool);
@@ -7131,7 +7141,11 @@ sub gdb_arguments {
   mtr_add_arg($$args, "$gdb_init_file");
   mtr_add_arg($$args, "$$exe");
 
-  $$exe = "xterm";
+  if ($opt_gterm) {
+    $$exe = "gnome-terminal";
+  } else {
+    $$exe = "xterm";
+  }
 }
 
 # Modify the exe and args so that program is run in lldb
@@ -7857,4 +7871,3 @@ sub list_options ($) {
 
   exit(1);
 }
-
