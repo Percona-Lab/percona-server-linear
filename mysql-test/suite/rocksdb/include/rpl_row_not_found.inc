@@ -9,8 +9,8 @@
 --source include/master-slave.inc
 
 connection slave;
-call mtr.add_suppression("Slave SQL for channel '': Worker.*failed executing transaction");
-call mtr.add_suppression("Slave SQL for channel '': ... The slave coordinator and worker threads are stopped, possibly leaving data in inconsistent state.");
+call mtr.add_suppression("Replica SQL for channel '': Worker.*failed executing transaction");
+call mtr.add_suppression("The replica coordinator and worker threads are stopped, possibly leaving data in inconsistent state");
 connection master;
 
 create table t0 (a int) engine=myisam;
@@ -26,7 +26,10 @@ create table t2 (
 ) engine=rocksdb;
 insert into t2 select a,a,a,a from t1;
 create table t3 like t2;
-set statement transaction_isolation='READ-COMMITTED' for insert into t3 select * from t2;
+set @orig_transaction_isolation=@@session.transaction_isolation;
+set session transaction_isolation='READ-COMMITTED';
+insert into t3 select * from t2;
+set session transaction_isolation=@orig_transaction_isolation;
 
 --source include/sync_slave_sql_with_master.inc
 
