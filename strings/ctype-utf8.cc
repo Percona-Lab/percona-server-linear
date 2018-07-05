@@ -5246,7 +5246,7 @@ static inline size_t my_strnxfrm_unicode_tmpl(const CHARSET_INFO *cs,
   uchar *dst0 = dst;
   uchar *de = dst + dstlen;
   const uchar *se = src + srclen;
-  DBUG_ASSERT(src);
+  DBUG_ASSERT(src || srclen == 0);
 
   // We manually hoist this if test out of the loop; seemingly GCC
   // (at least 6.1.1) isn't smart enough to do it on its own.
@@ -5303,7 +5303,7 @@ static inline size_t my_strnxfrm_unicode_tmpl(const CHARSET_INFO *cs,
   }
 
 pad:
-  if (dst < de && nweights)  // PAD SPACE behavior.
+  if (dst < de && nweights && !(flags & MY_STRXFRM_NOPAD_WITH_SPACE))
     dst += my_strxfrm_pad_nweights_unicode(dst, de, nweights);
 
   if ((flags & MY_STRXFRM_PAD_TO_MAXLEN) && dst < de)
@@ -5350,7 +5350,7 @@ size_t my_strnxfrm_unicode_full_bin(const CHARSET_INFO *cs, uchar *dst,
   uchar *de = dst + dstlen;
   const uchar *se = src + srclen;
 
-  DBUG_ASSERT(src);
+  DBUG_ASSERT(src || srclen == 0);
   DBUG_ASSERT(cs->state & MY_CS_BINSORT);
 
   for (; dst < de && nweights; nweights--) {
