@@ -108,7 +108,8 @@ struct Rdb_deadlock_info {
     std::string index_name;
     std::string table_name;
   };
-  std::vector <Rdb_dl_trx_info> path;
+  std::vector<Rdb_dl_trx_info> path;
+  int64_t deadlock_time;
   ulonglong victim_trx_id;
 };
 
