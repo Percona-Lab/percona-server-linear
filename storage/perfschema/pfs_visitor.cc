@@ -1107,8 +1107,13 @@ void PFS_connection_stat_visitor::visit_account(PFS_account *pfs) {
   m_stat.aggregate_disconnected(pfs->m_disconnected_count);
 }
 
-void PFS_connection_stat_visitor::visit_thread(PFS_thread *) {
-  m_stat.aggregate_active(1);
+void PFS_connection_stat_visitor::visit_thread(PFS_thread *pfs) {
+  /*
+    PFS_connection_stat_visitor is used in tables accounts,
+    users and hosts. It should take into account only
+    FOREGROUND threads.
+  */
+  if (pfs->m_processlist_id != 0) m_stat.aggregate_active(1);
 }
 
 PFS_connection_memory_visitor::PFS_connection_memory_visitor(
@@ -1195,7 +1200,9 @@ void PFS_connection_status_visitor::visit_account(PFS_account *pfs) {
 void PFS_connection_status_visitor::visit_thread(PFS_thread *) {}
 
 void PFS_connection_status_visitor::visit_THD(THD *thd) {
-  add_to_status(m_status_vars, &thd->status_var);
+  if (!thd->status_var_aggregated) {
+    add_to_status(m_status_vars, &thd->status_var);
+  }
 }
 
 PFS_instance_wait_visitor::PFS_instance_wait_visitor() {}
