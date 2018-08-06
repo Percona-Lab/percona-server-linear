@@ -42,6 +42,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #ifndef UNIV_HOTBACKUP
 #include "ibuf0types.h"
 #endif /* !UNIV_HOTBACKUP */
+#include "trx0types.h"
 #include "ut0new.h"
 
 #include "sql/dd/object_id.h"
@@ -1769,6 +1770,7 @@ byte *fil_tablespace_redo_rename(byte *ptr, const byte *end,
 @param[in]	ptr		redo log record
 @param[in]	end		end of the redo log buffer
 @param[in]	space_id	the tablespace ID
+@param[in]	apply		whether to apply the record
 @return log record end, nullptr if not a complete record */
 byte *fil_tablespace_redo_encryption(byte *ptr, const byte *end,
                                      space_id_t space_id)
@@ -1862,17 +1864,6 @@ and old name are same, no update done.
                                 will be updated
 @param[in]	name		new name for tablespace */
 void fil_space_update_name(fil_space_t *space, const char *name);
-
-/*************************************************************************
-Return local hash table informations. */
-
-ulint
-fil_system_hash_cells(void);
-/*========================*/
-
-ulint
-fil_system_hash_nodes(void);
-/*========================*/
 
 /** Mark space as corrupt
 @param space_id	space id */
