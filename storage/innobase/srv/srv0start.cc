@@ -1430,6 +1430,60 @@ static void verify_page_type(page_id_t page_id, page_type_t type) {
   mtr_commit(&mtr);
 }
 
+/** Enable encryption of system tablespace if requested. At
+startup load the encryption information from first datafile
+to tablespace object
+@return DB_SUCCESS on succes, others on failure */
+static dberr_t srv_sys_enable_encryption(bool create_new_db) {
+  fil_space_t *space = fil_space_get(TRX_SYS_SPACE);
+  dberr_t err = DB_SUCCESS;
+
+  if (create_new_db) {
+    if (srv_sys_tablespace_encrypt) {
+      fsp_flags_set_encryption(space->flags);
+      srv_sys_space.set_flags(space->flags);
+
+      err = fil_set_encryption(space->id, Encryption::AES, nullptr, nullptr);
+      ut_ad(err == DB_SUCCESS);
+    }
+  } else {
+    auto encryption_metadata = srv_sys_space.read_encryption_metadata();
+    if (!encryption_metadata) {
+      return encryption_metadata.error();
+    }
+
+    const bool is_encrypted = encryption_metadata->can_encrypt();
+
+    if (is_encrypted && !srv_sys_tablespace_encrypt) {
+      ib::error() << "The system tablespace is encrypted but"
+                  << " --innodb_sys_tablespace_encrypt is"
+                  << " OFF. Enable the option and start server";
+      return (DB_ERROR);
+    }
+
+    if (!is_encrypted && srv_sys_tablespace_encrypt) {
+      ib::error() << "The system tablespace is not encrypted but"
+                  << " --innodb_sys_tablespace_encrypt is"
+                  << " ON. This instance was not bootstrapped"
+                  << " with --innodb_sys_tablespace_encrypt=ON."
+                  << " Disable this option and start server";
+      return (DB_ERROR);
+    }
+
+    if (is_encrypted) {
+      fsp_flags_set_encryption(space->flags);
+      srv_sys_space.set_flags(space->flags);
+
+      err = fil_set_encryption(space->id, Encryption::AES,
+                               encryption_metadata->m_key,
+                               encryption_metadata->m_iv);
+      ut_ad(err == DB_SUCCESS);
+    }
+  }
+
+  return (err);
+}
+
 dberr_t srv_start(bool create_new_db) {
   /* Reset the start state. */
   srv_start_state = SRV_START_STATE_NONE;
@@ -1654,8 +1708,13 @@ dberr_t srv_start(bool create_new_db) {
 
   /* Open or create the data files for the System Tablespace. */
   switch (const auto err = srv_sys_space.prepare_nodes(); err) {
-    case DB_SUCCESS:
+    case DB_SUCCESS: {
+      const auto encryption_err = srv_sys_enable_encryption(create_new_db);
+      if (encryption_err != DB_SUCCESS) {
+        return srv_init_abort(encryption_err);
+      }
       break;
+    }
     case DB_CANNOT_OPEN_FILE:
       ib::error(ER_IB_MSG_1134);
       [[fallthrough]];
@@ -2065,6 +2124,9 @@ dberr_t srv_start(bool create_new_db) {
       srv_monitor_thread_created = true;
     }
   }
+
+  /* wake main loop of page cleaner up */
+  os_event_set(buf_flush_event);
 
   srv_sys_tablespaces_open = true;
 
