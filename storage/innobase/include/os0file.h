@@ -1,7 +1,7 @@
 /***********************************************************************
 
 Copyright (c) 1995, 2018, Oracle and/or its affiliates. All Rights Reserved.
-Copyright (c) 2009, Percona Inc.
+Copyright (c) 2009, 2017, Percona Inc.
 
 Portions of this file contain modifications contributed and copyrighted
 by Percona Inc.. Those modifications are
@@ -55,6 +55,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 #include <locale>
 #include <string>
 #endif /* !_WIN32 */
+#include "page0types.h"
 
 #include <functional>
 #include <stack>
@@ -578,7 +579,10 @@ class IORequest {
     This can be used to force a read and write without any
     compression e.g., for redo log, merge sort temporary files
     and the truncate redo log. */
-    NO_COMPRESSION = 512
+    NO_COMPRESSION = 512,
+
+    /** Force write of decrypted pages in encrypted tablespace. */
+    NO_ENCRYPTION = 1024
   };
 
   /** Default constructor */
@@ -722,8 +726,16 @@ class IORequest {
     return ((m_type & NO_COMPRESSION) == 0);
   }
 
+  /** @return true if the page write should not be encrypted */
+  MY_NODISCARD bool is_encryption_disabled() const noexcept {
+    return ((m_type & NO_ENCRYPTION) != 0);
+  }
+
   /** Disable transformations. */
   void disable_compression() { m_type |= NO_COMPRESSION; }
+
+  /** Disable encryption of a page in encrypted tablespace */
+  void disable_encryption() noexcept { m_type |= NO_ENCRYPTION; }
 
   /** Set encryption algorithm
   @param[in] type		The encryption algorithm to use */
@@ -992,7 +1004,6 @@ bool os_file_set_nocache(pfs_os_file_t file, const char *file_name,
                          const char *operation_name,
                          bool failure_warning = true);
 
-
 /** NOTE! Use the corresponding macro os_file_create(), not directly
 this function!
 Opens an existing file or creates a new.
@@ -1026,8 +1037,6 @@ bool os_file_delete_func(const char *name);
 @return true if success */
 bool os_file_delete_if_exists_func(const char *name, bool *exist);
 
-extern mysql_pfs_key_t innodb_bmp_file_key;
-extern mysql_pfs_key_t innodb_parallel_dblwrite_file_key;
 /** NOTE! Use the corresponding macro os_file_rename(), not directly
 this function!
 Renames a file (can also move it to another directory). It is safest that the
@@ -1062,6 +1071,7 @@ extern mysql_pfs_key_t innodb_clone_file_key;
 extern mysql_pfs_key_t innodb_data_file_key;
 extern mysql_pfs_key_t innodb_tablespace_open_file_key;
 extern mysql_pfs_key_t innodb_bmp_file_key;
+extern mysql_pfs_key_t innodb_parallel_dblwrite_file_key;
 
 /* Following four macros are instumentations to register
 various file I/O operations with performance schema.
@@ -1151,7 +1161,6 @@ os_file_close_no_error_handling
 os_file_rename
 os_aio
 os_file_read
-os_file_read_trx
 os_file_read_no_error_handling
 os_file_read_no_error_handling_int_fd
 os_file_write
@@ -1183,10 +1192,10 @@ The wrapper functions have the prefix of "innodb_". */
                   message2, space_id, trx, should_buffer, __FILE__, __LINE__)
 
 #define os_file_read_pfs(type, file, buf, offset, n) \
-  pfs_os_file_read_func(type, file, buf, offset, n, NULL, __FILE__, __LINE__)
+  pfs_os_file_read_func(type, file, buf, offset, n, nullptr, __FILE__, __LINE__)
 
-#define os_file_read_trx_pfs(type, file, buf, offset, n, trx) \
-  pfs_os_file_read_func(type, file, buf, offset, n, trx, __FILE__, __LINE__)
+#define os_file_read_trx_pfs(file, buf, offset, n, trx) \
+  pfs_os_file_read_func(file, buf, offset, n, trx, __FILE__, __LINE__)
 
 #define os_file_read_first_page_pfs(type, file, buf, n) \
   pfs_os_file_read_first_page_func(type, file, buf, n, __FILE__, __LINE__)
@@ -1583,10 +1592,7 @@ to original un-instrumented file I/O APIs */
               message2, space_id, trx, should_buffer)
 
 #define os_file_read_pfs(type, file, buf, offset, n) \
-  os_file_read_func(type, file, buf, offset, n, NULL)
-
-#define os_file_read_trx_pfs(type, file, buf, offset, n, trx) \
-  os_file_read_func(type, file, buf, offset, n, trx)
+  os_file_read_func(type, file, buf, offset, n)
 
 #define os_file_read_first_page_pfs(type, file, buf, n) \
   os_file_read_first_page_func(type, file, buf, n)
@@ -1599,6 +1605,9 @@ to original un-instrumented file I/O APIs */
 
 #define os_file_read_no_error_handling_int_fd(type, file, buf, offset, n, o) \
   os_file_read_no_error_handling_func(type, file, buf, offset, n, o)
+
+#define os_file_read_trx_pfs(file, buf, offset, n, trx) \
+  os_file_read_func(file, buf, offset, n, trx)
 
 #define os_file_write_pfs(type, name, file, buf, offset, n) \
   os_file_write_func(type, name, file, buf, offset, n)
@@ -1641,14 +1650,6 @@ to original un-instrumented file I/O APIs */
 #else
 #define os_file_read(type, file, buf, offset, n) \
   os_file_read_pfs(type, file.m_file, buf, offset, n)
-#endif
-
-#ifdef UNIV_PFS_IO
-#define os_file_read_trx(type, file, buf, offset, n, trx) \
-  os_file_read_trx_pfs(type, file, buf, offset, n, trx)
-#else
-#define os_file_read_trx(type, file, buf, offset, n, trx) \
-  os_file_read_trx_pfs(type, file.m_file, buf, offset, n, trx)
 #endif
 
 #ifdef UNIV_PFS_IO
@@ -2123,6 +2124,28 @@ class Dir_Walker {
 
 /** Submit buffered AIO requests on the given segment to the kernel. */
 void os_aio_dispatch_read_array_submit();
+
+struct fil_space_t;
+
+/** Encrypt a doublewrite buffer page. The page is encrypted
+using the key of tablespace object provided.
+Caller should allocate buffer for encrypted page
+@param[in]	space			tablespace object
+@param[in]	in_page			unencrypted page
+@param[in,out]	encrypted_buf		buffer to hold the encrypted page
+@param[in]	encrypted_buf_len	length of the encrypted buffer
+@return true on success, false on failure */
+bool os_dblwr_encrypt_page(fil_space_t *space, page_t *in_page,
+                           page_t *encrypted_buf, ulint encrypted_buf_len);
+
+/** Decrypt a page from doublewrite buffer. Tablespace object
+(fil_space_t) must have encryption key, iv set properly.
+The decrpyted page will be written in the same buffer of input page.
+@param[in]	space	tablespace obejct
+@param[in,out]	page	in: encrypted page
+                        out: decrypted page
+@return DB_SUCCESS on success, others on failure */
+dberr_t os_dblwr_decrypt_page(fil_space_t *space, page_t *in_page);
 
 #include "os0file.ic"
 
