@@ -287,6 +287,9 @@ our @DEFAULT_SUITES = qw(
   rocksdb
   rocksdb.rpl
   rocksdb.sys_vars
+  audit_null
+  audit_log
+  keyring_vault
 );
 
 our $DEFAULT_SUITES = join ',', @DEFAULT_SUITES;
@@ -2567,6 +2570,7 @@ sub collect_mysqld_features {
   my $args;
   mtr_init_args(\$args);
   mtr_add_arg($args, "--no-defaults");
+  mtr_add_arg($args, "--basedir=%s", $basedir);
   mtr_add_arg($args, "--datadir=%s", mixed_path($tmpdir));
   mtr_add_arg($args, "--log-syslog=0");
   mtr_add_arg($args, "--secure-file-priv=\"\"");
@@ -3061,6 +3065,7 @@ sub read_plugin_defs($$) {
 
           $ENV{ $plug_var . '_LOAD' }       = $load_var;
           $ENV{ $plug_var . '_LOAD_EARLY' } = $early_load_var;
+          $ENV{ $plug_var . '_EARLY_LOAD' } = $early_load_var;
           $ENV{ $plug_var . '_LOAD_ADD' }   = $load_add_var;
         }
       } else {
@@ -3069,6 +3074,7 @@ sub read_plugin_defs($$) {
         $ENV{ $plug_var . '_OPT' } = "";
         $ENV{ $plug_var . '_LOAD' }       = "" if $plug_names;
         $ENV{ $plug_var . '_LOAD_EARLY' } = "" if $plug_names;
+        $ENV{ $plug_var . '_EARLY_LOAD' } = "" if $plug_names;
         $ENV{ $plug_var . '_LOAD_ADD' }   = "" if $plug_names;
       }
     }
@@ -3354,6 +3360,7 @@ sub environment_setup {
     $ENV{'IBD2SDI'} = mtr_args2str($exe_ibd2sdi, @$args);
   }
 
+  # ----------------------------------------------------
   # sst_dump
   # ----------------------------------------------------
   my $exe_sst_dump=
@@ -3373,8 +3380,6 @@ sub environment_setup {
            "$basedir/storage/tokudb/PerconaFT/tools/tokuftdump");
   $ENV{'MYSQL_TOKUFTDUMP'}= native_path($exe_tokuftdump);
 
-
-  # ----------------------------------------------------
   # Setup env so childs can execute myisampack and myisamchk
   $ENV{'MYISAMCHK'} =
     native_path(mtr_exe_exists("$path_client_bindir/myisamchk"));
@@ -7722,6 +7727,7 @@ sub valgrind_exit_reports() {
 }
 
 sub run_ctest() {
+  $ENV{'MYSQL_TEST_DIR'} = $glob_mysql_test_dir;
   my $olddir = getcwd();
   chdir($bindir) or die("Could not chdir to $bindir");
 
