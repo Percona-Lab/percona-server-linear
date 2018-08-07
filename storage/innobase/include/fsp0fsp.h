@@ -706,8 +706,11 @@ is 127. The translation from an undo_space_num is:
 @return true if it is undo tablespace else false. */
 bool fsp_is_undo_tablespace(space_id_t space_id);
 
+/** Check if the space_id is for a shared system tablespace.
+@param[in]	space_id	tablespace ID
+@return true if id is a system tablespace, false if not. */
 UNIV_INLINE
-bool fsp_is_system_tablespace(space_id_t space_id) {
+bool fsp_is_system_tablespace(space_id_t space_id) noexcept {
   return (space_id == TRX_SYS_SPACE);
 }
 
