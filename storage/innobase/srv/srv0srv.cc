@@ -2,7 +2,7 @@
 
 Copyright (c) 1995, 2019, Oracle and/or its affiliates. All Rights Reserved.
 Copyright (c) 2008, 2009 Google Inc.
-Copyright (c) 2009, Percona Inc.
+Copyright (c) 2009, 2016, Percona Inc.
 
 Portions of this file contain modifications contributed and copyrighted by
 Google, Inc. Those modifications are gratefully acknowledged and are described
@@ -90,6 +90,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "usr0sess.h"
 #include "ut0crc32.h"
 #endif /* !UNIV_HOTBACKUP */
+#include "ha_innodb.h"
+#include "sql/handler.h"
 #include "ut0mem.h"
 
 #ifdef UNIV_HOTBACKUP
@@ -165,6 +167,13 @@ unsigned long long srv_max_undo_tablespace_size;
 
 /** Enable or disable encryption of temporary tablespace.*/
 bool srv_tmp_tablespace_encrypt;
+
+/** Option to enable encryption of system tablespace. */
+bool srv_sys_tablespace_encrypt;
+
+/** Enable or disable encryption of pages in parallel doublewrite buffer
+file */
+bool srv_parallel_dblwr_encrypt;
 
 /** Default undo tablespace size in UNIV_PAGEs count (10MB). */
 const page_no_t SRV_UNDO_TABLESPACE_SIZE_IN_PAGES =
@@ -405,6 +414,7 @@ ulong srv_buf_pool_instances;
 const ulong srv_buf_pool_instances_default = 0;
 /** Number of locks to protect buf_pool->page_hash */
 ulong srv_n_page_hash_locks = 16;
+
 /** Scan depth for LRU flush batch i.e.: number of blocks scanned*/
 ulong srv_LRU_scan_depth = 1024;
 /** Whether or not to flush neighbors of a block */
@@ -480,16 +490,6 @@ ulong srv_adaptive_flushing_lwm = 10;
 /* Number of iterations over which adaptive flushing is averaged. */
 ulong srv_flushing_avg_loops = 30;
 
-/* The relative priority of the current thread.  If 0, low priority; if 1, high
-priority.  */
-thread_local ulint srv_current_thread_priority = 0;
-
-/* The relative priority of the purge coordinator and worker threads.  */
-bool srv_purge_thread_priority = false;
-
-/* The relative priority of the master thread.  */
-bool srv_master_thread_priority = false;
-
 /* The tids of the purge threads */
 os_tid_t srv_purge_tids[MAX_PURGE_THREADS];
 
@@ -507,6 +507,16 @@ ulint srv_sched_priority_io = 19;
 
 /* The relative scheduling priority of the master thread */
 ulint srv_sched_priority_master = 19;
+
+/* The relative priority of the current thread.  If 0, low priority; if 1, high
+priority.  */
+thread_local ulint srv_current_thread_priority = 0;
+
+/* The relative priority of the purge coordinator and worker threads.  */
+bool srv_purge_thread_priority = false;
+
+/* The relative priority of the master thread.  */
+bool srv_master_thread_priority = false;
 
 /* The number of purge threads to use.*/
 ulong srv_n_purge_threads = 4;
@@ -591,8 +601,6 @@ ulong srv_doublewrite_batch_size = 120;
 ulong srv_replication_delay = 0;
 
 ulint srv_pass_corrupt_table = 0; /* 0:disable 1:enable */
-
-bool srv_redo_log_thread_started = false;
 
 /*-------------------------------------------*/
 ulong srv_n_spin_wait_rounds = 30;
@@ -825,6 +833,11 @@ static const ulint SRV_MASTER_SLOT = 0;
 os_event_t srv_checkpoint_completed_event;
 
 os_event_t srv_redo_log_tracked_event;
+
+/** Whether the redo log tracker thread has been started. Does not take into
+account whether the tracking is currently enabled (see srv_track_changed_pages
+for that) */
+bool srv_redo_log_thread_started = false;
 
 #ifdef HAVE_PSI_STAGE_INTERFACE
 /** Performance schema stage event for monitoring ALTER TABLE progress
@@ -1464,6 +1477,20 @@ ibool srv_printf_innodb_monitor(
   fprintf(file, ULINTPF " read views open inside InnoDB\n",
           trx_sys->mvcc->size());
 
+  mutex_enter(&trx_sys->mutex);
+
+  fprintf(file, "%lu RW transactions active inside InnoDB\n",
+          UT_LIST_GET_LEN(trx_sys->rw_trx_list));
+
+  ReadView *oldest_view = trx_sys->mvcc->get_oldest_view();
+  if (oldest_view) {
+    fprintf(file, "---OLDEST VIEW---\n");
+    oldest_view->print(file);
+    fprintf(file, "-----------------\n");
+  }
+
+  mutex_exit(&trx_sys->mutex);
+
   n_reserved = fil_space_get_n_reserved_extents(0);
   if (n_reserved > 0) {
     fprintf(file,
@@ -1877,12 +1904,6 @@ loop:
   /* Update the statistics collected for deciding LRU
   eviction policy. */
   buf_LRU_stat_update();
-
-  /* In case mutex_exit is not a memory barrier, it is
-  theoretically possible some threads are left waiting though
-  the semaphore is already released. Wake up those threads: */
-
-  sync_arr_wake_threads_if_sema_free();
 
   if (sync_array_print_long_waits(&waiter, &sema) && sema == old_sema &&
       os_thread_eq(waiter, old_waiter)) {
@@ -3080,6 +3101,8 @@ static ulint srv_do_purge(
   }
 
   do {
+    srv_current_thread_priority = srv_purge_thread_priority;
+
     if (trx_sys->rseg_history_len > rseg_history_len ||
         (srv_max_purge_lag > 0 && rseg_history_len > srv_max_purge_lag)) {
       /* History length is now longer than what it was

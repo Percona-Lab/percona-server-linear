@@ -526,7 +526,7 @@ dberr_t buf_dblwr_init_or_load_pages(pfs_os_file_t file, const char *path) {
       }
 
     } else {
-      recv_dblwr.add(page);
+      recv_dblwr.add_to_sys(page);
     }
 
     page += univ_page_size.physical();
@@ -622,13 +622,11 @@ dberr_t buf_dblwr_init_or_load_pages(pfs_os_file_t file, const char *path) {
       return (DB_ERROR);
     }
 
-
     byte zero_page[UNIV_PAGE_SIZE_MAX] = {0};
     for (page = recovery_buf; page < recovery_buf + size;
          page += UNIV_PAGE_SIZE) {
       /* Skip all zero pages */
       const ulint checksum = mach_read_from_4(page + FIL_PAGE_SPACE_OR_CHKSUM);
-
 
       if (checksum != 0 || memcmp(page, zero_page, UNIV_PAGE_SIZE) != 0)
         recv_dblwr.add(page);
@@ -721,7 +719,9 @@ static void buf_dblwr_recover_page(page_no_t page_no_dblwr, fil_space_t *space,
       BlockReporter dblwr_buf_page(true, page, page_size,
                                    fsp_is_checksum_disabled(space->id));
 
-      if (dblwr_buf_page.is_corrupted()) {
+      dberr_t err = os_dblwr_decrypt_page(space, page);
+
+      if (err != DB_SUCCESS || dblwr_buf_page.is_corrupted()) {
         ib::error(ER_IB_MSG_107) << "Dump of the page:";
         buf_page_print(read_buf, page_size, BUF_PAGE_PRINT_NO_CRASH);
 
@@ -1063,6 +1063,50 @@ static void buf_dblwr_write_block_to_datafile(
   }
 }
 
+/** Encrypt a page in doublewerite buffer shard. The page is
+encrypted using its tablespace key.
+@param[in]	block		the buffer pool block for the page
+@param[in,out]	dblwr_page	in: unencrypted page
+out: encrypted page (if tablespace is
+encrypted */
+static void buf_dblwr_encrypt_page(const buf_block_t *block,
+                                   page_t *dblwr_page) {
+  const ulint space_id = block->page.id.space();
+  fil_space_t *space = fil_space_acquire_silent(space_id);
+
+  if (space == nullptr) {
+    /* Tablespace dropped */
+    return;
+  }
+
+  byte *encrypted_buf = static_cast<byte *>(ut_zalloc_nokey(UNIV_PAGE_SIZE));
+  ut_a(encrypted_buf != nullptr);
+
+  const page_size_t page_size(space->flags);
+  const bool success =
+      os_dblwr_encrypt_page(space, dblwr_page, encrypted_buf, UNIV_PAGE_SIZE);
+
+  if (success) {
+    memcpy(dblwr_page, encrypted_buf, page_size.physical());
+  }
+
+  ut_free(encrypted_buf);
+
+  fil_space_release(space);
+}
+
+/* Disable encryption of Page 0 of any tablespace or if it is system
+tablespace, do not encrypt pages upto TRX_SYS_PAGE_NO (including).
+TRX_SYS_PAGE should be not encrypted because dblwr buffer is found
+from this page
+@param[in]	block	buffer block
+@return true if encryption should be disabled for the block, else false */
+static bool buf_dblwr_disable_encryption(const buf_block_t &block) noexcept {
+  return (block.page.id.page_no() == 0 ||
+          (block.page.id.space() == TRX_SYS_SPACE &&
+           block.page.id.page_no() <= TRX_SYS_PAGE_NO));
+}
+
 /** Flushes possible buffered writes from the specified partition of
 the doublewrite memory buffer to disk, and also wakes up the aio
 thread if simulated aio is used. It is very important to call this
@@ -1103,6 +1147,7 @@ void buf_dblwr_flush_buffered_writes(ulint dblwr_partition) noexcept {
 
   write_buf = dblwr_shard->write_buf;
 
+  const bool encrypt_parallel_dblwr = srv_parallel_dblwr_encrypt;
 
   for (ulint len2 = 0, i = 0; i < dblwr_shard->first_free;
        len2 += UNIV_PAGE_SIZE, i++) {
@@ -1127,6 +1172,9 @@ void buf_dblwr_flush_buffered_writes(ulint dblwr_partition) noexcept {
     buffer has sane LSN values. */
     buf_dblwr_check_page_lsn(dblwr_page);
 
+    if (encrypt_parallel_dblwr && !buf_dblwr_disable_encryption(*block)) {
+      buf_dblwr_encrypt_page(block, dblwr_page);
+    }
   }
 
   len = dblwr_shard->first_free * UNIV_PAGE_SIZE;
@@ -1160,9 +1208,7 @@ void buf_dblwr_flush_buffered_writes(ulint dblwr_partition) noexcept {
   srv_stats.dblwr_pages_written.add(dblwr_shard->first_free);
   srv_stats.dblwr_writes.inc();
 
-
   if (parallel_dblwr_buf.needs_flush) os_file_flush(parallel_dblwr_buf.file);
-
 
   /* We know that the writes have been flushed to disk now
   and in recovery we will find them in the doublewrite buffer
@@ -1325,6 +1371,9 @@ retry:
 
   IORequest write_request(IORequest::WRITE);
 
+  if (buf_dblwr_disable_encryption(*(buf_block_t *)bpage)) {
+    write_request.disable_encryption();
+  }
 
   if (bpage->size.is_compressed()) {
     memcpy(buf_dblwr->write_buf + univ_page_size.physical() * i,
@@ -1394,7 +1443,6 @@ static MY_ATTRIBUTE((warn_unused_result)) dberr_t
     return (DB_ERROR);
   }
 
-
   const bool o_direct_set = os_file_set_nocache(
       parallel_dblwr_buf.file, parallel_dblwr_buf.path, "create", false);
   switch (srv_unix_file_flush_method) {
@@ -1409,7 +1457,6 @@ static MY_ATTRIBUTE((warn_unused_result)) dberr_t
       parallel_dblwr_buf.needs_flush = true;
       break;
   }
-
 
   success = os_file_set_size(parallel_dblwr_buf.path, parallel_dblwr_buf.file,
                              0, size, srv_read_only_mode, true);
