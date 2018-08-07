@@ -64,7 +64,6 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "dict0dict.h"
 #include "fil0fil.h"
 #include "fsp0fsp.h"
-#include "log0online.h"
 #include "fsp0sysspace.h"
 #include "ha_prototypes.h"
 #include "ibuf0ibuf.h"
@@ -1909,6 +1908,54 @@ static lsn_t srv_prepare_to_delete_redo_log_files(ulint n_files) {
   return (flushed_lsn);
 }
 
+/** Enable encryption of system tablespace if requested. At
+startup load the encryption information from first datafile
+to tablespace object
+@return DB_SUCCESS on succes, others on failure */
+static dberr_t srv_sys_enable_encryption(bool create_new_db) {
+  fil_space_t *space = fil_space_get(TRX_SYS_SPACE);
+  dberr_t err = DB_SUCCESS;
+
+  if (create_new_db && srv_sys_tablespace_encrypt) {
+    fsp_flags_set_encryption(space->flags);
+    srv_sys_space.set_flags(space->flags);
+
+    err = fil_set_encryption(space->id, Encryption::AES, nullptr, nullptr);
+    ut_ad(err == DB_SUCCESS);
+  } else {
+    const auto fsp_flags = srv_sys_space.m_files.begin()->flags();
+    const bool is_encrypted = FSP_FLAGS_GET_ENCRYPTION(fsp_flags);
+
+    if (is_encrypted && !srv_sys_tablespace_encrypt) {
+      ib::error() << "The system tablespace is encrypted but"
+                  << " --innodb_sys_tablespace_encrypt is"
+                  << " OFF. Enable the option and start server";
+      return (DB_ERROR);
+    }
+
+    if (!is_encrypted && srv_sys_tablespace_encrypt) {
+      ib::error() << "The system tablespace is not encrypted but"
+                  << " --innodb_sys_tablespace_encrypt is"
+                  << " ON. This instance was not bootstrapped"
+                  << " with --innodb_sys_tablespace_encrypt=ON."
+                  << " Disable this option and start server";
+      return (DB_ERROR);
+    }
+
+    if (is_encrypted) {
+      fsp_flags_set_encryption(space->flags);
+      srv_sys_space.set_flags(space->flags);
+
+      err = fil_set_encryption(space->id, Encryption::AES,
+                               srv_sys_space.m_files.begin()->m_encryption_key,
+                               srv_sys_space.m_files.begin()->m_encryption_iv);
+      ut_ad(err == DB_SUCCESS);
+    }
+  }
+
+  return (err);
+}
+
 dberr_t srv_start(bool create_new_db) {
   lsn_t flushed_lsn;
 
@@ -2242,6 +2289,8 @@ dberr_t srv_start(bool create_new_db) {
 
   switch (err) {
     case DB_SUCCESS:
+      err = srv_sys_enable_encryption(create_new_db);
+      if (err != DB_SUCCESS) return (srv_init_abort(err));
       break;
     case DB_CANNOT_OPEN_FILE:
       ib::error(ER_IB_MSG_1134);
@@ -2677,13 +2726,16 @@ files_checked:
 
       /* If log tracking is enabled, make it catch up with
       the old logs synchronously. */
+      bool saved_srv_track_changed_pages = srv_track_changed_pages;
       if (srv_track_changed_pages) {
         const lsn_t checkpoint_lsn = log_sys->last_checkpoint_lsn;
-        ib::info() << "Tracking redo log synchronously until "
+        ib::info() << "Tracking redo log synchronously "
+                      "until "
                    << checkpoint_lsn;
         if (!log_online_follow_redo_log()) {
           return (srv_init_abort(DB_ERROR));
         }
+        srv_track_changed_pages = false;
       }
 
       /* Close and free the redo log files, so that
@@ -2709,6 +2761,25 @@ files_checked:
       if (err != DB_SUCCESS) {
         return (srv_init_abort(err));
       }
+
+      if (saved_srv_track_changed_pages) {
+        const lsn_t checkpoint_lsn = log_sys->last_checkpoint_lsn;
+        log_sys->last_checkpoint_lsn = log_get_lsn(*log_sys);
+        ib::info() << "Tracking redo log synchronously until "
+                   << checkpoint_lsn;
+        srv_track_changed_pages = true;
+        if (!log_online_follow_redo_log()) {
+          return (srv_init_abort(DB_ERROR));
+        }
+        srv_track_changed_pages = false;
+      }
+
+      /* create_log_files() can increase system lsn that is
+      why FIL_PAGE_FILE_FLUSH_LSN have to be updated */
+      flushed_lsn = log_get_lsn(*log_sys);
+      err = fil_write_flushed_lsn(flushed_lsn);
+      if (err != DB_SUCCESS) return (srv_init_abort(err));
+      fil_flush_file_spaces(FIL_TYPE_TABLESPACE);
 
       create_log_files_rename(logfilename, dirnamelen, new_checkpoint_lsn,
                               logfile0);
@@ -2866,6 +2937,9 @@ files_checked:
 
     srv_start_state_set(SRV_START_STATE_MONITOR);
   }
+
+  /* wake main loop of page cleaner up */
+  os_event_set(buf_flush_event);
 
   srv_sys_tablespaces_open = true;
 
