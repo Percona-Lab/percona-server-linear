@@ -219,8 +219,9 @@ our $opt_gterm;
 our $DEFAULT_SUITES =
 "auth_sec,binlog_gtid,binlog_nogtid,clone,collations,connection_control,encryption,federated,funcs_2,gcol,sysschema,gis,information_schema,innodb,innodb_fts,innodb_gis,innodb_undo,innodb_zip,json,main,opt_trace,parts,perfschema,query_rewrite_plugins,rpl,rpl_gtid,rpl_nogtid,secondary_engine,service_status_var_registration,service_sys_var_registration,service_udf_registration,sys_vars,binlog,test_service_sql_api,test_services,x,"
   # Percona suites
-  ."funcs_1,jp,stress,engines/iuds,engines/funcs,group_replication,"
-  ."innodb_stress,"
+  ."funcs_1,jp,stress,engines/iuds,engines/funcs,group_replication,audit_null,"
+  ."interactive_utilities,innodb_stress,"
+  ."audit_log,keyring_vault,"
   ."tokudb.add_index,tokudb.alter_table,tokudb,tokudb.bugs,tokudb.parts,"
   ."tokudb.rpl,tokudb.perfschema,"
   ."rocksdb,rocksdb.rpl,rocksdb.sys_vars";
@@ -2259,6 +2260,7 @@ sub collect_mysqld_features {
   my $args;
   mtr_init_args(\$args);
   mtr_add_arg($args, "--no-defaults");
+  mtr_add_arg($args, "--basedir=%s", $basedir);
   mtr_add_arg($args, "--datadir=%s", mixed_path($tmpdir));
   mtr_add_arg($args, "--log-syslog=0");
   mtr_add_arg($args, "--secure-file-priv=\"\"");
@@ -2691,6 +2693,7 @@ sub read_plugin_defs($) {
           $semi = ';';
         }
 
+	$ENV{ $plug_var . '_EARLY_LOAD'} = $early_load_var;
         $ENV{ $plug_var . '_LOAD' }     = $load_var;
         $ENV{ $plug_var . '_LOAD_EARLY' } = $early_load_var;
         $ENV{ $plug_var . '_LOAD_ADD' } = $load_add_var;
@@ -2933,6 +2936,7 @@ sub environment_setup {
     $ENV{'IBD2SDI'} = mtr_args2str($exe_ibd2sdi, @$args);
   }
 
+  # ----------------------------------------------------
   # sst_dump
   # ----------------------------------------------------
   my $exe_sst_dump=
@@ -2952,8 +2956,6 @@ sub environment_setup {
            "$basedir/storage/tokudb/PerconaFT/tools/tokuftdump");
   $ENV{'MYSQL_TOKUFTDUMP'}= native_path($exe_tokuftdump);
 
-
-  # ----------------------------------------------------
   # Setup env so childs can execute myisampack and myisamchk
   $ENV{'MYISAMCHK'} =
     native_path(mtr_exe_exists("$path_client_bindir/myisamchk"));
@@ -7243,6 +7245,7 @@ sub valgrind_exit_reports() {
 }
 
 sub run_ctest() {
+  $ENV{'MYSQL_TEST_DIR'} = $glob_mysql_test_dir;
   my $olddir = getcwd();
   chdir($bindir) or die("Could not chdir to $bindir");
 
