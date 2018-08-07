@@ -9,10 +9,12 @@ SET GLOBAL innodb_fast_shutdown = 0;
 --source include/restart_mysqld.inc
 
 --disable_query_log
-call mtr.add_suppression("InnoDB: Database page [0-9]+:1 contained only zeroes.");
+call mtr.add_suppression("Database page [0-9]+:1 contained only zeroes.");
 call mtr.add_suppression("Header page consists of zero bytes");
 call mtr.add_suppression("Checksum mismatch in datafile");
 call mtr.add_suppression("but the innodb_page_size start-up parameter is");
+call mtr.add_suppression("Database page corruption");
+call mtr.add_suppression("Wrong server version");
 --enable_query_log
 
 let INNODB_PAGE_SIZE=`select @@innodb_page_size`;
@@ -36,7 +38,7 @@ commit work;
 --echo # Test Begin: Test if recovery works if first page of user
 --echo # tablespace is full of zeroes.
 
-select space from information_schema.innodb_sys_tables
+select space from information_schema.innodb_tables
 where name = 'test/t1' into @space_id;
 
 --echo # Wait for purge to complete
@@ -45,6 +47,8 @@ where name = 'test/t1' into @space_id;
 --echo # Ensure that dirty pages of table t1 is flushed.
 flush tables t1 for export;
 unlock tables;
+
+SET GLOBAL innodb_checkpoint_disabled=1;
 
 begin;
 insert into t1 values (6, repeat('%', 12));
@@ -63,15 +67,10 @@ set global innodb_buf_flush_list_now = 1;
 
 --echo # Make the first page (page_no=0) of the user tablespace
 --echo # full of zeroes.
-perl;
-use IO::Handle;
-my $fname= "$ENV{'MYSQLD_DATADIR'}test/t1.ibd";
-open(FILE, "+<", $fname) or die;
-FILE->autoflush(1);
-binmode FILE;
-print FILE chr(0) x ($ENV{'INNODB_PAGE_SIZE'});
-close FILE;
-EOF
+--let IBD_FILE=$MYSQLD_DATADIR/test/t1.ibd
+--let PAGE_NUM="0"
+--let ALL_ZEROES=1
+--source corrupt_page.inc
 
 --source include/start_mysqld.inc
 
@@ -83,12 +82,14 @@ select f1, f2 from t1;
 --echo # Test Begin: Test if recovery works if first page of user
 --echo # tablespace is corrupted.
 
-select space from information_schema.innodb_sys_tables
+select space from information_schema.innodb_tables
 where name = 'test/t1' into @space_id;
 
 --echo # Ensure that dirty pages of table t1 is flushed.
 flush tables t1 for export;
 unlock tables;
+
+SET GLOBAL innodb_checkpoint_disabled=1;
 
 begin;
 insert into t1 values (6, repeat('%', 12));
@@ -105,15 +106,9 @@ set global innodb_buf_flush_list_now = 1;
 --source include/no_checkpoint_end.inc
 
 --echo # Corrupt the first page (page_no=0) of the user tablespace.
-perl;
-use IO::Handle;
-my $fname= "$ENV{'MYSQLD_DATADIR'}test/t1.ibd";
-open(FILE, "+<", $fname) or die;
-FILE->autoflush(1);
-binmode FILE;
-print FILE chr(0) x ($ENV{'INNODB_PAGE_SIZE'}/2);
-close FILE;
-EOF
+--let IBD_FILE=$MYSQLD_DATADIR/test/t1.ibd
+--let PAGE_NUM="0"
+--source corrupt_page.inc
 
 --source include/start_mysqld.inc
 
@@ -125,12 +120,14 @@ select f1, f2 from t1;
 --echo # Test Begin: Test if recovery works if 2nd page of user
 --echo # tablespace is full of zeroes.
 
-select space from information_schema.innodb_sys_tables
+select space from information_schema.innodb_tables
 where name = 'test/t1' into @space_id;
 
 --echo # Ensure that dirty pages of table t1 is flushed.
 flush tables t1 for export;
 unlock tables;
+
+SET GLOBAL innodb_checkpoint_disabled=1;
 
 begin;
 insert into t1 values (6, repeat('%', 400));
@@ -147,16 +144,10 @@ set global innodb_buf_flush_list_now = 1;
 --source include/no_checkpoint_end.inc
 
 --echo # Make the 2nd page (page_no=1) of the tablespace all zeroes.
-perl;
-use IO::Handle;
-my $fname= "$ENV{'MYSQLD_DATADIR'}test/t1.ibd";
-open(FILE, "+<", $fname) or die;
-FILE->autoflush(1);
-binmode FILE;
-seek(FILE, $ENV{'INNODB_PAGE_SIZE'}, SEEK_SET);
-print FILE chr(0) x ($ENV{'INNODB_PAGE_SIZE'});
-close FILE;
-EOF
+--let IBD_FILE=$MYSQLD_DATADIR/test/t1.ibd
+--let PAGE_NUM=1
+--let ALL_ZEROES=1
+--source corrupt_page.inc
 
 --source include/start_mysqld.inc
 
@@ -168,12 +159,14 @@ select f1, f2 from t1;
 --echo # Test Begin: Test if recovery works if 2nd page of user
 --echo # tablespace is corrupted.
 
-select space from information_schema.innodb_sys_tables
+select space from information_schema.innodb_tables
 where name = 'test/t1' into @space_id;
 
 --echo # Ensure that dirty pages of table t1 is flushed.
 flush tables t1 for export;
 unlock tables;
+
+SET GLOBAL innodb_checkpoint_disabled=1;
 
 begin;
 insert into t1 values (6, repeat('%', 400));
@@ -190,16 +183,9 @@ set global innodb_buf_flush_list_now = 1;
 --source include/no_checkpoint_end.inc
 
 --echo # Corrupt the 2nd page (page_no=1) of the user tablespace.
-perl;
-use IO::Handle;
-my $fname= "$ENV{'MYSQLD_DATADIR'}test/t1.ibd";
-open(FILE, "+<", $fname) or die;
-FILE->autoflush(1);
-binmode FILE;
-seek(FILE, $ENV{'INNODB_PAGE_SIZE'}, SEEK_SET);
-print FILE chr(0) x ($ENV{'INNODB_PAGE_SIZE'}/2);
-close FILE;
-EOF
+--let IBD_FILE=$MYSQLD_DATADIR/test/t1.ibd
+--let PAGE_NUM=1
+--source corrupt_page.inc
 
 --source include/start_mysqld.inc
 
@@ -233,15 +219,10 @@ set global innodb_buf_flush_list_now = 1;
 
 --echo # Make the first page (page_no=0) of the system tablespace
 --echo # all zeroes.
-perl;
-use IO::Handle;
-my $fname= "$ENV{'MYSQLD_DATADIR'}ibdata1";
-open(FILE, "+<", $fname) or die;
-FILE->autoflush(1);
-binmode FILE;
-print FILE chr(0) x ($ENV{'INNODB_PAGE_SIZE'});
-close FILE;
-EOF
+--let IBD_FILE=$MYSQLD_DATADIR/ibdata1
+--let PAGE_NUM="0"
+--let ALL_ZEROES=1
+--source corrupt_page.inc
 
 --source include/start_mysqld.inc
 
@@ -269,15 +250,9 @@ set global innodb_buf_flush_list_now = 1;
 --source include/kill_mysqld.inc
 
 --echo # Corrupt the first page (page_no=0) of the system tablespace.
-perl;
-use IO::Handle;
-my $fname= "$ENV{'MYSQLD_DATADIR'}ibdata1";
-open(FILE, "+<", $fname) or die;
-FILE->autoflush(1);
-binmode FILE;
-print FILE chr(0) x ($ENV{'INNODB_PAGE_SIZE'}/2);
-close FILE;
-EOF
+--let IBD_FILE=$MYSQLD_DATADIR/ibdata1
+--let PAGE_NUM="0"
+--source corrupt_page.inc
 
 --source include/start_mysqld.inc
 
@@ -306,16 +281,10 @@ set global innodb_buf_flush_list_now = 1;
 
 --echo # Make the 2nd page (page_no=1) of the system tablespace
 --echo # all zeroes.
-perl;
-use IO::Handle;
-my $fname= "$ENV{'MYSQLD_DATADIR'}ibdata1";
-open(FILE, "+<", $fname) or die;
-FILE->autoflush(1);
-binmode FILE;
-seek(FILE, $ENV{'INNODB_PAGE_SIZE'}, SEEK_SET);
-print FILE chr(0) x ($ENV{'INNODB_PAGE_SIZE'});
-close FILE;
-EOF
+--let IBD_FILE=$MYSQLD_DATADIR/ibdata1
+--let PAGE_NUM=1
+--let ALL_ZEROES=1
+--source corrupt_page.inc
 
 --source include/start_mysqld.inc
 
@@ -344,16 +313,9 @@ set global innodb_buf_flush_list_now = 1;
 
 --echo # Make the 2nd page (page_no=1) of the system tablespace
 --echo # all zeroes.
-perl;
-use IO::Handle;
-my $fname= "$ENV{'MYSQLD_DATADIR'}ibdata1";
-open(FILE, "+<", $fname) or die;
-FILE->autoflush(1);
-binmode FILE;
-seek(FILE, $ENV{'INNODB_PAGE_SIZE'}, SEEK_SET);
-print FILE chr(0) x ($ENV{'INNODB_PAGE_SIZE'}/2);
-close FILE;
-EOF
+--let IBD_FILE=$MYSQLD_DATADIR/ibdata1
+--let PAGE_NUM=1
+--source corrupt_page.inc
 
 --source include/start_mysqld.inc
 
