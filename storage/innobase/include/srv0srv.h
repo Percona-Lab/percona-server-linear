@@ -2,7 +2,7 @@
 
 Copyright (c) 1995, 2018, Oracle and/or its affiliates. All rights reserved.
 Copyright (c) 2008, 2009, Google Inc.
-Copyright (c) 2009, Percona Inc.
+Copyright (c) 2009, 2016, Percona Inc.
 
 Portions of this file contain modifications contributed and copyrighted by
 Google, Inc. Those modifications are gratefully acknowledged and are described
@@ -138,6 +138,8 @@ struct srv_stats_t {
   /** Number of rows inserted */
   ulint_ctr_64_t n_rows_inserted;
 
+  ulint_ctr_1_t n_lock_max_wait_time;
+
   /** Number of buffered aio requests submitted */
   ulint_ctr_64_t n_aio_submitted;
 
@@ -241,6 +243,11 @@ extern os_event_t srv_checkpoint_completed_event;
 log tracking iteration */
 extern os_event_t srv_redo_log_tracked_event;
 
+/** Whether the redo log tracker thread has been started. Does not take into
+account whether the tracking is currently enabled (see srv_track_changed_pages
+for that) */
+extern bool srv_redo_log_thread_started;
+
 /* If the last data file is auto-extended, we add this many pages to it
 at a time */
 #define SRV_AUTO_EXTEND_INCREMENT (srv_sys_space.get_autoextend_increment())
@@ -319,18 +326,22 @@ extern bool srv_undo_log_truncate;
 /** Enable or disable Encrypt of UNDO tablespace. */
 extern bool srv_undo_log_encrypt;
 
-/** Whether the redo log tracker thread has been started. Does not take into
-account whether the tracking is currently enabled (see srv_track_changed_pages
-for that) */
-extern bool srv_redo_log_thread_started;
-
 /** Enable or disable encryption of temporary tablespace.*/
 extern bool srv_tmp_tablespace_encrypt;
 
-extern bool srv_track_changed_pages;
-extern ulonglong	srv_max_bitmap_file_size;
+/** Enable this option to encrypt system tablespace at bootstrap. */
+extern bool srv_sys_tablespace_encrypt;
 
-extern ulonglong	srv_max_changed_pages;
+/** Enable or disable encryption of pages in parallel doublewrite buffer file */
+extern bool srv_parallel_dblwr_encrypt;
+
+/** Whether the redo log tracking is currently enabled. Note that it is
+possible for the log tracker thread to be running and the tracking to be
+disabled */
+extern bool srv_track_changed_pages;
+extern ulonglong srv_max_bitmap_file_size;
+
+extern ulonglong srv_max_changed_pages;
 
 /** Default size of UNDO tablespace while it is created new. */
 extern const page_no_t SRV_UNDO_TABLESPACE_SIZE_IN_PAGES;
@@ -593,6 +604,7 @@ extern ulong srv_doublewrite_batch_size;
 extern ulong srv_checksum_algorithm;
 
 extern double srv_max_buf_pool_modified_pct;
+
 extern ulong srv_max_purge_lag;
 extern ulong srv_max_purge_lag_delay;
 
@@ -755,7 +767,6 @@ extern mysql_pfs_key_t srv_worker_thread_key;
 extern mysql_pfs_key_t trx_recovery_rollback_thread_key;
 extern mysql_pfs_key_t srv_ts_alter_encrypt_thread_key;
 extern mysql_pfs_key_t srv_log_tracking_thread_key;
-extern mysql_pfs_key_t log_scrub_thread_key;
 #endif /* UNIV_PFS_THREAD */
 #endif /* !UNIV_HOTBACKUP */
 
