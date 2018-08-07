@@ -58,6 +58,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 #include <locale>
 #include <string>
 #endif /* !_WIN32 */
+#include "page0types.h"
 
 #include <functional>
 #include <stack>
@@ -320,7 +321,10 @@ class IORequest {
     This can be used to force a read and write without any
     compression e.g., for redo log, merge sort temporary files
     and the truncate redo log. */
-    NO_COMPRESSION = 512
+    NO_COMPRESSION = 512,
+
+    /** Force write of decrypted pages in encrypted tablespace. */
+    NO_ENCRYPTION = 1024
   };
 
   /** Default constructor */
@@ -464,8 +468,16 @@ class IORequest {
     return ((m_type & NO_COMPRESSION) == 0);
   }
 
+  /** @return true if the page write should not be encrypted */
+  MY_NODISCARD bool is_encryption_disabled() const noexcept {
+    return ((m_type & NO_ENCRYPTION) != 0);
+  }
+
   /** Disable transformations. */
   void disable_compression() { m_type |= NO_COMPRESSION; }
+
+  /** Disable encryption of a page in encrypted tablespace */
+  void disable_encryption() noexcept { m_type |= NO_ENCRYPTION; }
 
   /** Set encryption algorithm
   @param[in] type		The encryption algorithm to use */
