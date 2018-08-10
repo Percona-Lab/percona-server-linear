@@ -9643,6 +9643,8 @@ dberr_t fil_set_encryption(space_id_t space_id, Encryption::Type algorithm,
 
   Encryption::set_or_generate(algorithm, key, iv, space->m_encryption_metadata);
 
+  if (space->crypt_data == nullptr) fsp_flags_set_encryption(space->flags);
+
   if (acquire_mutex) {
     shard->mutex_release();
   }
