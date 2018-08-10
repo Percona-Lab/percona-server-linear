@@ -9271,10 +9271,12 @@ dberr_t fil_set_encryption(space_id_t space_id, Encryption::Type algorithm,
     Encryption::random_value(space->encryption_iv);
   } else {
     memcpy(space->encryption_iv, iv, ENCRYPTION_KEY_LEN);
-  }
+  if (space->crypt_data == nullptr) FSP_FLAGS_SET_ENCRYPTION(space->flags);
 
   ut_ad(algorithm != Encryption::NONE);
   space->encryption_type = algorithm;
+
+  if (space->crypt_data == nullptr) space->flags |= FSP_FLAGS_MASK_ENCRYPTION;
 
   if (acquire_mutex) {
     shard->mutex_release();
