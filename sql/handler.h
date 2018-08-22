@@ -4490,7 +4490,8 @@ class handler {
   bool is_using_full_unique_key(uint active_index, key_part_map keypart_map,
                                 enum ha_rkey_function find_flag) const noexcept;
   bool is_using_prohibited_gap_locks(TABLE *table,
-                                     bool using_full_primary_key) const;
+                                     bool using_full_primary_key) const
+      noexcept;
 
   /**
     Notify storage engine about imminent index read with key length.
