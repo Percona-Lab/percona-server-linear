@@ -5180,8 +5180,8 @@ class handler {
                                 uint actual_key_parts) noexcept;
   bool is_using_full_unique_key(uint active_index, key_part_map keypart_map,
                                 enum ha_rkey_function find_flag) const noexcept;
-  bool is_using_prohibited_gap_locks(TABLE *table,
-                                     bool using_full_primary_key) const;
+  bool is_using_prohibited_gap_locks(
+      TABLE *table, bool using_full_primary_key) const noexcept;
 
 public:
   virtual int read_range_first(const key_range *start_key,
