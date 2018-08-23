@@ -203,6 +203,7 @@ class MYSQL_BIN_LOG : public TC_LOG {
 
   std::atomic<my_off_t> atomic_binlog_end_pos;
   ulonglong bytes_written;
+  ulonglong binlog_space_total;
   IO_CACHE index_file;
   char index_file_name[FN_REFLEN];
   /*
@@ -262,8 +263,6 @@ class MYSQL_BIN_LOG : public TC_LOG {
   int32 get_prep_xids() { return m_atomic_prep_xids; }
 
   inline uint get_sync_period() { return *sync_period_ptr; }
-
-  int write_to_file(Log_event *event);
 
  public:
   /*
@@ -802,7 +801,8 @@ class MYSQL_BIN_LOG : public TC_LOG {
   int purge_logs(const char *to_log, bool included, bool need_lock_index,
                  bool need_update_threads, ulonglong *decrease_log_space,
                  bool auto_purge);
-  int purge_logs_maximum_number(ulong max_nr_files);
+  int count_binlog_space(bool need_lock_index);
+  int purge_logs_by_size(bool need_lock_index);
   int purge_logs_before_date(time_t purge_time, bool auto_purge);
   int set_crash_safe_index_file_name(const char *base_file_name);
   int open_crash_safe_index_file();
