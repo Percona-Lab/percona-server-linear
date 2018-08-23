@@ -230,6 +230,7 @@ extern bool opt_using_transactions;
 extern ulong current_pid;
 extern ulong expire_logs_days;
 extern ulong binlog_expire_logs_seconds;
+extern ulonglong binlog_space_limit;
 extern uint sync_binlog_period, sync_relaylog_period, sync_relayloginfo_period,
     sync_masterinfo_period, opt_mts_checkpoint_period, opt_mts_checkpoint_group;
 extern ulong opt_tc_log_size, tc_log_max_pages_used, tc_log_page_size;
@@ -362,12 +363,6 @@ extern char *opt_log_error_suppression_list;
 extern char *opt_log_error_services;
 extern bool encrypt_binlog;
 extern bool encrypt_tmp_files;
-extern bool opt_log_syslog_enable;
-extern char *opt_log_syslog_tag;
-#ifndef _WIN32
-extern bool opt_log_syslog_include_pid;
-extern char *opt_log_syslog_facility;
-#endif
 /** The size of the host_cache. */
 extern uint host_cache_size;
 extern ulong log_error_verbosity;
