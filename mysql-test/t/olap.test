@@ -1371,7 +1371,6 @@ ORDER BY S;
 
 DROP TABLE t;
 
-
 --echo #
 --echo # PS-8328: MySQL 8 Crash when using group_concat with group by with
 --echo #          rollup.

@@ -25,39 +25,40 @@
 
 # usage: set_suites <BUILD_TYPE>
 function set_suites() {
-  # Comparing to 8.4 added in 9.4: component_connection_control, jdv
+  # Comparing to 8.0 added in 8.4: component_audit_log_filter, percona_innodb, component_js_lang
+  # Comparing to 8.0 removed from 8.4: data_masking, binlog_57_decryption, audit_log_filter
   if [[ "$1" == "Valgrind" ]]; then
     # Unit tests, KEYRING_VAULT tests, ps_protocol, ci_fs will be executed by worker 1
-    echo "Setting WORKER_x_MTR_SUITES for PS 9.x with Valgrind (a custom suite split)"
-    WORKER_1_MTR_SUITES="router,rpl_gtid|big,percona_rpl_gtid|big,percona|nobig,component_audit_log_filter,rpl_nogtid|nobig,sysschema|big,innodb_zip|big,rpl_encryption,rocksdb_rpl|nobig,jp,service_sys_var_registration,audit_null,rocksdb_stress,component_js_lang|big"
-    WORKER_2_MTR_SUITES="innodb|nobig,innodb_fts|big,funcs_1|big,encryption|nobig,component_masking_functions,component_encryption_udf|nobig,component_connection_control|nobig,procfs,encryption|big"
-    WORKER_3_MTR_SUITES="main|big,binlog|nobig,percona_binlog|nobig,innodb_zip|nobig,engines/funcs|nobig,innodb_gis|big,parts|big,binlog_nogtid|nobig,collations,sysschema|nobig,rocksdb_sys_vars,connection_control|nobig,jdv"
-    WORKER_4_MTR_SUITES="innodb|big,group_replication|nobig,rpl_gtid|nobig,percona_rpl_gtid|nobig,binlog|big,percona_binlog|big,innodb_fts|nobig,binlog_nogtid|big,funcs_1|nobig,innodb_gis|nobig,perfschema|big,federated|nobig,gis|big"
-    WORKER_5_MTR_SUITES="main|nobig,rpl|big,percona_rpl|big,rpl_nogtid|big,component_encryption_udf|big,x|nobig,binlog_gtid|nobig,component_keyring_file|nobig,funcs_2|big,test_services,binlog_gtid|big,stress|nobig,information_schema,component_js_lang|nobig,component_connection_control|big"
-    WORKER_6_MTR_SUITES="group_replication|big,percona_innodb|nobig,rocksdb|big,innodb_undo|nobig,stress|big,x|big,auth_sec|nobig,auth_openid_connect,rocksdb_rpl|big,gcol|nobig,query_rewrite_plugins,secondary_engine,interactive_utilities,connection_control|big,percona|big"
-    WORKER_7_MTR_SUITES="rpl|nobig,percona_rpl|nobig,innodb_undo|big,perfschema|nobig,component_keyring_file|big,percona_innodb|big,sys_vars|nobig,auth_sec|big,opt_trace|nobig,json,engines/iuds|nobig,test_service_sql_api,service_status_var_registration,opt_trace|big"
-    WORKER_8_MTR_SUITES="engines/funcs|big,clone|big,rocksdb|nobig,clone|nobig,parts|nobig,federated|big,engines/iuds|big,gis|nobig,sys_vars|big,gcol|big,funcs_2|nobig,service_udf_registration,percona-pam-for-mysql"
+    echo "Setting WORKER_x_MTR_SUITES for PS 8.4 with Valgrind (a custom suite split)"
+    WORKER_1_MTR_SUITES="rpl|nobig,percona_rpl|nobig,percona_innodb|nobig,perfschema|nobig,clone|nobig,innodb_undo|big,sys_vars|nobig,engines/iuds|big,component_keyring_file|nobig,funcs_1|big,sys_vars|big,gcol|big,funcs_2|nobig,service_udf_registration,interactive_utilities"
+    WORKER_2_MTR_SUITES="innodb|big"
+    WORKER_3_MTR_SUITES="innodb|nobig,stress|big,innodb_gis|nobig,auth_sec|nobig,auth_openid_connect,innodb_gis|big,opt_trace|nobig,json,gis|nobig,encryption|big,audit_null,procfs,connection_control|big"
+    WORKER_4_MTR_SUITES="main|big,rocksdb|big,percona|nobig,percona_innodb|big,audit_log,innodb_fts|nobig,binlog_nogtid|nobig,auth_sec|big,component_masking_functions,query_rewrite_plugins,test_service_sql_api,connection_control|nobig,gis|big,component_js_lang|big"
+    WORKER_5_MTR_SUITES="clone|big,rpl_gtid|big,percona_rpl_gtid|big,binlog|nobig,percona_binlog|nobig,component_encryption_udf|big,sysschema|big,parts|big,rpl_encryption,collations,innodb_zip|big,sysschema|nobig,test_services,federated|nobig,service_status_var_registration,percona|big"
+    WORKER_6_MTR_SUITES="main|nobig,rpl|big,percona_rpl|big,x|big,innodb_undo|nobig,x|nobig,engines/funcs|nobig,binlog_gtid|nobig,funcs_1|nobig,gcol|nobig,perfschema|big,secondary_engine,information_schema,percona-pam-for-mysql"
+    WORKER_7_MTR_SUITES="group_replication|big,component_keyring_file|big,rocksdb|nobig,rpl_nogtid|nobig,innodb_zip|nobig,parts|nobig,innodb_fts|big,binlog_nogtid|big,funcs_2|big,encryption|nobig,jp,rocksdb_sys_vars,component_encryption_udf|nobig,opt_trace|big,component_js_lang|nobig"
+    WORKER_8_MTR_SUITES="engines/funcs|big,group_replication|nobig,rpl_nogtid|big,component_audit_log_filter,rpl_gtid|nobig,percona_rpl_gtid|nobig,binlog|big,percona_binlog|big,federated|big,rocksdb_rpl|big,rocksdb_rpl|nobig,binlog_gtid|big,engines/iuds|nobig,service_sys_var_registration,stress|nobig,rocksdb_stress"
   elif [[ "$1" == "RelWithDebInfo" ]]; then
     # Unit tests, KEYRING_VAULT tests, ps_protocol, ci_fs will be executed by worker 1
-    echo "Setting WORKER_x_MTR_SUITES for PS 9.x with BUILD_TYPE=RelWithDebInfo (a custom suite split)"
-    WORKER_1_MTR_SUITES="main|nobig,main|big,parts,percona,component_audit_log_filter,engines/iuds,component_connection_control,opt_trace,information_schema"
-    WORKER_2_MTR_SUITES="component_encryption_udf,innodb_zip,gis,json,component_js_lang,router"
-    WORKER_3_MTR_SUITES="group_replication|big,binlog,percona_binlog,test_service_sql_api,component_masking_functions,connection_control,service_sys_var_registration,jdv"
-    WORKER_4_MTR_SUITES="rocksdb|big,rpl_gtid,percona_rpl_gtid,auth_sec,auth_openid_connect,engines/funcs,innodb_undo,interactive_utilities,query_rewrite_plugins,audit_null"
-    WORKER_5_MTR_SUITES="rocksdb|nobig,percona_innodb,sys_vars,perfschema,innodb_fts,binlog_gtid,rpl_encryption,service_udf_registration,procfs"
-    WORKER_6_MTR_SUITES="rpl|nobig,percona_rpl|nobig,rpl_nogtid|big,rocksdb_rpl,clone,innodb_gis,funcs_1,funcs_2,collations,jp,percona-pam-for-mysql"
-    WORKER_7_MTR_SUITES="group_replication|nobig,rpl_nogtid|nobig,innodb|nobig,component_keyring_file,rocksdb_stress,gcol,stress,test_services,secondary_engine,service_status_var_registration"
-    WORKER_8_MTR_SUITES="innodb|big,rpl|big,percona_rpl|big,sysschema,x|big,x|nobig,binlog_nogtid,federated,rocksdb_sys_vars,encryption"
+    echo "Setting WORKER_x_MTR_SUITES for PS 8.4 with BUILD_TYPE=RelWithDebInfo (a custom suite split)"
+    WORKER_1_MTR_SUITES="main|nobig,rpl_gtid,percona_rpl_gtid,rpl_nogtid|big,innodb_gis,binlog_nogtid,binlog_gtid,json,information_schema,service_status_var_registration"
+    WORKER_2_MTR_SUITES="group_replication|big,funcs_1,component_masking_functions,collations,gis,percona-pam-for-mysql"
+    WORKER_3_MTR_SUITES="rocksdb|big,clone,x|nobig,rocksdb_stress,funcs_2,test_services,encryption,component_js_lang"
+    WORKER_4_MTR_SUITES="rocksdb|nobig,innodb|nobig,sys_vars,component_keyring_file,innodb_zip,federated,rpl_encryption,secondary_engine"
+    WORKER_5_MTR_SUITES="component_encryption_udf,main|big,parts,x|big,binlog,percona_binlog,audit_log,component_audit_log_filter,connection_control,rocksdb_sys_vars"
+    WORKER_6_MTR_SUITES="innodb|big,percona_innodb,rocksdb_rpl,engines/funcs,innodb_fts,engines/iuds,service_sys_var_registration,audit_null,procfs"
+    WORKER_7_MTR_SUITES="rpl|nobig,percona_rpl|nobig,rpl_nogtid|nobig,auth_sec,auth_openid_connect,perfschema,gcol,test_service_sql_api,interactive_utilities,jp,service_udf_registration"
+    WORKER_8_MTR_SUITES="group_replication|nobig,rpl|big,percona_rpl|big,sysschema,percona,innodb_undo,stress,query_rewrite_plugins,opt_trace"
   else # Debug (and everything different from "RelWithDebInfo" and "Valgrind")
     # Unit tests, KEYRING_VAULT tests, ps_protocol, ci_fs will be executed by worker 1
-    echo "Setting WORKER_x_MTR_SUITES for PS 9.x with BUILD_TYPE=Debug (a custom suite split)"
-    WORKER_1_MTR_SUITES="rocksdb|nobig,rpl|big,percona_rpl|big,innodb_undo|nobig,percona,sysschema|nobig,x|big,binlog_nogtid|nobig,encryption,service_sys_var_registration,audit_null,router"
-    WORKER_2_MTR_SUITES="clone|big,component_keyring_file|big,perfschema|nobig,rocksdb_rpl|nobig,clone|nobig,innodb_zip|big,rocksdb_stress,binlog_nogtid|big,query_rewrite_plugins,jdv"
-    WORKER_3_MTR_SUITES="rocksdb|big,rpl_nogtid|nobig,percona_innodb|big,component_audit_log_filter,sysschema|big,parts|nobig,rpl_encryption,component_masking_functions,jp,information_schema"
-    WORKER_4_MTR_SUITES="group_replication|big,percona_innodb|nobig,binlog|nobig,percona_binlog|nobig,rpl_nogtid|big,rocksdb_rpl|big,federated,innodb_gis|nobig,collations,test_services,component_js_lang"
-    WORKER_5_MTR_SUITES="main|big,innodb_gis|big,rpl_gtid|big,percona_rpl_gtid|big,binlog|big,percona_binlog|big,funcs_1,auth_sec|big,binlog_gtid|nobig,opt_trace,secondary_engine,service_status_var_registration"
-    WORKER_6_MTR_SUITES="main|nobig,group_replication|nobig,parts|big,innodb_undo|big,innodb_fts|nobig,perfschema|big,engines/iuds,innodb_zip|nobig,rocksdb_sys_vars,component_connection_control,service_udf_registration"
-    WORKER_7_MTR_SUITES="innodb|big,rpl|nobig,percona_rpl|nobig,engines/funcs,sys_vars,x|nobig,component_keyring_file|nobig,stress,funcs_2,json,interactive_utilities,procfs"
-    WORKER_8_MTR_SUITES="component_encryption_udf,innodb|nobig,innodb_fts|big,rpl_gtid|nobig,percona_rpl_gtid|nobig,gcol,gis,auth_sec|nobig,auth_openid_connect,binlog_gtid|big,test_service_sql_api,connection_control,percona-pam-for-mysql"
+    echo "Setting WORKER_x_MTR_SUITES for PS 8.4 with BUILD_TYPE=Debug (a custom suite split)"
+    WORKER_1_MTR_SUITES="innodb|nobig,rpl|big,percona_rpl|big,perfschema|nobig,component_encryption_udf,clone|nobig,federated,rpl_encryption,collations,audit_null,component_js_lang"
+    WORKER_2_MTR_SUITES="rocksdb|big,component_keyring_file|big,percona,x|nobig,component_keyring_file|nobig,engines/iuds,funcs_2,component_masking_functions,interactive_utilities,percona-pam-for-mysql"
+    WORKER_3_MTR_SUITES="clone|big,percona_innodb|big,innodb_undo|big,audit_log,component_audit_log_filter,rocksdb_rpl|big,innodb_zip|big,opt_trace,test_services,jp,service_udf_registration"
+    WORKER_4_MTR_SUITES="group_replication|big,rpl_nogtid|nobig,innodb_undo|nobig,binlog|big,percona_binlog|big,rpl_nogtid|big,perfschema|big,binlog_nogtid|nobig,innodb_zip|nobig,gis,information_schema"
+    WORKER_5_MTR_SUITES="main|big,percona_innodb|nobig,rpl_gtid|nobig,percona_rpl_gtid|nobig,gcol,sysschema|nobig,parts|nobig,rocksdb_stress,rocksdb_sys_vars,connection_control,procfs"
+    WORKER_6_MTR_SUITES="main|nobig,group_replication|nobig,engines/funcs,rpl_gtid|big,percona_rpl_gtid|big,innodb_fts|nobig,auth_sec|big,auth_sec|nobig,auth_openid_connect,binlog_nogtid|big,service_sys_var_registration,service_status_var_registration"
+    WORKER_7_MTR_SUITES="innodb|big,innodb_gis,innodb_fts|big,sys_vars,rocksdb_rpl|nobig,sysschema|big,stress,binlog_gtid|big,test_service_sql_api,secondary_engine"
+    WORKER_8_MTR_SUITES="rpl|nobig,percona_rpl|nobig,rocksdb|nobig,parts|big,binlog|nobig,percona_binlog|nobig,encryption,funcs_1,x|big,binlog_gtid|nobig,json,query_rewrite_plugins"
   fi
 }
