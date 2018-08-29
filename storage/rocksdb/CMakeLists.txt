@@ -1,5 +1,4 @@
 # TODO: Copyrights
-SET(CMAKE_CXX_STANDARD 11)
 
 # by default MyRocks is not built
 IF (NOT DEFINED WITH_ROCKSDB)
@@ -28,13 +27,6 @@ IF (NOT CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64")
   RETURN ()
 ENDIF ()
 
-# check compiler version, 4.8.0 is minimal accepted
-IF ((CMAKE_CXX_COMPILER_ID STREQUAL GNU) AND
-    (CMAKE_CXX_COMPILER_VERSION VERSION_LESS "4.8.0"))
-  MESSAGE (${MYROCKS_STATUS_MODE} "GCC >= 4.8.0 required. ${CMAKE_CXX_COMPILER_VERSION} found. Not building MyRocks")
-  RETURN ()
-ENDIF ()
-
 # Relax unused variable warnings for release modes
 MY_CHECK_CXX_COMPILER_FLAG("-Wunused-variable" HAVE_UNUSED_VARIABLE)
 IF(HAVE_UNUSED_VARIABLE)
@@ -55,12 +47,17 @@ ENDIF()
 SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-unused-variable")
 SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-unused-variable")
 
-# check that compiler supports cxx11 and set options
-INCLUDE (check_stdcxx11)
-IF (!HAVE_STDCXX11)
-  MESSAGE (${MYROCKS_STATUS_MODE} "${CMAKE_CXX_COMPILER} doesn't support -std=c++11, you need one that does. Not building MyRocks")
-  RETURN ()
-ENDIF ()
+# Relax undefined definition warnings for 8.0 until RocksDB catches up
+SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-undef")
+SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-undef")
+
+# Relax unused parameter warnings for 8.0 until RocksDB catches up
+SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-unused-parameter")
+SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-unused-parameter")
+
+# Relax suggest-attribute=format warnings for 8.0 until RocksDB catches up
+SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-suggest-attribute=format")
+SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-suggest-attribute=format")
 
 IF (NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/rocksdb/Makefile")
   MESSAGE(SEND_ERROR "Missing Makefile in rocksdb directory. Try \"git submodule update\".")
@@ -162,6 +159,10 @@ ELSE()
   SET(PIC_EXT "")
 ENDIF()
 
+IF(DEFINED WITH_UBSAN)
+  add_definitions(-DROCKSDB_UBSAN_RUN)
+ENDIF()
+
 SET(ROCKSDB_SOURCES
   ha_rocksdb.cc ha_rocksdb.h ha_rocksdb_proto.h
   logger.h
@@ -179,18 +180,15 @@ SET(ROCKSDB_SOURCES
   rdb_sst_info.cc rdb_sst_info.h
   rdb_utils.cc rdb_utils.h rdb_buff.h
   rdb_threads.cc rdb_threads.h
+  ha_rockspart.cc ha_rockspart.h
   ${ROCKSDB_LIB_SOURCES}
 )
 
-SET(rocksdb_static_libs ${rocksdb_static_libs} ${ZLIB_LIBRARY} "-lrt")
+SET(rocksdb_static_libs ${rocksdb_static_libs} ${ZLIB_LIBRARY} regex "-lrt")
 
 MYSQL_ADD_PLUGIN(rocksdb ${ROCKSDB_SOURCES} STORAGE_ENGINE DEFAULT MODULE_ONLY
   LINK_LIBRARIES ${rocksdb_static_libs}
 )
-
-IF(WITH_EMBEDDED_SERVER)
-  ADD_SUBDIRECTORY(unittest)
-ENDIF()
 
 # TODO: read this file list from src.mk:TOOL_SOURCES
 SET(ROCKSDB_TOOL_SOURCES
