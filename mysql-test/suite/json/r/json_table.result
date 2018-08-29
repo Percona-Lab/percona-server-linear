@@ -2220,19 +2220,6 @@ EXPLAIN
 
 DROP TABLE t;
 #
-# Bug#37382579: Hypergraph crash with JSON_TABLE and escaped characters
-#
-CREATE TABLE t(txt LONGTEXT);
-INSERT INTO t VALUES ('[1]'), ('[2]'), ('[3]');
-SELECT *
-FROM t, JSON_TABLE(txt, '$[*]' COLUMNS (i INT PATH '$')) AS jt
-ORDER BY i;
-txt	i
-[1]	1
-[2]	2
-[3]	3
-DROP TABLE t;
-#
 # Bug#36606073: json_table and exists make a bug
 #
 CREATE TABLE t(x VARCHAR(10));
