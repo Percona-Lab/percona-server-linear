@@ -111,6 +111,7 @@ if (!$eval_result)
 
 --let $assert_text=
 --let $assert_cond=
+--let $assert_debug=
 --let $eval_expr= $_assert_old_eval_expr
 --let $eval_result= $_assert_old_eval_result
 --let $eval_no_result= $_assert_old_eval_no_result
