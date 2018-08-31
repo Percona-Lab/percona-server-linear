@@ -200,6 +200,11 @@ struct MYSQL_XID {
 */
 #define PLUGIN_VAR_PERSIST_AS_READ_ONLY 0x20000
 #define PLUGIN_VAR_INVISIBLE 0x40000 /* Variable should not be shown */
+/**
+  This flag enables variables to be recognized by SET_VAR() HINT. Should
+  be used only THDVAR() variables, ie variables which have session scope.
+ */
+#define PLUGIN_VAR_HINTUPDATEABLE 0x80000
 
 struct SYS_VAR;
 struct st_mysql_value;
@@ -249,7 +254,8 @@ typedef void (*mysql_var_update_func)(MYSQL_THD thd, SYS_VAR *var,
   (PLUGIN_VAR_READONLY | PLUGIN_VAR_NOSYSVAR | PLUGIN_VAR_NOCMDOPT |   \
    PLUGIN_VAR_NOCMDARG | PLUGIN_VAR_OPCMDARG | PLUGIN_VAR_RQCMDARG |   \
    PLUGIN_VAR_MEMALLOC | PLUGIN_VAR_NODEFAULT | PLUGIN_VAR_NOPERSIST | \
-   PLUGIN_VAR_PERSIST_AS_READ_ONLY | PLUGIN_VAR_INVISIBLE)
+   PLUGIN_VAR_PERSIST_AS_READ_ONLY | PLUGIN_VAR_INVISIBLE |            \
+   PLUGIN_VAR_HINTUPDATEABLE)
 
 #define MYSQL_PLUGIN_VAR_HEADER \
   int flags;                    \
