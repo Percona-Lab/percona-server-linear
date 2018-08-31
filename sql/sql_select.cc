@@ -1800,6 +1800,7 @@ void JOIN::cleanup_item_list(const mem_root_deque<Item *> &items) const {
 bool SELECT_LEX::optimize(THD *thd) {
   DBUG_TRACE;
 
+  DBUG_ASSERT(master_unit()->cleaned == SELECT_LEX_UNIT::UC_DIRTY);
   DBUG_ASSERT(join == nullptr);
   JOIN *const join_local = new (thd->mem_root) JOIN(thd, this);
   if (!join_local) return true; /* purecov: inspected */
