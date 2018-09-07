@@ -12109,6 +12109,71 @@ const char *create_table_info_t::create_options_are_invalid() {
   return (ret);
 }
 
+static const LEX_STRING yes_string = {C_STRING_WITH_LEN("Y")};
+
+void ha_innobase::adjust_encryption_key_id(HA_CREATE_INFO *create_info,
+                                           dd::Properties *options) noexcept {
+  LEX_STRING *encrypt_type = &create_info->encrypt_type;
+
+  if (false == create_info->was_encryption_key_id_set) {
+    if (Encryption::should_be_keyring_encrypted(encrypt_type->str)) {
+      create_info->encryption_key_id =
+          THDVAR(current_thd, default_encryption_key_id);
+      create_info->was_encryption_key_id_set = true;
+    }
+  } else if (Encryption::is_master_key_encryption(encrypt_type->str) ||
+             Encryption::none_explicitly_specified(encrypt_type->str)) {
+    // if it is encrypted table with Master key encryption or marked as not to
+    // be encrypted and alter table does not have ENCRYPTION_KEY_ID - mark
+    // encryption key id as not set.
+
+    push_warning_printf(current_thd, Sql_condition::SL_WARNING,
+                        HA_WRONG_CREATE_OPTION,
+                        Encryption::none_explicitly_specified(encrypt_type->str)
+                            ? "InnoDB: Ignored ENCRYPTION_KEY_ID %u when "
+                              "encryption is disabled."
+                            : "InnoDB: Ignored ENCRYPTION_KEY_ID %u when "
+                              "Master Key encryption is enabled.",
+                        create_info->encryption_key_id);
+    create_info->encryption_key_id = FIL_DEFAULT_ENCRYPTION_KEY;
+    create_info->was_encryption_key_id_set = false;
+    options->remove("encryption_key_id");
+  }
+
+  if (options && create_info->was_encryption_key_id_set &&
+      (create_info->tablespace == nullptr ||
+       strcmp(create_info->tablespace, dict_sys_t::s_file_per_table_name) ==
+           0)) {
+    options->set("encryption_key_id", create_info->encryption_key_id);
+  }
+}
+
+/** Adjust encryption options.
+@param[in,out]  create_info Additional create information.
+@param[in,out]  table_def dd::Table object to be modified.*/
+void ha_innobase::adjust_encryption_options(HA_CREATE_INFO *create_info,
+                                            dd::Table *table_def) noexcept {
+  const bool is_intrinsic =
+      (create_info->options & HA_LEX_CREATE_INTERNAL_TMP_TABLE) != 0;
+  /* If table is intrinsic, it will use encryption for table based on
+  temporary tablespace encryption property. For non-intrinsic tables
+  without explicit encryption attribute, table will be forced to be
+  encrypted if innodb_encrypt_tables=ON/FORCE */
+  if (create_info->encrypt_type.length == 0 &&
+      create_info->encrypt_type.str == nullptr &&
+      ((is_intrinsic && srv_tmp_space.is_encrypted()) ||
+       (!is_intrinsic && srv_encrypt_tables != SRV_ENCRYPT_TABLES_OFF))) {
+    create_info->encrypt_type = yes_string;
+    if (table_def) {
+      dd::String_type encrypt_type;
+      dd::Properties &table_options = table_def->options();
+      encrypt_type.assign(create_info->encrypt_type.str,
+                          create_info->encrypt_type.length);
+      table_options.set("encrypt_type", encrypt_type);
+    }
+  }
+}
+
 /** Update create_info.  Used in SHOW CREATE TABLE et al. */
 
 void ha_innobase::update_create_info(
@@ -14355,6 +14420,8 @@ statement commit time.
 int ha_innobase::create(const char *name, TABLE *form,
                         HA_CREATE_INFO *create_info, dd::Table *table_def) {
   THD *thd = ha_thd();
+
+  adjust_encryption_options(create_info, table_def);
 
   if (thd_sql_command(thd) == SQLCOM_TRUNCATE) {
     return (truncate_impl(name, form, table_def));
