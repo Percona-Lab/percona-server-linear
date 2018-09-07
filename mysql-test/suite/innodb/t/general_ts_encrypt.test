@@ -1,9 +1,5 @@
 # InnoDB general tablespace encryption
 
---source include/have_innodb.inc
---source include/not_embedded.inc
---source include/have_partition.inc
-
 call mtr.add_suppression("Partition.*does not exist in the InnoDB internal data dictionary though");
 
 let $innodb_file_per_table = `SELECT @@innodb_file_per_table`;
@@ -224,7 +220,7 @@ ALTER TABLE spt2 ADD PARTITION (PARTITION p7 VALUES LESS THAN (160) (
 # SELECT FILE_ID, FILE_NAME FROM INFORMATION_SCHEMA.FILES
 # WHERE FILE_TYPE = 'TABLESPACE' ORDER BY FILE_ID;
 
-# SELECT NAME, FLAG, SPACE_TYPE FROM INFORMATION_SCHEMA.INNODB_SYS_TABLESPACES
+# SELECT NAME, FLAG, SPACE_TYPE FROM INFORMATION_SCHEMA.INNODB_TABLESPACES
 # ORDER BY NAME;
 
 
@@ -262,3 +258,4 @@ DROP TABLESPACE ts_encrypted;
 DROP TABLESPACE ts_encrypted_new;
 DROP TABLESPACE ts_unencrypted;
 DROP TABLESPACE ts_unencrypted_new;
+DROP TABLESPACE ts_valid2;
