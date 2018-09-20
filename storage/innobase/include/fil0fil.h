@@ -2264,6 +2264,21 @@ void fil_adjust_name_import(dict_table_t *table, const char *path,
 @param space_id	space id */
 void fil_space_set_corrupt(space_id_t space_id);
 
+using space_id_vec = std::vector<space_id_t>;
+
+// TODO: Check if can get encryption threads start without this
+void fil_system_acquire();
+void fil_system_release();
+
+void fil_lock_shard_by_id(space_id_t space_id);
+void fil_unlock_shard_by_id(space_id_t space_id);
+
+/** Rotate the tablespace key by new master key.
+@param[in]	space	tablespace object
+@return true if the re-encrypt suceeds */
+bool encryption_rotate_low(fil_space_t *space);
+
+
 #ifndef UNIV_HOTBACKUP
 
 /** Allows fil system to do periodical cleanup. */
