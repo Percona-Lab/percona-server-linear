@@ -9435,6 +9435,32 @@ dberr_t fil_temp_update_encryption(fil_space_t *space) {
   return (err);
 }
 
+/** Rotate the tablespace key by new master key.
+@param[in]	space	tablespace object
+@return true if the re-encrypt suceeds */
+static bool encryption_rotate_low(fil_space_t *space) {
+  bool success = true;
+  if (space->encryption_type == Encryption::AES) {
+    mtr_t mtr;
+    mtr_start(&mtr);
+
+    if (fsp_is_system_temporary(space->id)) {
+      mtr_set_log_mode(&mtr, MTR_LOG_NO_REDO);
+    }
+
+    mtr_x_lock_space(space, &mtr);
+
+    byte encrypt_info[Encryption::INFO_SIZE];
+    memset(encrypt_info, 0, Encryption::INFO_SIZE);
+
+    if (!fsp_header_rotate_encryption(space, encrypt_info, &mtr)) {
+      success = false;
+    }
+    mtr_commit(&mtr);
+  }
+  return (success);
+}
+
 /** Reset the encryption type for the tablespace
 @param[in] space_id		Space ID of tablespace for which to set
 @return DB_SUCCESS or error code */
@@ -9575,6 +9601,21 @@ size_t Fil_system::encryption_rotate() {
 }
 
 size_t fil_encryption_rotate() { return (fil_system->encryption_rotate()); }
+
+bool fil_encryption_rotate_global(const space_id_vec &space_ids) {
+  for (space_id_t space_id : space_ids) {
+    fil_space_t *space = fil_space_acquire(space_id);
+
+    bool success = encryption_rotate_low(space);
+
+    fil_space_release(space);
+
+    if (!success) {
+      return (false);
+    }
+  }
+  return (true);
+}
 
 #endif /* !UNIV_HOTBACKUP */
 
