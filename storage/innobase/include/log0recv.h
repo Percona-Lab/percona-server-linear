@@ -382,8 +382,11 @@ class MetadataRecover {
       ut::allocator<std::pair<const table_id_t, PersistentTableMetadata *>>>;
 
  public:
-  /** Default constructor */
-  MetadataRecover() UNIV_NOTHROW = default;
+  /** Default constructor
+  @param[in]    read_only_      if set, the instance will only parse the log
+                                without applying any changes */
+  explicit MetadataRecover(bool read_only_) UNIV_NOTHROW
+      : read_only(read_only_) {}
 
   /** Destructor */
   ~MetadataRecover();
@@ -394,9 +397,12 @@ class MetadataRecover {
   @param[in]	version	table dynamic metadata version
   @param[in]	ptr	redo log start
   @param[in]	end	end of redo log
+  @param[in]	apply	if false, this is coming from changed page
+                        tracking and changes should be parsed only
   @retval ptr to next redo log record, nullptr if this log record
   was truncated */
-  byte *parseMetadataLog(table_id_t id, uint64_t version, byte *ptr, byte *end);
+  byte *parseMetadataLog(table_id_t id, uint64_t version, byte *ptr, byte *end,
+                         bool apply);
 
   /** Apply the collected persistent dynamic metadata to in-memory
   table objects */
@@ -420,6 +426,9 @@ class MetadataRecover {
  private:
   /** Map used to store and merge persistent dynamic metadata */
   PersistentTables m_tables;
+  /** Flag indicating whether this is a redo log tracking (read-only) or a
+  regular recovery instance */
+  const bool read_only;
 };
 
 /** Recovery system data structure */
