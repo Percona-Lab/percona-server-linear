@@ -13945,6 +13945,7 @@ role_or_label_keyword:
         | CATALOG_NAME_SYM
         | CHAIN_SYM
         | CHANGED
+        | CHANGED_PAGE_BITMAPS_SYM
         | CHANNEL_SYM
         | CIPHER_SYM
         | CLASS_ORIGIN_SYM
