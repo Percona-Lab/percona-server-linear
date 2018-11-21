@@ -273,7 +273,6 @@ extern bool srv_background_scrub_data_uncompressed;
 extern bool srv_background_scrub_data_compressed;
 extern uint srv_background_scrub_data_interval;
 extern uint srv_background_scrub_data_check_interval;
-extern mysql_pfs_key_t scrub_stat_mutex_key;
 
 static Innodb_data_lock_inspector innodb_data_lock_inspector;
 
