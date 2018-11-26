@@ -35,7 +35,7 @@ IF(HAVE_PAM AND HAVE_GETPWNAM_R AND HAVE_GETGRGID_R AND HAVE_DLFCN_H)
   MYSQL_ADD_PLUGIN(auth_pam_compat ${AUTH_PAM_COMPAT_SOURCES} LINK_LIBRARIES pam MODULE_ONLY)
   MYSQL_ADD_PLUGIN(dialog
                    src/dialog.cc
-                   ../../client/get_password.cc
+                   ../../sql-common/get_password.cc
                    LINK_LIBRARIES perconaserverclient
                    MODULE_ONLY)
 ENDIF(HAVE_PAM AND HAVE_GETPWNAM_R AND HAVE_GETGRGID_R AND HAVE_DLFCN_H)
