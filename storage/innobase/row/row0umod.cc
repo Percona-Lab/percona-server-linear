@@ -336,7 +336,15 @@ introduced where a call to log_free_check() is bypassed. */
     }
   }
 
-  ut_ad(rec_get_trx_id(pcur->get_rec(), index) == node->new_trx_id);
+  /**
+   * when scrubbing, and records gets cleared,
+   *   the transaction id is not present afterwards.
+   *   this is safe as: since the record is on free-list
+   *   it can be reallocated at any time after this mtr-commits
+   *   which is just below
+   */
+  ut_ad(srv_immediate_scrub_data_uncompressed ||
+        rec_get_trx_id(pcur->get_rec(), index) == node->new_trx_id);
 
   pcur->commit_specify_mtr(&mtr);
 
