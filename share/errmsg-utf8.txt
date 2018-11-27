@@ -19303,21 +19303,12 @@ ER_COMPRESSION_DICTIONARY_DATA_TOO_LONG
 ER_COMPRESSION_DICTIONARY_IS_REFERENCED
   eng "Compression dictionary '%-.192s' is in use"
 
-ER_RPL_FAILED_TO_RECREATE_CACHE_FOR_INFO_FILE
-  eng "Failed to recreate a cache on info file (file '%s')"
-
-ER_XB_MSG_0
-  eng "%s"
-
-ER_XB_MSG_1
-  eng "%s"
-
 #
-# End of Percona Server error messages
+# End of Percona Server 8.0 error messages
 #
 
 #
-# Start of MyRocks specific messages
+# Start of MyRocks specific messages to be sent to client
 #
 
 start-error-number 50000
@@ -19378,11 +19369,10 @@ ER_PER_INDEX_CF_DEPRECATED
 
 #
 # End of MyRocks specific messages
-
 #
 
 ################################################################################
-# Error numbers 50000 to 51999 are reserved. Please do not use them for the
+# Error numbers 50018 to 51999 are reserved. Please do not use them for the
 # other error messages.
 ################################################################################
-reserved-error-section 50000 51999
+reserved-error-section 50018 51999
