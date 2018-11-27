@@ -164,7 +164,7 @@ class Create_field {
   */
   uint pack_length_override{0};
 
-  LEX_CSTRING zip_dict_name{NULL_CSTR};  // Compression dictionary name
+  LEX_CSTRING zip_dict_name;  // Compression dictionary name
 
   /* Generated column expression information */
   Value_generator *gcol_info{nullptr};
@@ -187,7 +187,7 @@ class Create_field {
     is filled in dd::Column::options and later used to fill TABLE_SHARE*
     zip_dict_name and zip_dict_data
   */
-  uint64_t zip_dict_id{0};
+  uint64_t zip_dict_id;
 
   LEX_CSTRING m_engine_attribute = EMPTY_CSTR;
   LEX_CSTRING m_secondary_engine_attribute = EMPTY_CSTR;
@@ -206,8 +206,10 @@ class Create_field {
         */
         treat_bit_as_char(false),
         pack_length_override(0),
+        zip_dict_name(NULL_CSTR),
         stored_in_db(false),
-        m_default_val_expr(nullptr) {}
+        m_default_val_expr(nullptr),
+        zip_dict_id(0) {}
   Create_field(Field *field, Field *orig_field);
 
   /* Used to make a clone of this object for ALTER/CREATE TABLE */
