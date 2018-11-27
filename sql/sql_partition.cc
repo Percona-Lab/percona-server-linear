@@ -264,7 +264,7 @@ static bool is_name_in_list(const char *name, List<String> list_names) {
 
   SYNOPSIS
     partition_default_handling()
-    table                         Table object
+    part_handler                  Partition handler
     part_info                     Partition info to set up
     is_create_table_ind           Is this part of a table creation
     normalized_path               Normalized path name of table and database
@@ -5658,7 +5658,7 @@ static int get_part_iter_for_interval_cols_via_map(
     uchar *min_value, uchar *max_value, uint min_len, uint max_len, uint flags,
     PARTITION_ITERATOR *part_iter) {
   uint32 nparts;
-  get_col_endpoint_func get_col_endpoint;
+  get_col_endpoint_func get_col_endpoint = nullptr;
   DBUG_TRACE;
 
   if (part_info->part_type == partition_type::RANGE) {
