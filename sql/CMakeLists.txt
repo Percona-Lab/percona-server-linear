@@ -142,6 +142,8 @@ SET(DD_SOURCES
   dd/impl/system_views/columns.cc
   dd/impl/system_views/column_statistics.cc
   dd/impl/system_views/enabled_roles.cc
+  dd/impl/system_views/compression_dictionary.cc
+  dd/impl/system_views/compression_dictionary_tables.cc
   dd/impl/system_views/events.cc
   dd/impl/system_views/files.cc
   dd/impl/system_views/innodb_datafiles.cc
