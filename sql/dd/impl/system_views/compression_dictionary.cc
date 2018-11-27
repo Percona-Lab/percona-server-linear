@@ -1,6 +1,6 @@
 /*****************************************************************************
 
-Copyright (c) 2010-2012, Percona Inc. All Rights Reserved.
+Copyright (c) 2018, Percona Inc. All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License as published by the Free Software
@@ -16,9 +16,25 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 *****************************************************************************/
 
-#ifndef XTRADB_I_S_H
-#define XTRADB_I_S_H
+#include "sql/dd/impl/system_views/compression_dictionary.h"
 
-extern struct st_mysql_plugin i_s_xtradb_read_view;
+namespace dd {
+namespace system_views {
 
-#endif /* XTRADB_I_S_H */
+const Compression_dictionary &Compression_dictionary::instance() noexcept {
+  static Compression_dictionary *s_instance = new Compression_dictionary();
+  return *s_instance;
+}
+
+Compression_dictionary::Compression_dictionary() {
+  m_target_def.set_view_name(view_name());
+
+  m_target_def.add_field(FIELD_DICT_VERSION, "DICT_VERSION", "dict.version");
+  m_target_def.add_field(FIELD_DICT_NAME, "DICT_NAME", "dict.name");
+  m_target_def.add_field(FIELD_DICT_DATA, "DICT_DATA", "dict.data");
+
+  m_target_def.add_from("mysql.compression_dictionary dict");
+}
+
+}  // namespace system_views
+}  // namespace dd
