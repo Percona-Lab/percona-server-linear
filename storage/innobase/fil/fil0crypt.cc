@@ -2469,6 +2469,7 @@ void fil_crypt_thread() {
 
   while (!thr.should_shutdown()) {
     key_state_t new_state;
+    time_t wait_start = time(0);
 
     while (!thr.should_shutdown()) {
       /* wait for key state changes
