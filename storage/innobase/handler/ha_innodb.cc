@@ -6095,7 +6095,9 @@ static int innobase_init_files(dict_init_mode_t dict_init_mode,
     dd_space.add_file(&dd_file);
     tablespaces->push_back(&dd_space);
 
-    static Plugin_tablespace innodb(dict_sys_t::s_sys_space_name, "",
+    const char *options = srv_sys_space.is_encrypted() ? "encryption=y" : "";
+
+    static Plugin_tablespace innodb(dict_sys_t::s_sys_space_name, options,
                                     se_private_data_innodb_system, "",
                                     innobase_hton_name);
     for (size_t i = 0; i < srv_sys_space.get_nodes_count(); ++i) {
@@ -13287,12 +13289,6 @@ bool create_table_info_t::create_option_tablespace_is_valid() {
 
   bool is_create_table = (thd_sql_command(m_thd) == SQLCOM_CREATE_TABLE);
 
-  /* Tables in shared tablespace should not have encryption options */
-  if (is_shared_tablespace(m_create_info->tablespace)) {
-    m_create_info->encrypt_type.str = nullptr;
-    m_create_info->encrypt_type.length = 0;
-  }
-
   /* If TABLESPACE=innodb_file_per_table this function is not called
   since tablespace_is_shared_space() will return false.  Any other
   tablespace is incompatible with the DATA DIRECTORY phrase.
@@ -13487,14 +13483,6 @@ bool create_table_info_t::create_option_encryption_is_valid() const {
     my_printf_error(ER_ILLEGAL_HA_CREATE_OPTION,
                     "InnoDB: Tablespace `%s` cannot contain an"
                     " ENCRYPTED table.",
-                    MYF(0), tablespace_name);
-    return (false);
-  }
-
-  if (!table_is_encrypted && tablespace_is_encrypted) {
-    my_printf_error(ER_ILLEGAL_HA_CREATE_OPTION,
-                    "InnoDB: Tablespace `%s` can contain only an"
-                    " ENCRYPTED tables.",
                     MYF(0), tablespace_name);
     return (false);
   }
