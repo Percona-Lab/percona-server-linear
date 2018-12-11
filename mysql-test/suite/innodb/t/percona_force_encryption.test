@@ -18,11 +18,12 @@ create table t3_on_default (a int) engine=innodb;
 create table t4_on_explicit_off (a int) engine=innodb encryption="N";
 --error ER_ILLEGAL_HA_CREATE_OPTION
 create table t_unencrypted_tablespace (a text) tablespace ts_unencrypted1 ENGINE="InnoDB";
-set global innodb_encrypt_tables='FORCE';
+set global innodb_encrypt_tables=FORCE;
 --error ER_INVALID_ENCRYPTION_OPTION
 create table t5_force_explicit_off (a int) engine=innodb encryption="N";
 create table t6_force_default (a int) engine=innodb;
 create table t6_force_default_dup like t6_force_default;
+--error ER_ILLEGAL_HA_CREATE_OPTION
 create table t7_partitioned (a int, primary key(a))
 	engine=innodb tablespace ts_encrypted1
 	partition by range (a) partitions 2 (
@@ -39,7 +40,7 @@ create table t7_partitioned_fail (a int, primary key(a))
 	partition by range (a) partitions 2 (
 		partition p1 values less than (20),
 		partition p2 values less than (40) tablespace ts_encrypted2);
-set global innodb_encrypt_tables='FORCE';
+set global innodb_encrypt_tables=FORCE;
 
 insert into t1_default_explicit_on values (42);
 insert into t2_default_explicit_off values (42);
@@ -56,7 +57,6 @@ show create table t5_off_explicit_off;
 show create table t6_force_default;
 show create table t6_force_default_dup;
 show create table t5_off_explicit_off_dup;
-show create table t7_partitioned;
 
 --error ER_INVALID_ENCRYPTION_OPTION
 alter table t1_default_explicit_on encryption="N";
@@ -85,7 +85,7 @@ alter table t6_force_default encryption="N", ALGORITHM=INPLACE;
 # Even when it's ON or FORCE, non encrypted tables can be altered,
 # without changing their encryption settings
 alter table t4_on_explicit_off change a b int;
-set global innodb_encrypt_tables='FORCE';
+set global innodb_encrypt_tables=FORCE;
 alter table t4_on_explicit_off change b a int;
 
 show create table t1_default_explicit_on;
@@ -96,7 +96,6 @@ show create table t5_off_explicit_off;
 show create table t6_force_default;
 show create table t6_force_default_dup;
 show create table t5_off_explicit_off_dup;
-show create table t7_partitioned;
 
 flush tables;
 
@@ -116,6 +115,18 @@ select * from t4_on_explicit_off;
 select * from t5_off_explicit_off;
 select * from t6_force_default;
 
+--echo #
+--echo # PS-5120 - Cannot add encrypted tables in to encrypted tablespace
+--echo #
+set global innodb_encrypt_tables = ON;
+create tablespace ts1 add datafile 'ts1.ibd' encryption='Y';
+create table t7(a INT);
+show create table t7;
+alter table t7 tablespace=ts1;
+show create table t7;
+drop table t7;
+drop tablespace ts1;
+
 # Cleanup
 drop table t1_default_explicit_on;
 drop table t2_default_explicit_off;
@@ -125,7 +136,6 @@ drop table t5_off_explicit_off;
 drop table t6_force_default;
 drop table t6_force_default_dup;
 drop table t5_off_explicit_off_dup;
-drop table t7_partitioned;
 
 drop tablespace ts_encrypted1;
 drop tablespace ts_encrypted2;
