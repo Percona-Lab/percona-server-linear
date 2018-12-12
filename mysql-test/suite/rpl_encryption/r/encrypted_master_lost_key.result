@@ -101,6 +101,7 @@ connection master;
 #         This behavior is confirmed in MDEV-11323
 #####################################################
 connection server_2;
+call mtr.add_suppression('Event decryption failure');
 START SLAVE SQL_THREAD;
 START SLAVE IO_THREAD;
 include/wait_for_slave_io_error.inc [errno=13114 # ER_SERVER_MASTER_FATAL_ERROR_READING_BINLOG]
@@ -127,8 +128,11 @@ Warning	3023	CHANGE MASTER TO with a MASTER_LOG_FILE clause but no MASTER_LOG_PO
 Note	1759	Sending passwords in plain text without SSL/TLS is extremely insecure.
 Note	1760	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
 include/start_slave.inc
-include/sync_slave_sql.inc
-connection server_2;
+connection server_1;
+include/sync_slave_sql_with_master.inc
+connection server_1;
+connection slave;
+connection slave;
 SHOW TABLES;
 Tables_in_test
 table3_to_encrypt
@@ -150,8 +154,11 @@ Warnings:
 Note	1759	Sending passwords in plain text without SSL/TLS is extremely insecure.
 Note	1760	Storing MySQL user name or password information in the master info repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START SLAVE; see the 'START SLAVE Syntax' in the MySQL Manual for more information.
 include/start_slave.inc
-include/sync_slave_sql.inc
-connection server_2;
+connection server_1;
+include/sync_slave_sql_with_master.inc
+connection server_1;
+connection slave;
+connection slave;
 SHOW TABLES;
 Tables_in_test
 table3_to_encrypt
