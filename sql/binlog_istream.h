@@ -71,8 +71,8 @@ class Binlog_read_error {
     CANNOT_GET_FILE_PASSWORD,
     READ_ENCRYPTED_LOG_FILE_IS_NOT_SUPPORTED,
     ERROR_DECRYPTING_FILE,
-    // Encrypted event decryption failure
-    DECRYPT
+    // Failed to initialize binlog decryption
+    DECRYPT_PRE_8_0_14_INIT_FAILURE
   };
 
   Binlog_read_error() {}
