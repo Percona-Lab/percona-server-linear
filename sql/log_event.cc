@@ -5107,23 +5107,6 @@ Format_description_log_event::Format_description_log_event(
   DBUG_VOID_RETURN;
 }
 
-bool Format_description_log_event::start_decryption(
-    binary_log::Start_encryption_event *see) {
-  DBUG_ASSERT(!crypto_data.is_enabled());
-
-  Start_encryption_log_event *sele =
-      down_cast<Start_encryption_log_event *>(see);
-  if (!sele->is_valid()) return true;
-  if (crypto_data.init(see->crypto_scheme, see->key_version, see->nonce)) {
-    sql_print_error(
-        "Failed to fetch percona_binlog key (version %u) from keyring and thus "
-        "failed to initialize binlog encryption.",
-        see->key_version);
-    return true;
-  }
-  return false;
-}
-
 #ifndef MYSQL_SERVER
 void Format_description_log_event::print(
     FILE *, PRINT_EVENT_INFO *print_event_info) const {
@@ -5347,10 +5330,6 @@ Start_encryption_log_event::Start_encryption_log_event(
       Log_event(header(), footer()) {}
 
 #ifdef MYSQL_SERVER
-int Start_encryption_log_event::do_apply_event(Relay_log_info const *rli) {
-  return rli->get_rli_description_event()->start_decryption(this);
-}
-
 int Start_encryption_log_event::do_update_pos(Relay_log_info *rli) {
   /*
     Master never sends Start_encryption_log_event, any SELE that a slave
