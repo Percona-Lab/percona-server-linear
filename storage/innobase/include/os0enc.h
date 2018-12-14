@@ -109,8 +109,6 @@ class Encryption {
   information version. */
   static constexpr char KEY_MAGIC_V3[] = "lCC";
 
-  static constexpr char KEY_MAGIC_PS_V1[] = "PSA";
-
   /** Encryption master key prifix */
   static constexpr char MASTER_KEY_PREFIX[] = "INNODBKey";
 

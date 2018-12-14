@@ -3031,6 +3031,9 @@ static void srv_master_main_loop(srv_slot_t *slot) {
       srv_master_do_idle_tasks();
     }
 
+    /* Enable undo log encryption if it is set */
+    undo_rotate_default_master_key();
+
     /* Purge any deleted tablespace pages. */
     fil_purge();
   }
