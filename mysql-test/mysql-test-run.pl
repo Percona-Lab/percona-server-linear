@@ -289,6 +289,7 @@ our @DEFAULT_SUITES = qw(
   audit_null
   audit_log
   keyring_vault
+  percona-pam-for-mysql
 );
 
 our $DEFAULT_SUITES = join ',', @DEFAULT_SUITES;
