@@ -248,7 +248,7 @@ static os_event_t srv_master_thread_disabled_event;
 char *srv_log_group_home_dir = nullptr;
 
 /** Enable or disable Encrypt of REDO tablespace. */
-bool srv_redo_log_encrypt = false;
+ulong srv_redo_log_encrypt = 0;
 
 ulong srv_n_log_files = SRV_N_LOG_FILES_MAX;
 
@@ -2980,22 +2980,6 @@ static void srv_master_sleep(void) {
 
 /** Check redo and undo log encryption and rotate default master key. */
 static void srv_sys_check_set_encryption() {
-  /* Rotate default master key for redo log encryption if it is set */
-  if (srv_redo_log_encrypt) {
-    fil_space_t *space = fil_space_get(dict_sys_t::s_log_space_first_id);
-    ut_a(space);
-
-    /* Encryption for redo tablespace must already have been set. This is
-    safeguard to encrypt it if not done earlier. */
-    ut_ad(FSP_FLAGS_GET_ENCRYPTION(space->flags));
-
-    if (!FSP_FLAGS_GET_ENCRYPTION(space->flags)) {
-      ib::warn(ER_IB_MSG_1285, space->name, "srv_redo_log_encrypt");
-      srv_enable_redo_encryption(false);
-    }
-    redo_rotate_default_master_key();
-  }
-
   if (!srv_undo_log_encrypt) {
     return;
   }
@@ -3090,7 +3074,9 @@ static void srv_master_main_loop(srv_slot_t *slot) {
       srv_master_do_idle_tasks();
     }
 
-    /* Make sure that early encryption processing of UNDO/REDO log is done. */
+    /* Enable undo log encryption if it is set */
+    undo_rotate_default_master_key();
+
     if (!is_early_redo_undo_encryption_done()) {
       continue;
     }
