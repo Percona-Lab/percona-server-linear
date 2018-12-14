@@ -806,7 +806,7 @@ redo log file header.
 bool log_rotate_encryption();
 
 /** Rotate default master key for redo log encryption. */
-void redo_rotate_default_master_key();
+void log_enable_encryption_if_set();
 
 /** Requests a sharp checkpoint write for provided or greater lsn.
 @param[in,out]	log	redo log
