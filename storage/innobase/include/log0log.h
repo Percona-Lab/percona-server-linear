@@ -884,6 +884,9 @@ redo log file header.
 @return true if success. */
 bool log_rotate_encryption();
 
+/** Rotate default master key for redo log encryption. */
+void log_enable_encryption_if_set();
+
 /** Computes lsn up to which sync flush should be done or returns 0
 if there is no need to execute sync flush now.
 @param[in,out]  log  redo log
