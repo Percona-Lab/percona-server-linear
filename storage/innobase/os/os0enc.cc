@@ -197,6 +197,7 @@ void deinit_keyring_services(SERVICE_TYPE(registry) *) { return; }
 constexpr char Encryption::KEY_MAGIC_V1[];
 constexpr char Encryption::KEY_MAGIC_V2[];
 constexpr char Encryption::KEY_MAGIC_V3[];
+constexpr char Encryption::KEY_MAGIC_RK[];
 constexpr char Encryption::KEY_MAGIC_PS_V1[];
 
 constexpr char Encryption::MASTER_KEY_PREFIX[];

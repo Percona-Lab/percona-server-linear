@@ -2970,6 +2970,44 @@ static void srv_master_sleep(void) {
   srv_main_thread_op_info = "";
 }
 
+/** Check redo and undo log encryption and rotate default master key. */
+static void srv_sys_check_set_encryption() {
+  if (!srv_undo_log_encrypt) {
+    return;
+  }
+
+  /* Rotate default master key for undo log encryption if it is set */
+  ut_ad(!undo::spaces->empty());
+
+  mutex_enter(&undo::ddl_mutex);
+
+  bool encrypt_undo = false;
+  undo::spaces->s_lock();
+  for (auto &undo_ts : undo::spaces->m_spaces) {
+    fil_space_t *space = fil_space_get(undo_ts->id());
+    ut_ad(space != nullptr);
+
+    /* Encryption for undo tablespace must already have been set. This is
+    safeguard to encrypt it if not done earlier. */
+    ut_ad(FSP_FLAGS_GET_ENCRYPTION(space->flags));
+    if (!FSP_FLAGS_GET_ENCRYPTION(space->flags)) {
+      ib::warn(ER_IB_MSG_1285, space->name, "srv_undo_log_encrypt");
+      /* No need to loop further as srv_enable_undo_encryption() would
+      loop through all UNDO tablespaces and encrypt. */
+      encrypt_undo = true;
+      break;
+    }
+  }
+  undo::spaces->s_unlock();
+
+  if (encrypt_undo) {
+    ut_d(bool ret =) srv_enable_undo_encryption();
+    ut_ad(!ret);
+  }
+  undo_rotate_default_master_key();
+  mutex_exit(&undo::ddl_mutex);
+}
+
 /** Waits on event in provided slot.
 @param[in]   slot     slot reserved as SRV_MASTER */
 static void srv_master_wait(srv_slot_t *slot) {
@@ -3027,6 +3065,9 @@ static void srv_master_main_loop(srv_slot_t *slot) {
     } else {
       srv_master_do_idle_tasks();
     }
+
+    /* Enable undo log encryption if it is set */
+    undo_rotate_default_master_key();
 
     /* Purge any deleted tablespace pages. */
     fil_purge();
