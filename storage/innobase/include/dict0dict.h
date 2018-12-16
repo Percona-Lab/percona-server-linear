@@ -1698,6 +1698,14 @@ Must be freed with mem_free().
                                                      char **data,
                                                      ulint *data_len);
 
+/** Detect if Percona Server 5.7 mysql database has encrypted InnoDB tables.
+This can happen if Percona Server is bootstrapped with
+--innodb-encrypt-tables=ON If yes or if srv_encrypt_tables is ON/FORCE, during
+upgrade, mysql.ibd should be encrpted.
+@param[in]  is_upgrade true in upgrade mode
+@return true if encrypted, false if not encrypted */
+bool dict_detect_encryption(bool is_upgrade);
+
 /** Set the compression type for the tablespace of a table
 @param[in]  table         The table that should be compressed
 @param[in]  algorithm     Text representation of the algorithm
