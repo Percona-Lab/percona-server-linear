@@ -2399,11 +2399,7 @@ void close_tmp_table(THD *thd, TABLE *entry) {
   const char *save_proc_info = thd->proc_info;
   THD_STAGE_INFO(thd, stage_removing_tmp_table);
 
-  thd->tmp_tables_used++;
-  if (entry->file) {
-    thd->tmp_tables_size += entry->file->stats.data_file_length;
-    if (entry->file->ht->db_type != DB_TYPE_HEAP) thd->tmp_tables_disk_used++;
-  }
+  if (entry->file) thd->tmp_tables_size += entry->file->stats.data_file_length;
 
   // Free blobs, even if no storage handler is assigned
   for (Field **ptr = entry->field; *ptr; ptr++) (*ptr)->mem_free();
