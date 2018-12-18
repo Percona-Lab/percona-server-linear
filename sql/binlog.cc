@@ -443,7 +443,7 @@ class MYSQL_BIN_LOG::Binlog_ofile : public Basic_ostream {
   bool flush() { return m_pipeline_head->flush(); }
   bool sync() { return m_pipeline_head->sync(); }
   bool flush_and_sync() { return flush() || sync(); }
-  my_off_t position() const noexcept override { return m_position; }
+  my_off_t position() { return m_position; }
   bool is_empty() { return position() == 0; }
   bool is_open() { return m_pipeline_head != nullptr; }
   /**
@@ -1253,8 +1253,6 @@ class Binlog_event_writer : public Basic_ostream {
   uint32 event_len = 0;
 
  public:
-  Event_encrypter event_encrypter;
-
   /**
     Constructs a new Binlog_event_writer. Should be called once before
     starting to flush the transaction or statement cache to the
@@ -1310,58 +1308,32 @@ class Binlog_event_writer : public Basic_ostream {
 
         if (header_len == LOG_EVENT_HEADER_LEN) {
           update_header();
-          if (event_encrypter.is_encryption_enabled()) {
-            uchar *header_for_encryption = header;
-            size_t header_for_encryption_length = header_len;
+          if (m_binlog_file->write(header, header_len)) DBUG_RETURN(true);
 
-            if (event_encrypter.init(m_binlog_file, header_for_encryption,
-                                     header_for_encryption_length)) {
-              DBUG_RETURN(true);
-            }
-            if (event_encrypter.encrypt_and_write(m_binlog_file,
-                                                  header_for_encryption,
-                                                  header_for_encryption_length))
-              DBUG_RETURN(true);
-          } else {
-            if (event_encrypter.encrypt_and_write(m_binlog_file, header,
-                                                  header_len))
-              DBUG_RETURN(true);
-          }
-          thd->binlog_bytes_written += header_len;
           event_len -= header_len;
           header_len = 0;
         }
       } else {
         my_off_t write_bytes = std::min<uint64>(length, event_len);
 
-        if (event_encrypter.encrypt_and_write(m_binlog_file, buffer,
-                                              write_bytes))
-          DBUG_RETURN(true);
+        if (m_binlog_file->write(buffer, write_bytes)) DBUG_RETURN(true);
 
         // update the checksum
         if (have_checksum)
           checksum = my_checksum(checksum, buffer, write_bytes);
 
-        thd->binlog_bytes_written += write_bytes;
         event_len -= write_bytes;
         length -= write_bytes;
         buffer += write_bytes;
 
         // The whole event is copied, now add the checksum
-        if (event_len == 0) {
-          if (have_checksum) {
-            uchar checksum_buf[BINLOG_CHECKSUM_LEN];
+        if (have_checksum && event_len == 0) {
+          uchar checksum_buf[BINLOG_CHECKSUM_LEN];
 
-            int4store(checksum_buf, checksum);
-            if (event_encrypter.encrypt_and_write(m_binlog_file, checksum_buf,
-                                                  BINLOG_CHECKSUM_LEN))
-              DBUG_RETURN(true);
-            thd->binlog_bytes_written += BINLOG_CHECKSUM_LEN;
-            checksum = initial_checksum;
-          }
-          if (event_encrypter.is_encryption_enabled() &&
-              event_encrypter.finish(m_binlog_file))
+          int4store(checksum_buf, checksum);
+          if (m_binlog_file->write(checksum_buf, BINLOG_CHECKSUM_LEN))
             DBUG_RETURN(true);
+          checksum = initial_checksum;
         }
       }
     }
@@ -1371,10 +1343,6 @@ class Binlog_event_writer : public Basic_ostream {
     Returns true if per event checksum is enabled.
   */
   bool is_checksum_enabled() { return have_checksum; }
-
-  my_off_t position() const noexcept override {
-    return m_binlog_file->position();
-  }
 };
 
 /*
@@ -1857,9 +1825,6 @@ int binlog_cache_data::flush(THD *thd, my_off_t *bytes_written,
       correct.
     */
     Binlog_event_writer writer(mysql_bin_log.get_binlog_file(), thd);
-
-    if (mysql_bin_log.get_crypto_data()->is_enabled())
-      writer.event_encrypter.enable_encryption(mysql_bin_log.get_crypto_data());
 
     /* The GTID ownership process might set the commit_error */
     error = (thd->commit_error == THD::CE_FLUSH_ERROR);
@@ -5026,9 +4991,6 @@ bool MYSQL_BIN_LOG::open_binlog(
     extra_description_event->created = 0;
     /* Don't set log_pos in event header */
     extra_description_event->set_artificial_event();
-    if (crypto.is_enabled()) {
-      extra_description_event->event_encrypter.enable_encryption(&crypto);
-    }
     if (binary_event_serialize(extra_description_event, m_binlog_file))
       goto err;
     bytes_written += extra_description_event->common_header->data_written;
@@ -6896,9 +6858,6 @@ bool MYSQL_BIN_LOG::write_event(Log_event *ev, Master_info *mi) {
 
   mysql_mutex_assert_owner(&LOCK_log);
 
-  if (crypto.is_enabled() && !ev->event_encrypter.is_encryption_enabled()) {
-    ev->event_encrypter.enable_encryption(&crypto);
-  }
   // write data
   bool error = false;
   if (!binary_event_serialize(ev, m_binlog_file)) {
@@ -7548,10 +7507,6 @@ inline bool MYSQL_BIN_LOG::write_event_to_binlog(Log_event *ev) {
           : static_cast<enum_binlog_checksum_alg>(binlog_checksum_options);
   DBUG_ASSERT(ev->common_footer->checksum_alg !=
               binary_log::BINLOG_CHECKSUM_ALG_UNDEF);
-
-  if (crypto.is_enabled()) {
-    ev->event_encrypter.enable_encryption(&crypto);
-  }
 
   /*
     Stores current position into log_pos, it is used to calculate correcty
