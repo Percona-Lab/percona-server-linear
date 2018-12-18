@@ -77,11 +77,6 @@ class Transaction_with_guarantee_message
   */
   my_off_t length();
 
-  my_off_t position() const noexcept {
-    DBUG_ASSERT(0);
-    return const_cast<Transaction_with_guarantee_message *>(this)->length();
-  }
-
   /**
     Decode transaction consistency without unmarshal transaction data.
 

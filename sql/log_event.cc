@@ -1212,7 +1212,7 @@ bool Log_event::wrapper_my_b_safe_write(Basic_ostream *ostream,
 
   if (need_checksum() && size != 0) crc = checksum_crc32(crc, buf, size);
 
-  return event_encrypter.encrypt_and_write(ostream, buf, size);
+  return ostream->write(buf, size);
 }
 
 bool Log_event::write_footer(Basic_ostream *ostream) {
@@ -1223,11 +1223,9 @@ bool Log_event::write_footer(Basic_ostream *ostream) {
   if (need_checksum()) {
     uchar buf[BINLOG_CHECKSUM_LEN];
     int4store(buf, crc);
-    if (event_encrypter.encrypt_and_write(ostream, buf, BINLOG_CHECKSUM_LEN))
-      return true;
+    return ostream->write((uchar *)buf, sizeof(buf));
   }
-  return event_encrypter.is_encryption_enabled() &&
-         event_encrypter.finish(ostream);
+  return 0;
 }
 
 uint32 Log_event::write_header_to_memory(uchar *buf) {
@@ -1268,6 +1266,7 @@ uint32 Log_event::write_header_to_memory(uchar *buf) {
 
 bool Log_event::write_header(Basic_ostream *ostream, size_t event_data_length) {
   uchar header[LOG_EVENT_HEADER_LEN];
+  bool ret;
   DBUG_ENTER("Log_event::write_header");
 
   /* Store number of bytes that will be written by this event */
@@ -1296,9 +1295,7 @@ bool Log_event::write_header(Basic_ostream *ostream, size_t event_data_length) {
 
   write_header_to_memory(header);
 
-  const bool is_format_description_and_need_checksum =
-      need_checksum() &&
-      ((common_header->flags & LOG_EVENT_BINLOG_IN_USE_F) != 0);
+  ret = ostream->write(header, LOG_EVENT_HEADER_LEN);
 
   /*
     Update the checksum.
@@ -1307,30 +1304,16 @@ bool Log_event::write_header(Basic_ostream *ostream, size_t event_data_length) {
     the LOG_EVENT_BINLOG_IN_USE_F flag before computing the checksum,
     since the flag will be cleared when the binlog is closed.  On
     verification, the flag is dropped before computing the checksum
-    too. We need to compute the checksum before we encrypt the header,
-    in case binlog encryption is turned on.
+    too.
   */
-
-  if (is_format_description_and_need_checksum) {
+  if (need_checksum() &&
+      (common_header->flags & LOG_EVENT_BINLOG_IN_USE_F) != 0) {
     common_header->flags &= ~LOG_EVENT_BINLOG_IN_USE_F;
     int2store(header + FLAGS_OFFSET, common_header->flags);
   }
   crc = my_checksum(crc, header, LOG_EVENT_HEADER_LEN);
 
-  // restore IN_USE flag after calculating the checksum
-  if (is_format_description_and_need_checksum) {
-    common_header->flags |= LOG_EVENT_BINLOG_IN_USE_F;
-    int2store(header + FLAGS_OFFSET, common_header->flags);
-  }
-
-  uchar *pos = header;
-  size_t len = sizeof(header);
-
-  if (event_encrypter.is_encryption_enabled() &&
-      event_encrypter.init(ostream, pos, len))
-    DBUG_RETURN(true);
-
-  DBUG_RETURN(event_encrypter.encrypt_and_write(ostream, pos, len));
+  DBUG_RETURN(ret);
 }
 #endif /* MYSQL_SERVER */
 
@@ -12285,14 +12268,12 @@ bool Incident_log_event::write_data_header(Basic_ostream *ostream) {
 */
 
 static bool write_str_at_most_255_bytes(Basic_ostream *ostream, const char *str,
-                                        uint length,
-                                        Event_encrypter *event_encrypter) {
+                                        uint length) {
   uchar tmp[1];
+
   tmp[0] = (uchar)length;
-  return (event_encrypter->encrypt_and_write(ostream, tmp, sizeof(tmp)) ||
-          (length > 0 &&
-           event_encrypter->encrypt_and_write(
-               ostream, reinterpret_cast<const uchar *>(str), length)));
+  return (ostream->write(tmp, sizeof(tmp)) ||
+          (length > 0 && ostream->write((uchar *)str, length)));
 }
 
 bool Incident_log_event::write_data_body(Basic_ostream *ostream) {
@@ -12304,8 +12285,8 @@ bool Incident_log_event::write_data_body(Basic_ostream *ostream) {
     crc = checksum_crc32(crc, (uchar *)message, message_length);
     // todo: report a bug on write_str accepts uint but treats it as uchar
   }
-  DBUG_RETURN(write_str_at_most_255_bytes(
-      ostream, message, (uint)message_length, &event_encrypter));
+  DBUG_RETURN(
+      write_str_at_most_255_bytes(ostream, message, (uint)message_length));
 }
 #endif
 
@@ -12403,8 +12384,8 @@ bool Rows_query_log_event::write_data_body(Basic_ostream *ostream) {
    m_rows_query length will be stored using only one byte, but on read
    that length will be ignored and the complete query will be read.
   */
-  DBUG_RETURN(write_str_at_most_255_bytes(
-      ostream, m_rows_query, strlen(m_rows_query), &event_encrypter));
+  DBUG_RETURN(
+      write_str_at_most_255_bytes(ostream, m_rows_query, strlen(m_rows_query)));
 }
 
 int Rows_query_log_event::do_apply_event(Relay_log_info const *rli) {

@@ -665,8 +665,6 @@ class Log_event {
   */
   ha_checksum crc;
 
-  Event_encrypter event_encrypter;
-
   /**
     Index in @c rli->gaq array to indicate a group that this event is
     purging. The index is set by Coordinator to a group terminator

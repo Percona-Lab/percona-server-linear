@@ -6747,11 +6747,6 @@ int mysqld_main(int argc, char **argv)
     (prev_gtids_ev.common_footer)->checksum_alg =
         static_cast<enum_binlog_checksum_alg>(binlog_checksum_options);
 
-    Binlog_crypt_data *crypto_data = mysql_bin_log.get_crypto_data();
-
-    if (crypto_data->is_enabled())
-      prev_gtids_ev.event_encrypter.enable_encryption(crypto_data);
-
     if (mysql_bin_log.write_event_to_binlog_and_sync(&prev_gtids_ev))
       unireg_abort(MYSQLD_ABORT_EXIT);
 
