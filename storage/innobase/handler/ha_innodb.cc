@@ -23339,6 +23339,24 @@ static void innodb_temp_tablespace_encryption_update(THD *thd, SYS_VAR *var,
   }
 }
 
+/** Enable or disable encryption of redo logs
+@param[in]	thd	thread handle
+@param[in]	var	system variable
+@param[out]	var_ptr	current value
+@param[in]	save	immediate result from check function */
+static void innodb_redo_encryption_update(THD *thd, SYS_VAR *var, void *var_ptr,
+                                          const void *save) {
+  if (srv_read_only_mode) {
+    push_warning_printf(thd, Sql_condition::SL_WARNING, ER_WRONG_ARGUMENTS,
+                        " Redo log cannot be"
+                        " encrypted in innodb_read_only mode");
+    return;
+  }
+
+  *static_cast<ulong *>(var_ptr) = *static_cast<const ulong *>(save);
+
+}
+
 static SHOW_VAR innodb_status_variables_export[] = {
     {"Innodb", (char *)&show_innodb_vars, SHOW_FUNC, SHOW_SCOPE_GLOBAL},
     {NullS, NullS, SHOW_LONG, SHOW_SCOPE_GLOBAL}};
