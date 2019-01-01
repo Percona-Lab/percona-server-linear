@@ -9065,8 +9065,18 @@ void MYSQL_BIN_LOG::handle_binlog_flush_or_sync_error(THD *thd,
       and allow the commit to happen in storage engine.
     */
     if (check_write_error(thd) &&
-        DBUG_EVALUATE_IF("simulate_cache_creation_failure", false, true))
-      thd->clear_error();
+        DBUG_EVALUATE_IF("simulate_cache_creation_failure", false, true)) {
+      /* we have DA_ERROR */
+      thd->clear_error(); /* sets thd->get_stmt_da()->status() to DA_EMPTY */
+      /* For SQLCOM_COMMIT, ROLLBACK, ROLLBACK TO SAVEPOINT, there is already
+      my_ok() in mysql_execute_command. Doing double my_ok() is not allowed. So
+      we avoid that here */
+      if (thd_sql_command(thd) != SQLCOM_COMMIT &&
+          thd_sql_command(thd) != SQLCOM_ROLLBACK &&
+          thd_sql_command(thd) != SQLCOM_ROLLBACK_TO_SAVEPOINT) {
+        my_ok(thd); /* sets thd->get_stmt_da()->status() to DA_OK */
+      }
+    }
 
     if (need_lock_log) mysql_mutex_unlock(&LOCK_log);
     DEBUG_SYNC(thd, "after_binlog_closed_due_to_error");
@@ -11035,16 +11045,16 @@ bool THD::is_ddl_gtid_compatible() {
       mysql_bin_log.is_open() == false)
     return true;
 
-  DBUG_PRINT(
-      "info",
-      ("SQLCOM_CREATE:%d CREATE-TMP:%d SELECT:%zu SQLCOM_DROP:%d "
-       "DROP-TMP:%d trx:%d",
-       lex->sql_command == SQLCOM_CREATE_TABLE,
-       (lex->sql_command == SQLCOM_CREATE_TABLE &&
-        (lex->create_info->options & HA_LEX_CREATE_TMP_TABLE)),
-       lex->query_block->fields.size(), lex->sql_command == SQLCOM_DROP_TABLE,
-       (lex->sql_command == SQLCOM_DROP_TABLE && lex->drop_temporary),
-       in_multi_stmt_transaction_mode()));
+  DBUG_PRINT("info",
+             ("SQLCOM_CREATE:%d CREATE-TMP:%d SELECT:%zu SQLCOM_DROP:%d "
+              "DROP-TMP:%d trx:%d",
+              lex->sql_command == SQLCOM_CREATE_TABLE,
+              (lex->sql_command == SQLCOM_CREATE_TABLE &&
+               (lex->create_info->options & HA_LEX_CREATE_TMP_TABLE)),
+              lex->query_block ? lex->query_block->fields.size() : 0,
+              lex->sql_command == SQLCOM_DROP_TABLE,
+              (lex->sql_command == SQLCOM_DROP_TABLE && lex->drop_temporary),
+              in_multi_stmt_transaction_mode()));
 
   if (lex->sql_command == SQLCOM_CREATE_TABLE &&
       !(lex->create_info->options & HA_LEX_CREATE_TMP_TABLE) &&
