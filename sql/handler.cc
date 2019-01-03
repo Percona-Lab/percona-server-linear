@@ -1832,6 +1832,8 @@ end:
     });
   }
 
+  if (!error) thd->diff_commit_trans++;
+
   DBUG_RETURN(error);
 }
 
