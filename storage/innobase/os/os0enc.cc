@@ -825,9 +825,9 @@ bool Encryption::fill_encryption_info(uint key_version, byte *iv,
   ptr += SERVER_UUID_LEN;
   /* Write tablespace iv. */
   memcpy(ptr, iv, KEY_LEN);
-  ptr += KEY_LEN * 2;
+  ptr += KEY_LEN;
   /* Write checksum bytes. */
-  crc = ut_crc32(encrypt_info, KEY_LEN * 2);
+  crc = ut_crc32(encrypt_info, KEY_LEN);
   mach_write_to_4(ptr, crc);
 #ifdef UNIV_ENCRYPT_DEBUG
   fprintf(stderr, "Encrypting log with key version: %u\n", key_version);
