@@ -5471,13 +5471,25 @@ dberr_t os_file_read_func(const IORequest &type, const char *file_name,
       os_file_read_page(type, file_name, file, buf, offset, n, nullptr, true));
 }
 
+/** NOTE! Use the corresponding macro os_file_read_first_page(),
+not directly this function!
+Requests a synchronous read operation for first @p n_pages pages of the @p file,
+using the page size stored on the first page. It does not uncompress nor decrypt
+any pages.
+@param[in,out]  type            IO request context
+@param[in]      file_name       file name
+@param[in]      file            open file handle
+@param[in,out]  buf             buffer where to read data to
+@param[in]      n_pages         number of pages to read
+@param[in]      exit_on_err     if true then exit on error
+@return DB_SUCCESS or error code */
 dberr_t os_file_read_first_page_func(IORequest &type, const char *file_name,
                                      os_file_t file, byte *buf,
-                                     page_no_t n_pages) {
+                                     page_no_t n_pages, bool exit_on_err) {
   ut_ad(type.is_read());
 
   dberr_t err = os_file_read_page(type, file_name, file, buf, 0,
-                                  UNIV_ZIP_SIZE_MIN, nullptr, true);
+                                  UNIV_ZIP_SIZE_MIN, nullptr, exit_on_err);
 
   if (err == DB_SUCCESS) {
     uint32_t flags = fsp_header_get_flags(buf);
@@ -5490,7 +5502,7 @@ dberr_t os_file_read_first_page_func(IORequest &type, const char *file_name,
     const size_t read_size = page_size.physical() * n_pages;
     ut_ad(read_size > 0);
     err = os_file_read_page(type, file_name, file, buf, 0, read_size, nullptr,
-                            true);
+                            exit_on_err);
     if (err == DB_SUCCESS) {
       srv_stats.page0_read.add(1);
     }

@@ -195,9 +195,26 @@ static inline dberr_t pfs_os_file_read_func(const IORequest &type,
   return (result);
 }
 
+/** NOTE! Please use the corresponding macro os_file_read_first_page(),
+not directly this function!
+This is the performance schema instrumented wrapper function for
+os_file_read_first_page() which requests a synchronous read operation for first
+@p n_pages pages of the @p file, using the page size stored on the first page.
+It does not uncompress nor decrypt any pages.
+@param[in, out] type            IO request context
+@param[in]      file_name       file name
+@param[in]      file            Open file handle
+@param[in,out]  buf             Buffer where to read data to. It must be
+                                aligned to OS device block size, it should be
+                                safe to use 4KB alignment. It must have length
+                                of at least `UNIV_PAGE_SIZE_MAX * n_pages`.
+@param[in]      n_pages         How many pages to read.
+@param[in]      src_location    location where func invoked
+@param[in]      exit_on_err     if true then exit on error
+@return DB_SUCCESS if request was successful */
 static inline dberr_t pfs_os_file_read_first_page_func(
     IORequest &type, const char *file_name, pfs_os_file_t file, byte *buf,
-    page_no_t n_pages, ut::Location src_location) {
+    page_no_t n_pages, ut::Location src_location, bool exit_on_err) {
   PSI_file_locker_state state;
   struct PSI_file_locker *locker = nullptr;
 
@@ -209,8 +226,8 @@ static inline dberr_t pfs_os_file_read_first_page_func(
 
   dberr_t result;
 
-  result =
-      os_file_read_first_page_func(type, file_name, file.m_file, buf, n_pages);
+  result = os_file_read_first_page_func(type, file_name, file.m_file, buf,
+                                        n_pages, exit_on_err);
 
   register_pfs_file_io_end(locker,
                            UNIV_ZIP_SIZE_MIN + n_pages * UNIV_PAGE_SIZE);
