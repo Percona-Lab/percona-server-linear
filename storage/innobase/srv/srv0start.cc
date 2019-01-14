@@ -3368,6 +3368,16 @@ void srv_pre_dd_shutdown() {
       }
     }
 
+    if (srv_threads.m_encryption_threads_active) {
+      wait = true;
+      if ((count % 600) == 0) {
+        ib::info(ER_XB_MSG_WAIT_FOR_KEYRING_ENCRYPT_THREAD)
+            << "Waiting for"
+               " keyring encryption threads"
+               " to exit";
+      }
+    }
+
     if (!wait) {
       break;
     }
