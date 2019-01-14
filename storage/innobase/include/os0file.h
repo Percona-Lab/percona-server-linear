@@ -1393,9 +1393,8 @@ The wrapper functions have the prefix of "innodb_". */
 #define os_file_read_trx_pfs(file, buf, offset, n, trx) \
   pfs_os_file_read_func(file, buf, offset, n, trx, __FILE__, __LINE__)
 
-#define os_file_read_first_page_pfs(type, file_name, file, buf, n)          \
-  pfs_os_file_read_first_page_func(type, file_name, file, buf, n, __FILE__, \
-                                   __LINE__)
+#define os_file_read_first_page_pfs(type, file_name, file, buf, n, exit) \
+  pfs_os_file_read_first_page_func(type, file_name, file, buf, n, __FILE__, __LINE__, exit)
 
 #define os_file_copy_pfs(src, src_offset, dest, dest_offset, size)          \
   pfs_os_file_copy_func(src, src_offset, dest, dest_offset, size, __FILE__, \
@@ -1558,11 +1557,13 @@ of page 0 of IBD file
 @param[in]	n		number of bytes to read
 @param[in]	src_file	file name where func invoked
 @param[in]	src_line	line where the func invoked
+@param[in]	exit_on_err	if true then exit on error
 @return DB_SUCCESS if request was successful */
 UNIV_INLINE
-dberr_t pfs_os_file_read_first_page_func(IORequest &type, const char *file_name,
-                                         pfs_os_file_t file, void *buf, ulint n,
-                                         const char *src_file, uint src_line);
+dberr_t pfs_os_file_read_first_page_func(IORequest &type, const char* file_name, pfs_os_file_t file,
+                                         void *buf, ulint n,
+                                         const char *src_file, uint src_line,
+                                         bool exit_on_err);
 
 /** copy data from one file to another file. Data is read/written
 at current file offset.
@@ -1796,8 +1797,8 @@ to original un-instrumented file I/O APIs */
 #define os_file_read_pfs(type, file_name, file, buf, offset, n) \
   os_file_read_func(type, file_name, file, buf, offset, n)
 
-#define os_file_read_first_page_pfs(type, file_name, file, buf, n) \
-  os_file_read_first_page_func(type, file_name, file, buf, n)
+#define os_file_read_first_page_pfs(type, file_name, file, buf, n, exit) \
+  os_file_read_first_page_func(type, file_name, file, buf, n, exit)
 
 #define os_file_copy_pfs(src, src_offset, dest, dest_offset, size) \
   os_file_copy_func(src, src_offset, dest, dest_offset, size)
@@ -1861,10 +1862,18 @@ to original un-instrumented file I/O APIs */
 
 #ifdef UNIV_PFS_IO
 #define os_file_read_first_page(type, file_name, file, buf, n) \
-  os_file_read_first_page_pfs(type, file_name, file, buf, n)
+  os_file_read_first_page_pfs(type, file_name, file, buf, n, true)
 #else
 #define os_file_read_first_page(type, file_name, file, buf, n) \
-  os_file_read_first_page_pfs(type, file_name, file.m_file, buf, n)
+  os_file_read_first_page_pfs(type, file_name, file.m_file, buf, n, true)
+#endif
+
+#ifdef UNIV_PFS_IO
+#define os_file_read_first_page_noexit(type, file_name, file, buf, n) \
+  os_file_read_first_page_pfs(type, file_name, file, buf, n, false)
+#else
+#define os_file_read_first_page_noexit(type, file_name, file, buf, n) \
+  os_file_read_first_page_pfs(type, file_name, file.m_file, buf, n, false)
 #endif
 
 #ifdef UNIV_PFS_IO
@@ -2010,9 +2019,10 @@ Requests a synchronous read operation of page 0 of IBD file
 @param[in]	file		Open file handle
 @param[out]	buf		buffer where to read
 @param[in]	n		number of bytes to read
+@param[in]	exit_on_err	if true then exit on error
 @return DB_SUCCESS if request was successful */
-dberr_t os_file_read_first_page_func(IORequest &type, const char *file_name,
-                                     os_file_t file, void *buf, ulint n)
+dberr_t os_file_read_first_page_func(IORequest &type, const char* file_name, os_file_t file, void *buf,
+                                     ulint n, bool exit_on_err)
     MY_ATTRIBUTE((warn_unused_result));
 
 /** copy data from one file to another file. Data is read/written
