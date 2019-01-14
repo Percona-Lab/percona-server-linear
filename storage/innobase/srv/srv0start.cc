@@ -3411,6 +3411,14 @@ void srv_pre_dd_shutdown() {
   /* Since this point we do not expect accesses to DD coming from InnoDB. */
   ut_d(trx_sys_before_pre_dd_shutdown_validate());
 
+  while (srv_threads.m_encryption_threads_active) {
+    ib::info(ER_XB_MSG_WAIT_FOR_KEYRING_ENCRYPT_THREAD)
+        << "Waiting for"
+           " keyring encryption threads"
+           " to exit";
+    std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+  }
+
   srv_shutdown_set_state(SRV_SHUTDOWN_PURGE);
 
   for (uint32_t count = 1; srv_purge_threads_active(); ++count) {
