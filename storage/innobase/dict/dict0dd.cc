@@ -6182,4 +6182,65 @@ bool dd_clear_encryption_flag(THD *thd, const char *space_name,
   return dd_update_tablespace_dd_flags(thd, space_name, is_space_being_removed,
                                        update_func);
 }
+
+static bool dd_get_tablespace_flags(THD *thd, const char *space_name,
+                                    uint32_t &dd_space_flags) {
+  const dd::Tablespace *dd_space = nullptr;
+  dd::cache::Dictionary_client::Auto_releaser releaser(thd->dd_client());
+
+  return thd->dd_client()->acquire(space_name, &dd_space) ||
+         dd_space == nullptr ||
+         dd_space->se_private_data().get(dd_space_key_strings[DD_SPACE_FLAGS],
+                                         &dd_space_flags);
+}
+
+/* Sets tablespace's DD flags.
+@param[in] Thread       THD
+@param[in] space_name   name of the space for which DD flags are to be set
+@param[in] space_flags  DD flags that are to be assigned to space
+@param[in] is_space_being_removed - pass by pointer as this can check outside
+this function */
+static bool dd_set_flags(THD *thd, const char *space_name,
+                         const uint32_t space_flags,
+                         volatile bool *is_space_being_removed) {
+  auto set_flags = [](uint32_t &dd_space_flags, uint32_t space_flags) {
+    // currently we are using this function only for correcting encryption flag
+    ut_ad(dd_space_flags == space_flags ||
+          FSP_FLAGS_GET_ENCRYPTION(dd_space_flags) !=
+              FSP_FLAGS_GET_ENCRYPTION(space_flags));
+    dd_space_flags = space_flags;
+  };
+  auto update_func = std::bind(set_flags, std::placeholders::_1, space_flags);
+  return dd_update_tablespace_dd_flags(thd, space_name, is_space_being_removed,
+                                       update_func);
+}
+
+bool dd_fix_mysql_ibd_encryption_flag_if_needed(THD *thd,
+                                                uint32_t space_flags) {
+  uint32_t dd_space_flags;
+  if (dd_get_tablespace_flags(thd, dict_sys_t::s_dd_space_name,
+                              dd_space_flags)) {
+    return true;
+  }
+  if (FSP_FLAGS_GET_ENCRYPTION(dd_space_flags) ==
+      FSP_FLAGS_GET_ENCRYPTION(space_flags)) {
+    return false;
+  }
+  // exclude encryption flag from validation
+  dd_space_flags &= ~FSP_FLAGS_MASK_ENCRYPTION;
+  space_flags &= ~FSP_FLAGS_MASK_ENCRYPTION;
+  if (dd_space_flags != space_flags) {
+    // this should not happen - some other flags other than encryption flag are
+    // mismatched
+    ib::error(ER_IB_MSG_394)
+        << "Flags read from mysql.ibd file (" << space_flags
+        << ") are different from the flags read from DD (" << dd_space_flags
+        << ") This comparission does *not* include the encryption flag.";
+    return true;
+  }
+  bool is_space_being_removed{false};
+  return dd_set_flags(thd, dict_sys_t::s_dd_space_name, space_flags,
+                      &is_space_being_removed);
+}
+
 #endif /* !UNIV_HOTBACKUP */
