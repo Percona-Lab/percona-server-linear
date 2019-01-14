@@ -132,10 +132,12 @@ InnoDB:
 #include <cstddef>
 #include <cstdlib>
 #include <cstring>
+#include <functional>
 #include <limits>
 #include <map>
 #include <type_traits> /* std::is_trivially_default_constructible */
 #include <unordered_set>
+#include <utility>
 
 #include "my_basename.h"
 #include "mysql/components/services/bits/psi_bits.h"
@@ -713,6 +715,12 @@ class ut_allocator {
 #endif /* UNIV_PFS_MEMORY */
   }
 
+  /** Construct an object. */
+  template <typename... Args>
+  void construct(T *p, Args &&...args) {
+    ::new ((void *)p) T(std::forward<Args>(args)...);
+  }
+
   /** Destroy an object pointed by 'p'. */
   void destroy(pointer p) { p->~T(); }
 
@@ -946,7 +954,7 @@ class ut_allocator {
 
 #ifdef UNIV_PFS_MEMORY
   /** Performance schema key. */
-  const PSI_memory_key m_key;
+  PSI_memory_key m_key;
 #endif /* UNIV_PFS_MEMORY */
 };
 
@@ -1128,6 +1136,15 @@ same problems as the standard library malloc.
 #define ut_free(ptr) ::free(ptr)
 
 #endif /* UNIV_PFS_MEMORY */
+
+inline void ut_free_func(byte *buf) { ut_free(buf); }
+
+using ut_unique_ptr = std::unique_ptr<byte, std::function<void(byte *)>>;
+
+inline ut_unique_ptr ut_make_unique_ptr_nokey(const size_t size) {
+  return ut_unique_ptr(static_cast<byte *>(ut_malloc_nokey(size)),
+                       ut_free_func);
+}
 
 namespace ut {
 
