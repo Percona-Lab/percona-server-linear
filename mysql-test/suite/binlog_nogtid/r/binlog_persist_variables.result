@@ -25,7 +25,7 @@ VARIABLE_NAME LIKE '%source%') AND
 (VARIABLE_NAME NOT LIKE 'innodb%')
 ORDER BY VARIABLE_NAME;
 
-include/assert.inc [Expect 117 variables in the table.]
+include/assert.inc [Expect 120 variables in the table.]
 
 # Test SET PERSIST
 SET PERSIST binlog_cache_size = @@GLOBAL.binlog_cache_size;
@@ -56,6 +56,7 @@ SET PERSIST binlog_row_image = @@GLOBAL.binlog_row_image;
 SET PERSIST binlog_row_metadata = @@GLOBAL.binlog_row_metadata;
 SET PERSIST binlog_row_value_options = @@GLOBAL.binlog_row_value_options;
 SET PERSIST binlog_rows_query_log_events = @@GLOBAL.binlog_rows_query_log_events;
+SET PERSIST binlog_skip_flush_commands = @@GLOBAL.binlog_skip_flush_commands;
 SET PERSIST binlog_space_limit = @@GLOBAL.binlog_space_limit;
 ERROR HY000: Variable 'binlog_space_limit' is a read only variable
 SET PERSIST binlog_stmt_cache_size = @@GLOBAL.binlog_stmt_cache_size;
@@ -66,8 +67,6 @@ SET PERSIST binlog_transaction_dependency_tracking = @@GLOBAL.binlog_transaction
 Warnings:
 Warning	1287	'@@binlog_transaction_dependency_tracking' is deprecated and will be removed in a future release.
 Warning	1287	'@@binlog_transaction_dependency_tracking' is deprecated and will be removed in a future release.
-SET PERSIST encrypt_binlog = @@GLOBAL.encrypt_binlog;
-ERROR HY000: Variable 'encrypt_binlog' is a read only variable
 SET PERSIST enforce_gtid_consistency = @@GLOBAL.enforce_gtid_consistency;
 SET PERSIST group_replication_consistency = @@GLOBAL.group_replication_consistency;
 SET PERSIST gtid_executed = @@GLOBAL.gtid_executed;
@@ -263,16 +262,16 @@ Warning	1287	'@@sync_relay_log_info' is deprecated and will be removed in a futu
 Warning	1287	'@@sync_relay_log_info' is deprecated and will be removed in a future release.
 SET PERSIST sync_source_info = @@GLOBAL.sync_source_info;
 
-include/assert.inc [Expect 90 persisted variables in persisted_variables table.]
+include/assert.inc [Expect 91 persisted variables in persisted_variables table.]
 
 ############################################################
 # 2. Restart server, it must preserve the persisted variable
 #    settings. Verify persisted configuration.
 # restart
 
-include/assert.inc [Expect 90 persisted variables in persisted_variables table.']
-include/assert.inc [Expect 90 persisted variables shown as PERSISTED in variables_info table.']
-include/assert.inc [Expect 90 persisted variables with matching persisted and global values.]
+include/assert.inc [Expect 91 persisted variables in persisted_variables table.']
+include/assert.inc [Expect 91 persisted variables shown as PERSISTED in variables_info table.']
+include/assert.inc [Expect 91 persisted variables with matching persisted and global values.]
 
 ############################################################
 # 3. Test RESET PERSIST IF EXISTS. Verify persisted variable
@@ -302,6 +301,7 @@ RESET PERSIST IF EXISTS binlog_row_image;
 RESET PERSIST IF EXISTS binlog_row_metadata;
 RESET PERSIST IF EXISTS binlog_row_value_options;
 RESET PERSIST IF EXISTS binlog_rows_query_log_events;
+RESET PERSIST IF EXISTS binlog_skip_flush_commands;
 RESET PERSIST IF EXISTS binlog_space_limit;
 Warnings:
 Warning	3615	Variable binlog_space_limit does not exist in persisted config file
@@ -310,9 +310,6 @@ RESET PERSIST IF EXISTS binlog_transaction_compression;
 RESET PERSIST IF EXISTS binlog_transaction_compression_level_zstd;
 RESET PERSIST IF EXISTS binlog_transaction_dependency_history_size;
 RESET PERSIST IF EXISTS binlog_transaction_dependency_tracking;
-RESET PERSIST IF EXISTS encrypt_binlog;
-Warnings:
-Warning	3615	Variable encrypt_binlog does not exist in persisted config file
 RESET PERSIST IF EXISTS enforce_gtid_consistency;
 RESET PERSIST IF EXISTS group_replication_consistency;
 RESET PERSIST IF EXISTS gtid_executed;
