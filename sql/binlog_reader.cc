@@ -51,7 +51,7 @@ static void debug_corrupt_event(unsigned char *buffer, unsigned int event_len) {
           type != binary_log::PREVIOUS_GTIDS_LOG_EVENT &&
           type != binary_log::GTID_LOG_EVENT &&
           type != binary_log::ANONYMOUS_GTID_LOG_EVENT &&
-          type != binary_log::START_ENCRYPTION_EVENT) {
+          type != binary_log::START_5_7_ENCRYPTION_EVENT) {
         int cor_pos = rand() % (event_len - BINLOG_CHECKSUM_LEN -
                                 LOG_EVENT_MINIMAL_HEADER_LEN) +
                       LOG_EVENT_MINIMAL_HEADER_LEN;
@@ -115,14 +115,17 @@ bool Binlog_event_data_istream::Decryption_buffer::set_size(
   }
   assert(size_to_set < m_size);
 
-  if (size_to_set < (m_size / 2) &&
-      ++m_number_of_events_with_half_the_size == 100) {
-    // There were already 101 events which size was a half of currently
-    // allocated size. This is strong indication that we had occured an
-    // event which was unusually big. Shrink the buffer to half the size.
-    if (resize(m_size / 2)) {
-      return true;
+  if (size_to_set < (m_size / 2)) {
+    if (++m_number_of_events_with_half_the_size == 100) {
+      // There were already 101 events in a row, which size was a half of
+      // currently allocated size. This is strong indication that we had occured
+      // an event which was unusually big. Shrink the buffer to half the size.
+      if (resize(m_size / 2)) {
+        return true;
+      }
+      m_number_of_events_with_half_the_size = 0;
     }
+  } else {
     m_number_of_events_with_half_the_size = 0;
   }
   return false;
@@ -145,7 +148,7 @@ bool Binlog_event_data_istream::fill_event_data(
     Basic_binlog_ifile *binlog_file =
         down_cast<Basic_binlog_ifile *>(m_istream);
 
-    // if file position if larger than 4 bytes we still care only about
+    // if file position is larger than 4 bytes we still care only about
     // least significant 4 bytes
     if (m_decryption_buffer.set_size(m_event_length) ||
         decrypt_event(
@@ -198,7 +201,7 @@ bool Binlog_event_data_istream::check_event_header() {
 Binlog_read_error::Error_type binlog_event_deserialize(
     const unsigned char *buffer, unsigned int event_len,
     const Format_description_event *fde, bool verify_checksum,
-    Log_event **event, bool force_opt MY_ATTRIBUTE((unused))) {
+    Log_event **event) {
   const char *buf = reinterpret_cast<const char *>(buffer);
   Log_event *ev = nullptr;
   enum_binlog_checksum_alg alg;
@@ -267,7 +270,7 @@ Binlog_read_error::Error_type binlog_event_deserialize(
   }
 
   if (event_type > fde->number_of_event_types &&
-      event_type != binary_log::START_ENCRYPTION_EVENT &&
+      event_type != binary_log::START_5_7_ENCRYPTION_EVENT &&
       /*
         Skip the event type check when simulating an unknown ignorable event.
       */
@@ -383,9 +386,9 @@ Binlog_read_error::Error_type binlog_event_deserialize(
     case binary_log::TRANSACTION_PAYLOAD_EVENT:
       ev = new Transaction_payload_log_event(buf, fde);
       break;
-case binary_log::START_ENCRYPTION_EVENT:
-  ev = new Start_encryption_log_event(buf, fde);
-  break;
+    case binary_log::START_5_7_ENCRYPTION_EVENT:
+      ev = new Start_encryption_log_event(buf, fde);
+      break;
     default:
       /*
         Create an object of Ignorable_log_event for unrecognized sub-class.
