@@ -1507,7 +1507,6 @@ char server_version[SERVER_VERSION_LENGTH];
 char server_version_suffix[SERVER_VERSION_LENGTH];
 const char *mysqld_unix_port;
 char *opt_mysql_tmpdir;
-bool encrypt_binlog;
 
 char *opt_authentication_policy;
 std::vector<std::string> authentication_policy_list;
@@ -7104,22 +7103,6 @@ static int init_server_components() {
     unireg_abort(MYSQLD_ABORT_EXIT);
   }
 
-  if (encrypt_binlog) {
-    if (!opt_source_verify_checksum ||
-        binlog_checksum_options == binary_log::BINLOG_CHECKSUM_ALG_OFF ||
-        binlog_checksum_options == binary_log::BINLOG_CHECKSUM_ALG_UNDEF) {
-      sql_print_error(
-          "BINLOG_ENCRYPTION requires MASTER_VERIFY_CHECKSUM = ON and "
-          "BINLOG_CHECKSUM to be turned ON.");
-      unireg_abort(MYSQLD_ABORT_EXIT);
-    }
-    if (!opt_bin_log)
-      sql_print_information(
-          "binlog and relay log encryption enabled without binary logging "
-          "being enabled. "
-          "If relay logs are in use, they will be encrypted.");
-  }
-
   RUN_HOOK(server_state, before_recovery, (nullptr));
   if (tc_log->open(opt_bin_log ? opt_bin_logname : opt_tc_log_file)) {
     LogErr(ERROR_LEVEL, ER_CANT_INIT_TC_LOG);
@@ -7152,6 +7135,13 @@ static int init_server_components() {
   if (rpl_encryption.initialize()) {
     LogErr(ERROR_LEVEL, ER_SERVER_RPL_ENCRYPTION_UNABLE_TO_INITIALIZE);
     unireg_abort(MYSQLD_ABORT_EXIT);
+  }
+
+  if (rpl_encryption.is_enabled() && !opt_bin_log) {
+    sql_print_information(
+        "binlog and relay log encryption enabled without binary logging being "
+        "enabled. "
+        "If relay logs are in use, they will be encrypted.");
   }
 
   if (opt_bin_log) {
