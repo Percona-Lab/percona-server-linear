@@ -284,25 +284,32 @@ our @DEFAULT_SUITES = qw(
   x
   component_keyring_file
 
-  funcs_1
-  jp
-  stress
+  audit_log
+  binlog_57_decryption
+  percona-pam-for-mysql
+  data_masking
+  keyring_vault
+  rocksdb
+  rocksdb_rpl
+  rocksdb_sys_vars
+  rocksdb_stress
+  rpl_encryption
+  tokudb
+  tokudb_add_index
+  tokudb_alter_table
+  tokudb_bugs
+  tokudb_parts
+  tokudb_perfschema
+  tokudb_rpl
+
+  audit_null
   engines/iuds
   engines/funcs
+  funcs_1
   group_replication
-  tokudb.add_index
-  tokudb.alter_table
-  tokudb
-  tokudb.bugs
-  tokudb.parts
-  tokudb.rpl
-  tokudb.perfschema
-  rocksdb
-  rocksdb.rpl
-  rocksdb.sys_vars
-  audit_null
-  audit_log
-  percona-pam-for-mysql
+  interactive_utilities
+  jp
+  stress
 );
 
 our $DEFAULT_SUITES = join ',', @DEFAULT_SUITES;
@@ -469,7 +476,7 @@ sub is_core_dump {
   # Name beginning with core, not ending in .gz, .c, nor .log, not belonging to
   # Boost, or ending with .dmp on Windows
   return (($core_name =~ /^core/ and $core_name !~ /\.gz$|\.c$|\.log$/
-           and $core_path !~ /\/boost_/)
+           and $core_path !~ /\/boost_/ and $core_path !~ /\/coredumper/)
           or (IS_WINDOWS and $core_name =~ /\.dmp$/));
 }
 
