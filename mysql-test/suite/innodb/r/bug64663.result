@@ -34,3 +34,5 @@ mysql/time_zone_name	33
 mysql/time_zone_transition	33
 mysql/time_zone_transition_type	33
 sys/sys_config	33
+mtr/test_suppressions	33
+mtr/global_suppressions	33
