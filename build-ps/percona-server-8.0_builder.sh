@@ -302,7 +302,7 @@ install_deps() {
             yum -y install  gcc-c++ devtoolset-7-gcc-c++ devtoolset-7-binutils
             yum -y install ccache devtoolset-7-libasan-devel devtoolset-7-libubsan-devel devtoolset-7-valgrind devtoolset-7-valgrind-devel
             yum -y install libasan libicu-devel libtool libzstd-devel lz4-devel make
-            yum -y install re2-devel redhat-lsb-core
+            yum -y install re2-devel redhat-lsb-core lz4-static
             source /opt/rh/devtoolset-7/enable
         else
 	    yum -y install perl.x86_64
@@ -561,6 +561,7 @@ build_rpm(){
     build_mecab_dict
 
     cd ${WORKDIR}
+    source /opt/rh/devtoolset-7/enable
     #
     if [ ${ARCH} = x86_64 ]; then
         rpmbuild --define "_topdir ${WORKDIR}/rpmbuild" --define "dist .el${RHEL}" --define "with_mecab ${MECAB_INSTALL_DIR}/usr" --rebuild rpmbuild/SRPMS/${SRCRPM}
