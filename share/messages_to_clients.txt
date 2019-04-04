@@ -9334,6 +9334,12 @@ ER_XB_MSG_WAIT_FOR_KEYRING_ENCRYPT_THREAD
 ER_PARALLEL_DOUBLEWRITE_WRITE_ERROR
   eng "Parallel doublewrite buffer write failed, crashing the server to avoid data loss"
 
+ER_XB_MSG_6
+  eng "Key rotation of encrypted session temporary tablespace %s failed"
+
+ER_XB_UNDO_DELETE_FAILURE
+  eng "Deletion of 5.7 undo tablespace %s failed"
+
 #
 # End of Percona Server 8.0 server error log messages
 #
