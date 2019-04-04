@@ -701,7 +701,12 @@ static dberr_t srv_undo_tablespace_read_encryption(pfs_os_file_t fh,
 
   /* Return if the encryption metadata is empty. */
   if (memcmp(first_page + offset, ENCRYPTION_KEY_MAGIC_V3,
-             ENCRYPTION_MAGIC_SIZE) != 0) {
+             ENCRYPTION_MAGIC_SIZE) != 0 &&
+      /* PS 5.7 undo encryption upgrade */
+      !(srv_is_upgrade_mode &&
+        memcmp(first_page + offset, ENCRYPTION_KEY_MAGIC_V2,
+               ENCRYPTION_MAGIC_SIZE) == 0) &&
+      (crypt_data == nullptr || crypt_data->min_key_version == 0)) {
     ut_free(first_page_buf);
     return (DB_SUCCESS);
   }
@@ -1371,10 +1376,11 @@ dberr_t srv_undo_tablespaces_upgrade() {
   for (const auto space_id : *trx_sys_undo_spaces) {
     undo::Tablespace undo_space(space_id);
 
-    fil_space_close(undo_space.id());
-
-    os_file_delete_if_exists(innodb_data_file_key, undo_space.file_name(),
-                             NULL);
+    dberr_t err =
+        fil_delete_tablespace(undo_space.id(), BUF_REMOVE_ALL_NO_WRITE);
+    if (err != DB_SUCCESS) {
+      ib::warn(ER_XB_UNDO_DELETE_FAILURE, undo_space.file_name());
+    }
   }
 
   /* Remove the tracking of these undo tablespaces from TRX_SYS page and
