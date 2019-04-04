@@ -396,13 +396,18 @@ static dberr_t srv_undo_tablespace_read_encryption(pfs_os_file_t fh,
   }
 
   /* Return if the encryption metadata is empty. */
-  if (!Encryption::is_encrypted_with_v3(first_page + offset)) {
+  if (!Encryption::is_encrypted_with_v3(first_page + offset) &&
+      !(srv_is_upgrade_mode &&
+        memcmp(first_page + offset, Encryption::KEY_MAGIC_V2,
+               Encryption::MAGIC_SIZE) == 0) &&
+      (crypt_data == nullptr || crypt_data->min_key_version == 0)) {
     ut::aligned_free(first_page);
     return (DB_SUCCESS);
   }
 
   byte key[Encryption::KEY_LEN];
   byte iv[Encryption::KEY_LEN];
+
   Encryption_key e_key{key, iv};
 
   if (crypt_data) {
