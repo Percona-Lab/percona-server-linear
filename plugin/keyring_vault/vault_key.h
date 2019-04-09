@@ -29,10 +29,11 @@ struct Vault_key : public Key, public ISerialized_object {
   std::string *get_key_type_as_string() override;
   const std::string *get_key_type_as_string() const;
 
-  virtual bool get_next_key(IKey **key_out);
-  virtual bool has_next_key();
-  virtual void create_key_signature() const;
-  virtual void xor_data();
+  bool get_next_key(IKey **key_out) override;
+  bool has_next_key() override;
+  void create_key_signature() const override;
+  void xor_data(uchar *, size_t) override;
+  void xor_data() override;
 
  protected:
   bool was_key_retrieved;
