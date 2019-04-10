@@ -3242,6 +3242,24 @@ inline constexpr const decltype(handlerton::flags)
 inline constexpr const decltype(handlerton::flags)
     HTON_SECONDARY_SUPPORTS_TEMPORARY_TABLE(1 << 25);
 
+/** Start of Percona specific HTON_* defines */
+
+/**
+  Engine supports compressed columns.
+*/
+#define HTON_SUPPORTS_COMPRESSED_COLUMNS (1 << 30)
+
+/**
+   Set if the storage engine supports 'online' backups. This means that there
+   exists a way to create a consistent copy of its tables without blocking
+   updates to them. If so, statements that update such tables will not be
+   affected by an active LOCK TABLES FOR BACKUP.
+*/
+#define HTON_SUPPORTS_ONLINE_BACKUPS (1 << 31)
+
+/** End of Percona specific HTON_* defines */
+
+
 /* Whether the handlerton is a secondary engine. */
 inline bool hton_is_secondary_engine(const handlerton *hton) {
   return hton != nullptr && (hton->flags & HTON_IS_SECONDARY_ENGINE) != 0U;
