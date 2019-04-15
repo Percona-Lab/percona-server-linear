@@ -77,9 +77,11 @@
 #include "sql/binlog.h"  // mysql_bin_log
 #include "sql/check_stack.h"
 #include "sql/dd/cache/dictionary_client.h"
+#include "sql/dd/dd.h"  // dd::get_dictionary()
 #include "sql/dd/dd_schema.h"
 #include "sql/dd/dd_table.h"       // dd::table_exists
 #include "sql/dd/dd_tablespace.h"  // dd::fill_table_and_parts_tablespace_name
+#include "sql/dd/dictionary.h"
 #include "sql/dd/string_type.h"
 #include "sql/dd/types/abstract_table.h"
 #include "sql/dd/types/column.h"
@@ -5658,7 +5660,19 @@ static bool set_non_locking_read_for_IS_view(THD *thd, TABLE_LIST *tl) {
     always a DD table. If this is not true, then we might
     need to invoke dd::Dictionary::is_dd_tablename() to make sure.
    */
-  if (tbl->db_stat && tbl->file->ha_extra(HA_EXTRA_NO_READ_LOCKING)) {
+
+  /* Addition to the above upstream comment:
+     Compression_dictionary table is dd::System_tables::Types::SYSTEM, so
+     pushing HA_EXTRA_NO_READ_LOCKING down will cause the assert in ha_innodb.cc
+     line c.a. 19297 (no_read_locking == true, is_dd_table == false).
+     This is the logic in ha_innobase::external_lock introduced in 8.0.22.
+     Below causes HA_EXTRA_NO_READ_LOCKING not to be pushed for SYSTEM tables
+     and we have locking as before.
+  */
+  bool is_dd_table = dd::get_dictionary()->is_dd_table_name(
+      tl->get_db_name(), tl->get_table_name());
+  if (is_dd_table && tbl->db_stat &&
+      tbl->file->ha_extra(HA_EXTRA_NO_READ_LOCKING)) {
     // Handler->ha_extra() for innodb does not fail ever as of now.
     // In case it is made to fail sometime later, we need to think
     // about the kind of error to be report to user.
@@ -7203,6 +7217,7 @@ TABLE *open_table_uncached(THD *thd, const char *path, const char *db,
                                            : NON_TRANSACTIONAL_TMP_TABLE);
 
   if (add_to_temporary_tables_list) {
+    tmp_table->set_tmp_dd_table_ptr(&table_def);
     tmp_table->set_binlog_drop_if_temp(
         !thd->is_current_stmt_binlog_disabled() &&
         !thd->is_current_stmt_binlog_format_row());
@@ -10292,13 +10307,13 @@ bool is_equal(const LEX_CSTRING *a, const LEX_CSTRING *b) noexcept {
 
 static bool is_cond_equal(const Item *cond) noexcept {
   return (cond->type() == Item::FUNC_ITEM &&
-          (((Item_func *)cond)->functype() == Item_func::EQ_FUNC ||
-           ((Item_func *)cond)->functype() == Item_func::EQUAL_FUNC));
+          (((const Item_func *)cond)->functype() == Item_func::EQ_FUNC ||
+           ((const Item_func *)cond)->functype() == Item_func::EQUAL_FUNC));
 }
 
 static bool is_cond_mult_equal(const Item *cond) noexcept {
   return (cond->type() == Item::FUNC_ITEM &&
-          (((Item_func *)cond)->functype() == Item_func::MULT_EQUAL_FUNC));
+          (((const Item_func *)cond)->functype() == Item_func::MULT_EQUAL_FUNC));
 }
 
 /*
@@ -10584,14 +10599,14 @@ void Join_node::add_equi_column(const Field *left, const Field *right) {
 inline bool is_cond_or(const Item *item) noexcept {
   if (item->type() != Item::COND_ITEM) return false;
 
-  Item_cond *cond_item = (Item_cond *)item;
+  const Item_cond *cond_item = (const Item_cond *)item;
   return (cond_item->functype() == Item_func::COND_OR_FUNC);
 }
 
 static bool is_cond_and(const Item *item) noexcept {
   if (item->type() != Item::COND_ITEM) return false;
 
-  Item_cond *cond_item = (Item_cond *)item;
+  const Item_cond *cond_item = (const Item_cond *)item;
   return (cond_item->functype() == Item_func::COND_AND_FUNC);
 }
 
@@ -10599,8 +10614,8 @@ void Join_node::add_const_equi_columns(Item *cond) {
   if (!cond) return;
   if (is_cond_or(cond)) return;
   if (is_cond_and(cond)) {
-    List<Item> *args = ((Item_cond *)cond)->argument_list();
-    List_iterator<Item> it(*args);
+    const List<Item> *args = ((const Item_cond *)cond)->argument_list();
+    List_iterator<Item> it(*const_cast<List<Item>*>(args));
     Item *c;
     while ((c = it++)) add_const_equi_columns(c);
     return;
@@ -10609,8 +10624,8 @@ void Join_node::add_const_equi_columns(Item *cond) {
     uint i;
     Field *first_field = nullptr;
     Field *second_field = nullptr;
-    Item **args = ((Item_func *)cond)->arguments();
-    uint arg_count = ((Item_func *)cond)->argument_count();
+    Item **args = ((const Item_func *)cond)->arguments();
+    uint arg_count = ((const Item_func *)cond)->argument_count();
     bool const_value = false;
 
     assert(arg_count == 2);
@@ -10621,9 +10636,9 @@ void Join_node::add_const_equi_columns(Item *cond) {
           (variable_field = field_belongs_to_tables(
                ((Item_field *)args[i]->real_item())->field))) {
         if (!first_field)
-          first_field = ((Item_field *)args[i]->real_item())->field;
+          first_field = ((const Item_field *)args[i]->real_item())->field;
         else
-          second_field = ((Item_field *)args[i]->real_item())->field;
+          second_field = ((const Item_field *)args[i]->real_item())->field;
       } else if (args[i]->real_item()->basic_const_item() || !variable_field) {
         const_value = true;
       }
