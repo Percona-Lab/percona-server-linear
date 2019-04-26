@@ -195,6 +195,7 @@ enum srv_shutdown_t {
     - the master thread,
     - redo log threads,
     - page cleaner threads,
+    - LRU manager threads,
     - archiver threads.
   List of threads being stopped within this phase:
     - lock_wait_timeout thread,
@@ -230,6 +231,10 @@ enum srv_shutdown_t {
 /** At a shutdown this value climbs from SRV_SHUTDOWN_NONE
 to SRV_SHUTDOWN_EXIT_THREADS. */
 extern std::atomic<enum srv_shutdown_t> srv_shutdown_state;
+
+/** true if shared MDL is taken by background thread for all tablespaces, for
+ *  which (un)encryption is to be rolled forward*/
+extern bool shared_mdl_is_taken;
 
 /** Call std::quick_exit(3) */
 void srv_fatal_error() MY_ATTRIBUTE((noreturn));
