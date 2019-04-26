@@ -2549,6 +2549,7 @@ bool srv_enable_undo_encryption(bool is_boot) {
     log_free_check();
 
     mtr_t mtr;
+
     mtr_start(&mtr);
     mtr_x_lock_space(space, &mtr);
 
@@ -2674,7 +2675,6 @@ loop:
       srv_master_do_idle_tasks();
     }
 
-    /* Make sure that early encryption processing of UNDO/REDO log is done. */
     if (!is_early_redo_undo_encryption_done()) {
       continue;
     }
