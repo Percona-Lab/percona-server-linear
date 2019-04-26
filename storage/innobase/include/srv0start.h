@@ -178,6 +178,7 @@ enum srv_shutdown_t {
     - master thread,
     - redo log threads,
     - page cleaner threads,
+    - LRU manager threads,
     - archiver threads.
   At this phase the purge threads must be stopped. */
   SRV_SHUTDOWN_CLEANUP,
