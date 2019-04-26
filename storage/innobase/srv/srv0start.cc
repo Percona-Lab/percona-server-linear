@@ -3296,6 +3296,11 @@ static lsn_t srv_shutdown_log() {
   ut_a(!buf_flush_page_cleaner_is_active());
   ut_a(buf_pool_check_no_pending_io() == 0);
 
+  if (log_scrub_thread_active) {
+    ut_ad(!srv_read_only_mode);
+    os_event_set(log_scrub_event);
+  }
+
   if (srv_fast_shutdown == 2) {
     if (!srv_read_only_mode) {
       ib::info(ER_IB_MSG_1253);

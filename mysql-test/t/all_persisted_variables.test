@@ -107,6 +107,7 @@ CREATE TABLE all_vars (id INT PRIMARY KEY AUTO_INCREMENT, var_name VARCHAR(64), 
 
 # Currently we are not able to test below global variables
 # 1. rbr_exec_mode
+# 2. innodb_default_encryption_key_id
 #
 # because of open bugs (listed below).
 #
@@ -114,7 +115,7 @@ CREATE TABLE all_vars (id INT PRIMARY KEY AUTO_INCREMENT, var_name VARCHAR(64), 
 #
 # Once the bugs is fixed, below $bug_var_count must be modified along with the query.
 
---let $bug_var_count=1
+--let $bug_var_count=2
 --expr $expected_var_count=$total_global_vars - $bug_var_count
 
 INSERT INTO all_vars (var_name, var_value)
