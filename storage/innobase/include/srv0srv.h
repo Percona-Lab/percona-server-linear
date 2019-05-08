@@ -1187,11 +1187,11 @@ bool set_undo_tablespace_encryption(space_id_t space_id, mtr_t *mtr);
 
 /** Enable UNDO tablespaces encryption.
 @return false for success, true otherwise. */
-bool srv_enable_undo_encryption();
-
 /** Enable REDO log encryption.
 @return false for success, true otherwise. */
 bool srv_enable_redo_encryption();
+
+bool srv_enable_undo_encryption();
 
 /** Get count of tasks in the queue.
  @return number of tasks in queue */

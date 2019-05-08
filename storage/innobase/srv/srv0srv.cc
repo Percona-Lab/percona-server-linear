@@ -97,6 +97,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "fil0crypt.h"
 #include "ha_innodb.h"
 #include "sql/handler.h"
+#include "system_key.h"
 #include "ut0mem.h"
 
 #ifdef UNIV_HOTBACKUP
@@ -2926,7 +2927,7 @@ bool srv_enable_undo_encryption() {
     ut_ad(fsp_is_undo_tablespace(undo_space->id()));
 
     /* While enabling encryption, make sure not to overwrite the tablespace key.
-    Otherwise, pages encrypted with the old tablespace key can't be read. */
+       Otherwise, pages encrypted with the old tablespace key can't be read. */
     if (FSP_FLAGS_GET_ENCRYPTION(space->flags)) {
       continue;
     }
