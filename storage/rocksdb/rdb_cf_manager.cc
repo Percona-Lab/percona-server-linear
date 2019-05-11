@@ -58,7 +58,7 @@ void Rdb_cf_manager::init(
 }
 
 void Rdb_cf_manager::cleanup() {
-  for (auto it : m_cf_name_map) {
+  for (const auto &it : m_cf_name_map) {
     delete it.second;
   }
   mysql_mutex_destroy(&m_mutex);
@@ -100,7 +100,6 @@ rocksdb::ColumnFamilyHandle *Rdb_cf_manager::get_or_create_cf(
     bool cf_name_found = m_cf_options->get_cf_options(cf_name, &opts);
 
     if (create || cf_name_found) {
-
       LogPluginErrMsg(INFORMATION_LEVEL, 0, "Creating a column family %s",
                       cf_name.c_str());
       LogPluginErrMsg(INFORMATION_LEVEL, 0, "    write_buffer_size=%ld",
@@ -172,7 +171,7 @@ std::vector<std::string> Rdb_cf_manager::get_cf_names(void) const {
   std::vector<std::string> names;
 
   RDB_MUTEX_LOCK_CHECK(m_mutex);
-  for (auto it : m_cf_name_map) {
+  for (const auto &it : m_cf_name_map) {
     names.push_back(it.first);
   }
   RDB_MUTEX_UNLOCK_CHECK(m_mutex);
