@@ -715,7 +715,7 @@ int Rdb_converter::encode_value_slice(
       assert(field->pack_length_in_rec() == ROCKSDB_SIZEOF_TTL_RECORD);
       assert(field->real_type() == MYSQL_TYPE_LONGLONG);
 
-      uint64 ts = uint8korr(field->ptr);
+      uint64 ts = uint8korr(field->field_ptr());
 #ifndef NDEBUG
       ts += rdb_dbug_set_ttl_rec_ts();
 #endif
