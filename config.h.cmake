@@ -185,6 +185,7 @@
  * Platform specific CMake files
  */
 #define MACHINE_TYPE "@MYSQL_MACHINE_TYPE@"
+#cmakedefine TARGET_OS_LINUX 1
 #cmakedefine LINUX_ALPINE 1
 #cmakedefine LINUX_SUSE
 #cmakedefine HAVE_LINUX_LARGE_PAGES 1
