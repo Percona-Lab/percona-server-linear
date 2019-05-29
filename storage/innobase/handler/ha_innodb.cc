@@ -23262,30 +23262,29 @@ static void innodb_temp_tablespace_encryption_update(THD *thd, SYS_VAR *var,
 
 /** Enable or disable encryption of redo logs
 @param[in]	thd	thread handle
-@param[in]	var	system variable
-@param[out]	var_ptr	current value
-@param[in]	save	immediate result from check function */
-static void update_innodb_redo_log_encrypt(THD *thd, SYS_VAR *var,
-                                           void *var_ptr, const void *save) {
-  const ulong target = *static_cast<const ulong *>(save);
-
+@param[in]	target new mode
+@return	true if error */
+static bool update_innodb_redo_log_encrypt(THD *thd, uint target) {
   if (srv_redo_log_encrypt == target) {
     /* No change */
-    return;
+    return false;
   }
 
   if (target == REDO_LOG_ENCRYPT_OFF) {
-    srv_redo_log_encrypt = REDO_LOG_ENCRYPT_OFF;
-    return;
+    return false;
   }
 
-  if (srv_redo_log_encrypt != REDO_LOG_ENCRYPT_OFF &&
-      srv_redo_log_encrypt != target) {
-    push_warning_printf(thd, Sql_condition::SL_WARNING, ER_WRONG_ARGUMENTS,
-                        " Redo log encryption mode"
-                        " can't be switched without stopping the server and"
-                        " recreating the redo logs.");
-    return;
+  if (existing_redo_encryption_mode != REDO_LOG_ENCRYPT_OFF &&
+      existing_redo_encryption_mode != target &&
+      !(existing_redo_encryption_mode == REDO_LOG_ENCRYPT_MK &&
+        target == REDO_LOG_ENCRYPT_ON)) {
+    ib::warn(ER_REDO_ENCRYPTION_CANT_BE_CHANGED,
+             log_encrypt_name(existing_redo_encryption_mode),
+             log_encrypt_name(static_cast<redo_log_encrypt_enum>(target)));
+    ib_senderrf(thd, IB_LOG_LEVEL_WARN, ER_REDO_ENCRYPTION_CANT_BE_CHANGED,
+                log_encrypt_name(existing_redo_encryption_mode),
+                log_encrypt_name(static_cast<redo_log_encrypt_enum>(target)));
+    return true;
   }
 
   if (srv_read_only_mode) {
