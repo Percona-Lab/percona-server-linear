@@ -1400,6 +1400,9 @@ static SHOW_VAR innodb_status_variables[] = {
     {"encryption_n_rowlog_blocks_decrypted",
      (char *)&export_vars.innodb_n_rowlog_blocks_decrypted, SHOW_LONGLONG,
      SHOW_SCOPE_GLOBAL},
+    {"encryption_redo_key_version",
+     (char *)&export_vars.innodb_redo_key_version, SHOW_LONGLONG,
+     SHOW_SCOPE_GLOBAL},
     {NullS, NullS, SHOW_LONG, SHOW_SCOPE_GLOBAL},
     /* Encryption */
     {"encryption_rotation_pages_read_from_cache",
@@ -4590,7 +4593,7 @@ bool innobase_fix_tablespaces_empty_uuid() {
     if (srv_enable_redo_encryption()) {
       srv_redo_log_encrypt = REDO_LOG_ENCRYPT_OFF;
     } else {
-      redo_rotate_default_key();
+      log_rotate_default_key();
     }
   }
 
@@ -4630,7 +4633,7 @@ bool innobase_fix_tablespaces_empty_uuid() {
   if (srv_enable_redo_encryption()) {
     srv_redo_log_encrypt = REDO_LOG_ENCRYPT_OFF;
   } else {
-    redo_rotate_default_key();
+    log_rotate_default_key();
   }
 
   /** Check if sys, temp need rotation to fix the empty uuid */
