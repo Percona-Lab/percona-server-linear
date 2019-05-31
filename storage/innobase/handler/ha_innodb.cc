@@ -578,8 +578,8 @@ bool meb_get_checksum_algorithm_enum(const char *algo_name,
 }
 #endif /* !UNIV_HOTBACKUP */
 
-static const char *redo_log_encrypt_names[] = {"off", "on", "master_key",
-                                               "keyring_key", NullS};
+static const char *redo_log_encrypt_names[] = {"OFF", "ON", "MASTER_KEY",
+                                               "KEYRING_KEY", NullS};
 static TYPELIB redo_log_encrypt_typelib = {
     array_elements(redo_log_encrypt_names) - 1, "redo_log_encrypt_typelib",
     redo_log_encrypt_names, nullptr};
@@ -1517,6 +1517,9 @@ static SHOW_VAR innodb_status_variables[] = {
      SHOW_SCOPE_GLOBAL},
     {"encryption_n_rowlog_blocks_decrypted",
      (char *)&export_vars.innodb_n_rowlog_blocks_decrypted, SHOW_LONGLONG,
+     SHOW_SCOPE_GLOBAL},
+    {"encryption_redo_key_version",
+     (char *)&export_vars.innodb_redo_key_version, SHOW_LONGLONG,
      SHOW_SCOPE_GLOBAL},
     {NullS, NullS, SHOW_LONG, SHOW_SCOPE_GLOBAL},
     /* Encryption */
@@ -4478,7 +4481,7 @@ static void innobase_post_recover() {
     } else {
       /* Enable encryption for UNDO tablespaces */
       mutex_enter(&undo::ddl_mutex);
-      if (srv_enable_undo_encryption()) {
+      if (srv_enable_undo_encryption(nullptr)) {
         srv_undo_log_encrypt = false;
         ut_d(ut_error);
       }
@@ -4502,7 +4505,6 @@ static void innobase_post_recover() {
     } else {
       /* Enable encryption for REDO log */
       if (srv_enable_redo_encryption()) {
-        ut_ad(false);
         srv_redo_log_encrypt = false;
         ut_d(ut_error);
       }
@@ -22476,7 +22478,7 @@ is registered as a callback with MySQL.
 @param[in]      thd       thread handle
 @param[in]      var       pointer to system variable
 @param[in]      save      possibly updated variable value
-@param[in]      value     current variable value
+  bool ret = srv_enable_undo_encryption(nullptr);
 @return error code */
 static int validate_innodb_undo_log_encrypt(THD *thd, SYS_VAR *var, void *save,
                                             struct st_mysql_value *value) {
@@ -22505,8 +22507,15 @@ static int validate_innodb_undo_log_encrypt(THD *thd, SYS_VAR *var, void *save,
   /* There would be at least 2 UNDO tablespaces */
   ut_ad(undo::spaces->size() >= FSP_IMPLICIT_UNDO_TABLESPACES);
 
+  if (!Encryption::check_keyring()) {
+    ib_senderrf(thd, IB_LOG_LEVEL_WARN, ER_DA_UNDO_NO_KEYRING);
+    ib::error(ER_UNDO_NO_KEYRING);
+    return (0);
+  }
+
   if (srv_read_only_mode) {
     ib::error(ER_IB_MSG_1051);
+    ib_senderrf(thd, IB_LOG_LEVEL_WARN, ER_IB_MSG_1051);
     return (0);
   }
 
@@ -22514,7 +22523,7 @@ static int validate_innodb_undo_log_encrypt(THD *thd, SYS_VAR *var, void *save,
   mutex_enter(&undo::ddl_mutex);
 
   /* Enable encryption for UNDO tablespaces */
-  bool ret = srv_enable_undo_encryption();
+  bool ret = srv_enable_undo_encryption(thd);
 
   if (!ret) {
     /* At this point, all UNDO tablespaces have been encrypted. */
@@ -22524,6 +22533,8 @@ static int validate_innodb_undo_log_encrypt(THD *thd, SYS_VAR *var, void *save,
   mutex_exit(&undo::ddl_mutex);
   return (0);
 }
+
+static bool update_innodb_redo_log_encrypt(THD *thd, uint target);
 
 /** Validate the value of innodb_redo_log_encrypt global variable. This function
 is registered as a callback with MySQL.
@@ -23327,24 +23338,6 @@ static void innodb_temp_tablespace_encryption_update(THD *thd, SYS_VAR *var,
   } else {
     *static_cast<bool *>(var_ptr) = *static_cast<const bool *>(save);
   }
-}
-
-/** Enable or disable encryption of redo logs
-@param[in]	thd	thread handle
-@param[in]	var	system variable
-@param[out]	var_ptr	current value
-@param[in]	save	immediate result from check function */
-static void innodb_redo_encryption_update(THD *thd, SYS_VAR *var, void *var_ptr,
-                                          const void *save) {
-  if (srv_read_only_mode) {
-    push_warning_printf(thd, Sql_condition::SL_WARNING, ER_WRONG_ARGUMENTS,
-                        " Redo log cannot be"
-                        " encrypted in innodb_read_only mode");
-    return;
-  }
-
-  *static_cast<ulong *>(var_ptr) = *static_cast<const ulong *>(save);
-
 }
 
 static SHOW_VAR innodb_status_variables_export[] = {

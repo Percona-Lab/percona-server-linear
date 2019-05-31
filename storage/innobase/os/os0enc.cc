@@ -184,6 +184,46 @@ void remove_key(const char *key_id) {
   (void)keyring_writer_service->remove(key_id, nullptr);
 }
 
+/**
+  Store key in a keyring
+
+  @param [in] key_id     Key identifier
+  @param [in] key        Key value
+  @param [in] key_length Length of the key
+  @param [in] key_type   Type of the key
+
+  @returns status of key storage
+    @retval true  Success
+    @retval fales Error
+*/
+bool store_key(const char *key_id, const unsigned char *key, size_t key_length,
+               const char *key_type) {
+  if (keyring_writer_service->store(key_id, nullptr, key, key_length,
+                                    key_type)) {
+    return false;
+  }
+  return true;
+}
+
+/**
+  Read key from a keyring
+
+  @param [in]  key_id     Key identifier
+  @param [out] key        Key value
+  @param [out] key_length Length of the key
+  @param [out] key_type   Type of the key
+
+  @returns status of key reading
+    @retval -1 Keyring error
+    @retval 0  Key absent
+    @retval 1  Key present. Check output buffers.
+*/
+int read_key(const char *key_id, unsigned char **key, size_t *key_length,
+             char **key_type) {
+  return keyring_operations_helper::read_secret(
+      innobase::encryption::keyring_reader_service, key_id, nullptr, key,
+      key_length, key_type, PSI_INSTRUMENT_ME);
+}
 #else
 
 bool init_keyring_services(SERVICE_TYPE(registry) *) { return false; }
@@ -1461,8 +1501,6 @@ byte *Encryption::encrypt(const IORequest &type, byte *src, ulint src_len,
     }
     ut::free(buf2);
     ut::free(check_buf);
-
-    fprintf(stderr, "Encrypted page:%lu.%lu\n", space_id, page_no);
   }
 #endif /* UNIV_ENCRYPT_DEBUG */
   return dst;
@@ -1483,6 +1521,22 @@ dberr_t Encryption::decrypt_log_block(const IORequest &, byte *src,
 
   ptr += LOG_BLOCK_HDR_SIZE;
   switch (m_type) {
+    case KEYRING: {
+      const ulint block_crc = log_block_calc_checksum_crc32(src);
+      const ulint written_crc = log_block_get_checksum(src);
+
+      const ulint enc_key_version = written_crc - block_crc;
+
+      if (m_key_version != enc_key_version &&
+          enc_key_version != REDO_LOG_ENCRYPT_NO_VERSION) {
+        redo_log_key *mkey =
+            redo_log_key_mgr.load_key_version(nullptr, enc_key_version);
+        m_key_version = mkey->version;
+        m_key = reinterpret_cast<unsigned char *>(mkey->key);
+      }
+    }
+    [[fallthrough]];
+
     case AES: {
       lint elen;
 

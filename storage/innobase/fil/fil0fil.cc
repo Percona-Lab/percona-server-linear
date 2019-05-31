@@ -8070,6 +8070,27 @@ inline void fil_io_set_keyring_encryption(IORequest &req_type,
   mutex_exit(&space->crypt_data->mutex);
 }
 
+static void fil_io_set_mk_encryption(IORequest &req_type, fil_space_t *space) {
+  unsigned char *key =
+      space->encryption_redo_key != nullptr
+          ? reinterpret_cast<unsigned char *>(space->encryption_redo_key->key)
+          : space->m_encryption_metadata.m_key;
+  uint version = space->encryption_redo_key != nullptr
+                     ? space->encryption_redo_key->version
+                     : REDO_LOG_ENCRYPT_NO_VERSION;
+  req_type.encryption_key(key, 32, false, space->m_encryption_metadata.m_iv, version, 0,
+                          nullptr, nullptr);
+
+  req_type.encryption_rotation(Encryption::NO_ROTATION);
+}
+
+static bool fil_keyring_skip_encryption(const page_id_t &page_id) {
+  /* Don't encrypt TRX_SYS_SPACE.TRX_SYS_PAGE_NO as it contains the address
+  to dblwr buffer */
+  return page_id.space() == TRX_SYS_SPACE &&
+         page_id.page_no() == TRX_SYS_PAGE_NO;
+}
+
 /** Set encryption information for IORequest.
 @param[in,out]  req_type        IO request
 @param[in]      page_id         page id
@@ -8134,8 +8155,33 @@ void fil_io_set_encryption(IORequest &req_type, const page_id_t &page_id,
                             space->m_encryption_metadata.m_iv, 0, 0, NULL,
                             NULL);  // not relevant for Master Key encryption
 
-    req_type.encryption_rotation(Encryption::NO_ROTATION);
-    req_type.encryption_algorithm(Encryption::AES);
+    /* Don't encrypt the page 0 of all tablespaces */
+    if (page_id.page_no() == 0) {
+      req_type.clear_encrypted();
+      return;
+    }
+
+    switch (space->m_encryption_metadata.m_type) {
+      case Encryption::KEYRING:
+        if (fil_keyring_skip_encryption(page_id)) {
+          req_type.clear_encrypted();
+          return;
+        } else {
+          ut_ad(space->crypt_data != nullptr);
+          fil_io_set_keyring_encryption(req_type, space, page_id);
+          req_type.encryption_algorithm(space->m_encryption_metadata.m_type);
+          return;
+        }
+
+      case Encryption::AES:
+        fil_io_set_mk_encryption(req_type, space);
+        req_type.encryption_algorithm(space->m_encryption_metadata.m_type);
+        return;
+      case Encryption::NONE:
+        // Already handled above
+      default:
+        ut_a(0);
+    }
   }
 
   req_type.encryption_key(space->m_encryption_metadata.m_key,

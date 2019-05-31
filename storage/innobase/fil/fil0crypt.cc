@@ -29,6 +29,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "mtr0types.h"
 #include "page0size.h"
 #include "page0zip.h"
+#include "system_key.h"
 #ifndef UNIV_INNOCHECKSUM
 #include <my_crypt.h>
 #include "buf0buf.h"
@@ -2875,3 +2876,174 @@ bool fil_space_verify_crypt_checksum(byte *page, ulint page_size,
 
   return (encrypted);
 }
+
+redo_log_key *redo_log_keys::load_latest_key(THD *thd, bool generate) {
+  size_t klen = 0;
+  char *key_type = nullptr;
+  byte *rkey = nullptr;
+
+  if (my_key_fetch(PERCONA_REDO_KEY_NAME, &key_type, nullptr,
+                   reinterpret_cast<void **>(&rkey), &klen) ||
+      rkey == nullptr || strncmp(key_type, "AES", 4) != 0) {
+    /* There is no key yet, we'll try to generate one */
+    my_free(rkey);
+    return generate ? generate_and_store_new_key(thd) : nullptr;
+  }
+
+  uint version = 0;
+  byte *rkey2 = nullptr;
+  size_t klen2 = 0;
+  const bool err = (parse_system_key(rkey, klen, &version, &rkey2, &klen2) ==
+                    reinterpret_cast<uchar *>(NullS));
+  if (err) {
+    my_free(rkey);
+    my_free(rkey2);
+    my_free(key_type);
+    return nullptr;
+  }
+
+  ut_ad(klen2 == Encryption::KEY_LEN);
+
+  auto it = m_keys.find(version);
+
+  if (it != m_keys.end() && it->second.present) {
+    ut_ad(memcmp(it->second.key, rkey2, Encryption::KEY_LEN) == 0);
+    my_free(rkey);
+    my_free(rkey2);
+    my_free(key_type);
+    return &it->second;
+  }
+
+  redo_log_key *rk = &m_keys[version];
+  rk->version = version;
+  rk->present = true;
+  memcpy(rk->key, rkey2, Encryption::KEY_LEN);
+
+  my_free(rkey);
+  my_free(rkey2);
+  my_free(key_type);
+
+  return rk;
+}
+
+redo_log_key *redo_log_keys::load_key_version(THD *thd, uint version) {
+  auto it = m_keys.find(version);
+
+  if (it != m_keys.end() && it->second.present) {
+    return &it->second;
+  }
+
+  size_t klen = 0;
+  char *key_type = nullptr;
+  byte *rkey = nullptr;
+
+  std::ostringstream percona_redo_with_ver_ss;
+  percona_redo_with_ver_ss << PERCONA_REDO_KEY_NAME << ':' << version;
+  if (my_key_fetch(percona_redo_with_ver_ss.str().c_str(), &key_type, nullptr,
+                   reinterpret_cast<void **>(&rkey), &klen) ||
+      rkey == nullptr || strncmp(key_type, "AES", 4) != 0) {
+    my_free(rkey);
+    my_free(key_type);
+    ib::error(ER_DA_REDO_ENCRYPTION_CANT_LOAD_KEY_VERSION, version);
+    if (thd) {
+      ib_senderrf(thd, IB_LOG_LEVEL_WARN,
+                  ER_DA_REDO_ENCRYPTION_CANT_LOAD_KEY_VERSION, version);
+    }
+    return nullptr;
+  }
+
+  ut_ad(klen == Encryption::KEY_LEN);
+
+  redo_log_key *rk = &m_keys[version];
+  rk->version = version;
+  rk->present = true;
+  memcpy(rk->key, rkey, Encryption::KEY_LEN);
+
+  my_free(rkey);
+  my_free(key_type);
+
+  return rk;
+}
+
+redo_log_key *redo_log_keys::generate_and_store_new_key(THD *thd) {
+  if (!innobase::encryption::generate_key(PERCONA_REDO_KEY_NAME, "AES",
+                                          Encryption::KEY_LEN)) {
+    ib::error(ER_REDO_ENCRYPTION_CANT_GENERATE_KEY);
+    if (thd) {
+      ib_senderrf(thd, IB_LOG_LEVEL_WARN,
+                  ER_DA_REDO_ENCRYPTION_CANT_GENERATE_KEY);
+    }
+    return nullptr;
+  }
+
+  char *redo_key_type = nullptr;
+  byte *rkey = nullptr;
+  size_t klen = 0;
+
+  if (innobase::encryption::read_key(PERCONA_REDO_KEY_NAME, &rkey, &klen,
+                                     &redo_key_type) != 1) {
+    ib::error(ER_REDO_ENCRYPTION_CANT_FETCH_KEY);
+    if (thd) {
+      ib_senderrf(thd, IB_LOG_LEVEL_WARN, ER_DA_REDO_ENCRYPTION_CANT_FETCH_KEY);
+    }
+    my_free(redo_key_type);
+    my_free(rkey);
+    return nullptr;
+  }
+
+  ut_ad(rkey != nullptr);
+  byte *rkey2 = nullptr;
+  size_t klen2 = 0;
+  uint version = 0;
+
+  bool err = (parse_system_key(rkey, klen, &version, &rkey2, &klen2) ==
+              reinterpret_cast<uchar *>(NullS));
+
+  ut_ad(klen2 == Encryption::KEY_LEN);
+
+  if (err) {
+    ib::error(ER_DA_REDO_ENCRYPTION_CANT_PARSE_KEY, rkey);
+    if (thd != nullptr) {
+      ib_senderrf(thd, IB_LOG_LEVEL_WARN, ER_DA_REDO_ENCRYPTION_CANT_PARSE_KEY,
+                  rkey);
+    }
+    my_free(redo_key_type);
+    my_free(rkey);
+    return nullptr;
+  }
+
+  redo_log_key *rk = &m_keys[version];
+  rk->version = version;
+  memcpy(rk->key, rkey2, Encryption::KEY_LEN);
+  rk->present = true;
+
+  my_free(redo_key_type);
+  my_free(rkey);
+  my_free(rkey2);
+
+  return rk;
+}
+
+redo_log_key *redo_log_keys::generate_new_key_without_storing() {
+  ut_ad(m_keys.empty());
+  Encryption::random_value(reinterpret_cast<byte *>(&m_keys[0].key));
+  return &m_keys[0];
+}
+
+bool redo_log_keys::store_used_keys() noexcept {
+  /* This is a for loop, but it really only should store a key with current
+  version 0 */
+  for (const auto &item : m_keys) {
+    if (!item.second.persisted()) {
+      ut_ad(item.first == 0);
+      if (my_key_store(PERCONA_REDO_KEY_NAME, "AES", nullptr, item.second.key,
+                       Encryption::KEY_LEN)) {
+        return false;
+      }
+    }
+  }
+
+  return true;
+}
+
+redo_log_keys redo_log_key_mgr;

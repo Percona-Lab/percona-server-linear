@@ -1180,18 +1180,19 @@ void srv_purge_coordinator_thread();
 void srv_worker_thread();
 
 /** Set encryption for UNDO tablespace with given space id.
+@param[in] thd          Thread handle
 @param[in] space_id     Undo tablespace id
 @param[in] mtr          Mini-transaction
 @return false for success, true otherwise */
-bool set_undo_tablespace_encryption(space_id_t space_id, mtr_t *mtr);
+bool set_undo_tablespace_encryption(THD *thd, space_id_t space_id, mtr_t *mtr);
 
 /** Enable UNDO tablespaces encryption.
 @return false for success, true otherwise. */
+bool srv_enable_undo_encryption(THD *thd);
+
 /** Enable REDO log encryption.
 @return false for success, true otherwise. */
 bool srv_enable_redo_encryption();
-
-bool srv_enable_undo_encryption();
 
 /** Get count of tasks in the queue.
  @return number of tasks in queue */
@@ -1402,6 +1403,9 @@ struct export_var_t {
                                   encrypted */
   int64_t innodb_pages_decrypted; /*!< Number of pages
                                   decrypted */
+
+  /* Current redo log encryption key versison for keyring encryption */
+  int64_t innodb_redo_key_version;
   ulint innodb_encryption_rotation_pages_read_from_cache;
   ulint innodb_encryption_rotation_pages_read_from_disk;
   ulint innodb_encryption_rotation_pages_modified;
