@@ -482,8 +482,8 @@ ibool meb_get_checksum_algorithm_enum(const char *algo_name,
 }
 #endif /* !UNIV_HOTBACKUP */
 
-static const char *redo_log_encrypt_names[] = {"off", "on", "master_key",
-                                               "keyring_key", NullS};
+static const char *redo_log_encrypt_names[] = {"OFF", "ON", "MASTER_KEY",
+                                               "KEYRING_KEY", NullS};
 static TYPELIB redo_log_encrypt_typelib = {
     array_elements(redo_log_encrypt_names) - 1, "redo_log_encrypt_typelib",
     redo_log_encrypt_names, nullptr};
@@ -21790,36 +21790,66 @@ is registered as a callback with MySQL.
 @return error code */
 static int validate_innodb_redo_log_encrypt(THD *thd, SYS_VAR *var, void *save,
                                             struct st_mysql_value *value) {
-  /* Call the default check function first. */
-  auto error = check_func_bool(thd, var, save, value);
-  if (error != 0) {
-    return (error);
+  const char *redo_log_encrypt_input;
+  char buff[STRING_BUFFER_USUAL_SIZE];
+  int len = sizeof(buff);
+  redo_log_encrypt_input = value->val_str(value, buff, &len);
+
+  bool legit_value = false;
+  uint use = 0;
+  for (; use < array_elements(redo_log_encrypt_names) - 1; use++) {
+    if (innobase_strcasecmp(redo_log_encrypt_input,
+                            redo_log_encrypt_names[use]) == 0) {
+      legit_value = true;
+      break;
+    }
   }
-  bool target = *static_cast<bool *>(save);
+
+  if (innobase_strcasecmp(redo_log_encrypt_input, "0") == 0) {
+    use = 0;
+    legit_value = true;
+  }
+
+  if (innobase_strcasecmp(redo_log_encrypt_input, "false") == 0) {
+    use = 0;
+    legit_value = true;
+  }
+
+  if (innobase_strcasecmp(redo_log_encrypt_input, "1") == 0) {
+    use = 1;
+    legit_value = true;
+  }
+
+  if (innobase_strcasecmp(redo_log_encrypt_input, "true") == 0) {
+    use = 1;
+    legit_value = true;
+  }
+
+  if (!legit_value) return 1;
 
   /* Set the default output to current value for all error cases. */
-  *static_cast<bool *>(save) = srv_redo_log_encrypt;
+  *static_cast<ulong *>(save) = srv_redo_log_encrypt;
 
-  if (srv_redo_log_encrypt == target) {
+  if (srv_redo_log_encrypt == use) {
     /* No change */
     return (0);
   }
 
   /* If encryption is to be disabled. This will just make sure I/O doesn't
   write REDO encrypted from now on. */
-  if (target == false) {
+  if (use == REDO_LOG_ENCRYPT_OFF) {
     /* Check and exit if concurrent clone in progress. */
     if (clone_check_active()) {
       my_error(ER_CLONE_IN_PROGRESS, MYF(0));
       return (ER_CLONE_IN_PROGRESS);
     }
-    *static_cast<bool *>(save) = false;
+    *static_cast<ulong *>(save) = REDO_LOG_ENCRYPT_OFF;
     return (0);
   }
 
   if (srv_read_only_mode) {
     ib::error(ER_IB_MSG_1242);
-    return (0);
+    return (ER_IB_MSG_1242);
   }
 
   /* Check and exit if concurrent clone in progress. The mark ensures
@@ -21829,15 +21859,10 @@ static int validate_innodb_redo_log_encrypt(THD *thd, SYS_VAR *var, void *save,
     return (ER_CLONE_IN_PROGRESS);
   }
 
-  /* Enable encryption for REDO tablespaces */
-  bool ret = srv_enable_redo_encryption();
-
-  if (!ret) {
-    /* At this point, REDO log is set to be encrypted. */
-    *static_cast<bool *>(save) = true;
-  }
   clone_mark_free();
-  return (0);
+  *static_cast<ulong *>(save) = use;
+
+  return 0;
 }
 
 /** Update the number of rollback segments per tablespace when the
