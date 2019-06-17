@@ -447,6 +447,11 @@ static dberr_t create_log_files(char *logfilename, size_t dirnamelen, lsn_t lsn,
     fsp_flags_set_encryption(log_space->flags);
     err = fil_set_encryption(log_space->id, alg,
                              reinterpret_cast<byte *>(mkey->key), nullptr);
+    if (err != DB_SUCCESS) {
+      ib::error(ER_REDO_ENCRYPTION_FAILED);
+
+      return (DB_ERROR);
+    }
     log_space->encryption_redo_key = mkey;
     log_space->encryption_key_version = REDO_LOG_ENCRYPT_NO_VERSION;
 
@@ -1351,7 +1356,7 @@ static dberr_t srv_undo_tablespaces_construct(bool create_new_db) {
   }
 
   if (srv_undo_log_encrypt) {
-    ut_d(bool ret =) srv_enable_undo_encryption(false);
+    ut_d(bool ret =) srv_enable_undo_encryption(nullptr, false);
     ut_ad(!ret);
   }
 

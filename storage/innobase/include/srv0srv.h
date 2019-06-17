@@ -1207,11 +1207,12 @@ void srv_purge_coordinator_thread();
 void srv_worker_thread();
 
 /** Set encryption for UNDO tablespace with given space id.
+@param[in] thd          Thread handle
 @param[in] space_id     Undo tablespace id
 @param[in] mtr          Mini-transaction
 @param[in] is_boot	true if it is called during server start up.
 @return false for success, true otherwise */
-bool set_undo_tablespace_encryption(space_id_t space_id, mtr_t *mtr,
+bool set_undo_tablespace_encryption(THD *thd, space_id_t space_id, mtr_t *mtr,
                                     bool is_boot);
 
 /** Enable UNDO tablespaces encryption.
@@ -1219,7 +1220,7 @@ bool set_undo_tablespace_encryption(space_id_t space_id, mtr_t *mtr,
                         case, default master key will be used which will be
                         rotated later with actual master key from keyring.
 @return false for success, true otherwise. */
-bool srv_enable_undo_encryption(bool is_boot);
+bool srv_enable_undo_encryption(THD *thd, bool is_boot);
 
 /** Get count of tasks in the queue.
  @return number of tasks in queue */
@@ -1268,15 +1269,15 @@ void undo_spaces_deinit();
 /** Enables master key redo encryption.
  * Doesn't depend on the srv_redo_log_encrypt variable, used by
  * SET innodb_redo_log_encrypt = MK. */
-bool srv_enable_redo_encryption_mk();
+bool srv_enable_redo_encryption_mk(THD *thd);
 
 /** Enables master key redo encryption.
  * Doesn't depend on the srv_redo_log_encrypt variable, used by
  * SET innodb_redo_log_encrypt = RK. */
-bool srv_enable_redo_encryption_rk();
+bool srv_enable_redo_encryption_rk(THD *thd);
 
 /** Enables redo log encryption based on srv_redo_log_encrypt. */
-bool srv_enable_redo_encryption();
+bool srv_enable_redo_encryption(THD *thd);
 
 /** Set redo log variable for performance schema global status.
 @param[in]	enable	true => redo log enabled, false => redo log disabled */

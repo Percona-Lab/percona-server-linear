@@ -4377,7 +4377,7 @@ static void innobase_post_recover() {
     } else {
       /* Enable encryption for UNDO tablespaces */
       mutex_enter(&undo::ddl_mutex);
-      if (srv_enable_undo_encryption(true)) {
+      if (srv_enable_undo_encryption(nullptr, true)) {
         ut_ad(false);
         srv_undo_log_encrypt = false;
       }
@@ -4400,7 +4400,7 @@ static void innobase_post_recover() {
       srv_redo_log_encrypt = false;
     } else {
       /* Enable encryption for REDO log */
-      if (srv_enable_redo_encryption()) {
+      if (srv_enable_redo_encryption(nullptr)) {
         ut_ad(false);
         srv_redo_log_encrypt = false;
       }
@@ -4687,7 +4687,7 @@ bool innobase_fix_tablespaces_empty_uuid() {
        server run. These functions are also called later, when the master key is
        correctly set up, later in this function.
      */
-    if (srv_enable_redo_encryption()) {
+    if (srv_enable_redo_encryption(nullptr)) {
       srv_redo_log_encrypt = REDO_LOG_ENCRYPT_OFF;
     } else {
       log_rotate_default_key();
@@ -4727,7 +4727,7 @@ bool innobase_fix_tablespaces_empty_uuid() {
     return (true);
   }
 
-  if (srv_enable_redo_encryption()) {
+  if (srv_enable_redo_encryption(nullptr)) {
     srv_redo_log_encrypt = REDO_LOG_ENCRYPT_OFF;
   } else {
     log_rotate_default_key();
@@ -22334,8 +22334,15 @@ static int validate_innodb_undo_log_encrypt(THD *thd, SYS_VAR *var, void *save,
   /* There would be at least 2 UNDO tablespaces */
   ut_ad(undo::spaces->size() >= FSP_IMPLICIT_UNDO_TABLESPACES);
 
+  if (!Encryption::check_keyring()) {
+    ib_senderrf(thd, IB_LOG_LEVEL_WARN, ER_DA_UNDO_NO_KEYRING);
+    ib::error(ER_UNDO_NO_KEYRING);
+    return (0);
+  }
+
   if (srv_read_only_mode) {
     ib::error(ER_IB_MSG_1051);
+    ib_senderrf(thd, IB_LOG_LEVEL_WARN, ER_IB_MSG_1051);
     return (0);
   }
 
@@ -22343,7 +22350,7 @@ static int validate_innodb_undo_log_encrypt(THD *thd, SYS_VAR *var, void *save,
   mutex_enter(&undo::ddl_mutex);
 
   /* Enable encryption for UNDO tablespaces */
-  bool ret = srv_enable_undo_encryption(false);
+  bool ret = srv_enable_undo_encryption(thd, false);
 
   if (!ret) {
     /* At this point, all UNDO tablespaces have been encrypted. */
@@ -23313,43 +23320,39 @@ static bool update_innodb_redo_log_encrypt(THD *thd, uint target) {
       existing_redo_encryption_mode != target &&
       !(existing_redo_encryption_mode == REDO_LOG_ENCRYPT_MK &&
         target == REDO_LOG_ENCRYPT_ON)) {
-    ib::warn(ER_REDO_ENCRYPTION_CANT_BE_CHANGED,
-             log_encrypt_name(existing_redo_encryption_mode),
-             log_encrypt_name(static_cast<redo_log_encrypt_enum>(target)));
-    ib_senderrf(thd, IB_LOG_LEVEL_WARN, ER_REDO_ENCRYPTION_CANT_BE_CHANGED,
+    ib::error(ER_REDO_ENCRYPTION_CANT_BE_CHANGED,
+              log_encrypt_name(existing_redo_encryption_mode),
+              log_encrypt_name(static_cast<redo_log_encrypt_enum>(target)));
+    ib_senderrf(thd, IB_LOG_LEVEL_WARN, ER_DA_REDO_ENCRYPTION_CANT_BE_CHANGED,
                 log_encrypt_name(existing_redo_encryption_mode),
                 log_encrypt_name(static_cast<redo_log_encrypt_enum>(target)));
     return true;
   }
 
   if (srv_read_only_mode) {
-    push_warning_printf(thd, Sql_condition::SL_WARNING, ER_WRONG_ARGUMENTS,
-                        " Redo log cannot be"
-                        " encrypted in innodb_read_only mode");
-    return;
+    ib::error(ER_IB_MSG_1242);
+    ib_senderrf(thd, IB_LOG_LEVEL_WARN, ER_IB_MSG_1242);
+    return true;
+  }
+
+  ut_ad(strlen(server_uuid) > 0);
+
+  if (!Encryption::check_keyring()) {
+    ib_senderrf(thd, IB_LOG_LEVEL_WARN, ER_DA_REDO_ENCRYPTION_KEYRING);
+    ib::error(ER_REDO_ENCRYPTION_KEYRING);
+    return true;
   }
 
   if (target == REDO_LOG_ENCRYPT_MK || target == REDO_LOG_ENCRYPT_ON) {
-    ut_ad(strlen(server_uuid) > 0);
-    if (srv_enable_redo_encryption_mk()) {
-      return;
-    }
-    srv_redo_log_encrypt = target;
-    return;
+    return srv_enable_redo_encryption_mk(thd);
   }
 
   if (target == REDO_LOG_ENCRYPT_RK) {
-    ut_ad(strlen(server_uuid) > 0);
-    if (srv_enable_redo_encryption_rk()) {
-      return;
-    }
-  return true;
-
-    srv_redo_log_encrypt = target;
-    return;
+    return srv_enable_redo_encryption_rk(thd);
   }
 
   ut_ad(0);
+  return true;
 }
 
 static SHOW_VAR innodb_status_variables_export[] = {
