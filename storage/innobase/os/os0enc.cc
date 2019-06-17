@@ -184,6 +184,46 @@ void remove_key(const char *key_id) {
   (void)keyring_writer_service->remove(key_id, nullptr);
 }
 
+/**
+  Store key in a keyring
+
+  @param [in] key_id     Key identifier
+  @param [in] key        Key value
+  @param [in] key_length Length of the key
+  @param [in] key_type   Type of the key
+
+  @returns status of key storage
+    @retval true  Success
+    @retval fales Error
+*/
+bool store_key(const char *key_id, const unsigned char *key, size_t key_length,
+               const char *key_type) {
+  if (keyring_writer_service->store(key_id, nullptr, key, key_length,
+                                    key_type)) {
+    return false;
+  }
+  return true;
+}
+
+/**
+  Read key from a keyring
+
+  @param [in]  key_id     Key identifier
+  @param [out] key        Key value
+  @param [out] key_length Length of the key
+  @param [out] key_type   Type of the key
+
+  @returns status of key reading
+    @retval -1 Keyring error
+    @retval 0  Key absent
+    @retval 1  Key present. Check output buffers.
+*/
+int read_key(const char *key_id, unsigned char **key, size_t *key_length,
+             char **key_type) {
+  return keyring_operations_helper::read_secret(
+      innobase::encryption::keyring_reader_service, key_id, nullptr, key,
+      key_length, key_type, PSI_INSTRUMENT_ME);
+}
 #else
 
 bool init_keyring_services(SERVICE_TYPE(registry) *) { return false; }
@@ -1497,7 +1537,8 @@ dberr_t Encryption::decrypt_log_block(const IORequest &type, byte *src,
 
       if (m_key_version != enc_key_version &&
           enc_key_version != REDO_LOG_ENCRYPT_NO_VERSION) {
-        redo_log_key *mkey = redo_log_key_mgr.load_key_version(enc_key_version);
+        redo_log_key *mkey =
+            redo_log_key_mgr.load_key_version(nullptr, enc_key_version);
         m_key_version = mkey->version;
         m_key = reinterpret_cast<unsigned char *>(mkey->key);
       }
