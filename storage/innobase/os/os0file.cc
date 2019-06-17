@@ -2205,7 +2205,9 @@ static Block *os_file_encrypt_log(const IORequest &type, void *&buf,
   Encryption encryption(type.encryption_algorithm());
   Block *block = NULL;
 
-  ut_ad(type.is_write() && type.is_encrypted() && type.is_log());
+  ut_ad(type.is_write());
+  ut_ad(type.is_encrypted());
+  ut_ad(type.is_log());
   ut_ad(*n % OS_FILE_LOG_BLOCK_SIZE == 0);
 
   if (*n <= BUFFER_BLOCK_SIZE - os_io_ptr_align) {
@@ -9748,7 +9750,8 @@ dberr_t Encryption::decrypt_log_block(const IORequest &type, byte *src,
 
       if (m_key_version != enc_key_version &&
           enc_key_version != REDO_LOG_ENCRYPT_NO_VERSION) {
-        redo_log_key *mkey = redo_log_key_mgr.load_key_version(enc_key_version);
+        redo_log_key *mkey =
+            redo_log_key_mgr.load_key_version(nullptr, enc_key_version);
         m_key_version = mkey->version;
         m_key = reinterpret_cast<unsigned char *>(mkey->key);
       }
