@@ -908,6 +908,7 @@ static inline bool is_instant(const Alter_inplace_info *ha_alter_info) {
       ha_alter_info->handler_flags & ~(INNOBASE_INPLACE_IGNORE);
 
   if ((Encryption::none_explicitly_specified(
+           ha_alter_info->create_info->used_fields,
            ha_alter_info->create_info->encrypt_type.str) &&
        (Encryption::is_keyring(old_table->s->encrypt_type.str) ||
         Encryption::is_empty(old_table->s->encrypt_type.str))) ||
@@ -4357,7 +4358,6 @@ template <typename Table>
   bool build_fts_common = false;
 
   ha_innobase_inplace_ctx *ctx;
-  KeyringEncryptionKeyIdInfo keyring_encryption_key_id;
 
   DBUG_TRACE;
 

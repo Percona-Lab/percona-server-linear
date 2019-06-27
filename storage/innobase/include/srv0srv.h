@@ -867,7 +867,7 @@ extern bool srv_print_lock_wait_timeout_info;
 
 extern bool srv_cmp_per_index_enabled;
 
-extern ulong srv_encrypt_tables;
+extern enum_default_table_encryption srv_default_table_encryption;
 
 extern ulong srv_encrypt_tables;
 
