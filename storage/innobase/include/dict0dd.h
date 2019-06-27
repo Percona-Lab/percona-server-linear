@@ -1588,6 +1588,8 @@ void get_field_types(const dd::Table *dd_tab, const dict_table_t *m_table,
                      ulint &prtype);
 #endif
 
+bool dd_is_table_in_encrypted_tablespace(const char *name);
+
 /* Sets tablespace's DD encryption flag.
 @param[in] Thread       THD
 @param[in] space_name   name of the space for which DD encryption flag is to be
