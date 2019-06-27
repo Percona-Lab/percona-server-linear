@@ -82,6 +82,23 @@ $SIG{INT} = sub { mtr_error("Got ^C signal"); };
 
 sub env_or_val($$) { defined $ENV{ $_[0] } ? $ENV{ $_[0] } : $_[1] }
 
+# set_term_args(user_specified_string, term_exe_variable, term_args_arr, title)
+sub set_term_args {
+  my $term_cmd = $_[0];
+  if ($term_cmd =~ /^ *$/) {
+    mtr_error("MTR_TERM is defined, but empty");
+  }
+  my @term_args = split / /, $term_cmd;
+  $_[1] = shift @term_args;
+  foreach my $t_arg (@term_args) {
+    if ($t_arg eq "%title%") {
+      mtr_add_arg($_[2], "$_[3]");
+    } else {
+      mtr_add_arg($_[2], $t_arg);
+    }
+  }
+}
+
 # Local variables
 my $opt_boot_dbx;
 my $opt_boot_ddd;
@@ -143,6 +160,8 @@ my $opt_testcase_timeout   = $ENV{MTR_TESTCASE_TIMEOUT} || 15;         # minutes
 my $opt_valgrind_clients   = 0;
 my $opt_valgrind_mysqld    = 0;
 my $opt_valgrind_mysqltest = 0;
+my $opt_mtr_term_args      = env_or_val(MTR_TERM => "xterm -title %title% -e");
+my $opt_lldb_cmd           = env_or_val(MTR_LLDB => "lldb");
 
 # Options used when connecting to an already running server
 my %opts_extern;
@@ -211,20 +230,20 @@ our $opt_suite_opt;
 our $opt_summary_report;
 our $opt_vardir;
 our $opt_xml_report;
-our $opt_gterm;
 
 #
 # Suites run by default (i.e. when invoking ./mtr without parameters)
 #
 our $DEFAULT_SUITES = "auth_sec,binlog_gtid,binlog_nogtid,clone,collations,connection_control,encryption,federated,funcs_2,gcol,sysschema,gis,innodb,innodb_fts,innodb_gis,innodb_undo,innodb_zip,json,main,opt_trace,parts,perfschema,query_rewrite_plugins,rpl,rpl_gtid,rpl_nogtid,secondary_engine,service_status_var_registration,service_sys_var_registration,service_udf_registration,sys_vars,binlog,test_service_sql_api,test_services,x,"
   # Percona suites
-  ."funcs_1,jp,stress,engines/iuds,engines/funcs,group_replication,audit_null,"
-  ."interactive_utilities,"
-  ."audit_log,"
-  ."tokudb.add_index,tokudb.alter_table,tokudb,tokudb.bugs,tokudb.parts,"
-  ."tokudb.rpl,tokudb.perfschema,"
-  ."rocksdb,rocksdb.rpl,rocksdb.sys_vars,"
-  ."percona-pam-for-mysql";
+  ."audit_log,binlog_57_decryption,percona-pam-for-mysql,"
+  ."keyring_vault,"
+  ."rocksdb,rocksdb_rpl,rocksdb_sys_vars,"
+  ."rpl_encryption,"
+  ."tokudb,tokudb_add_index,tokudb_alter_table,tokudb_bugs,tokudb_parts,"
+  ."tokudb_perfschema,tokudb_rpl,"
+  # MySQL suites tested by Percona by default
+  ."audit_null,engines/iuds,engines/funcs,funcs_1,group_replication,interactive_utilities,jp,stress";
 
 # End of list of default suites
 
@@ -563,6 +582,8 @@ sub main {
   mtr_report("Collecting tests");
   my $tests = collect_test_cases($opt_reorder, $opt_suites,
                                  \@opt_cases,  $opt_skip_test_list);
+  my $all_tests;
+  @$all_tests = @$tests;
   mark_time_used('collect');
 
   check_secondary_engine_option($tests) if $secondary_engine_support;
@@ -650,7 +671,8 @@ sub main {
   # Also read from any plugin local or suite specific plugin.defs
   my $plugin_def =
     "$basedir/internal/cloud/mysql-test/suite/*/plugin.defs " .
-    "suite/*/plugin.defs ";
+    "suite/*/plugin.defs " .
+    "$basedir/plugin/*/tests/mtr/plugin.defs ";
 
   $plugin_def = $plugin_def . "$basedir/internal/mysql-test/include/plugin.defs"
     if (-e "$basedir/internal/mysql-test/include/plugin.defs");
@@ -727,10 +749,23 @@ sub main {
   }
 
   if (@$completed != $num_tests) {
-    # Not all tests completed, failure
+    # Not all tests completed
     mtr_report();
     mtr_report("Only ", int(@$completed), " of $num_tests completed.");
-    mtr_error("Not all tests completed");
+    mtr_report("Not all tests completed. This means that a test scheduled for a worker did not report anything, the worker most likely crashed.");
+
+    my %comp;
+
+    foreach ( @$completed ) {
+      $comp{$_->{name}} = 1;
+    }
+    for (my $i = 0 ; $i <= @$all_tests ; $i++) {
+      my $t = $all_tests->[$i];
+      if (exists $t->{name} && !exists $comp{$t->{name}}) {
+        mtr_report("Missing result for testcase: ", $t->{name});
+      }
+    }
+
   }
 
   mark_time_used('init');
@@ -1517,8 +1552,6 @@ sub command_line_setup {
     'debugger=s'           => \$opt_debugger,
     'gdb'                  => \$opt_gdb,
     'gdb-secondary-engine' => \$opt_gdb_secondary_engine,
-    # For using gnome-terminal when using --gdb option
-    'gterm'                => \$opt_gterm,
     'lldb'                 => \$opt_lldb,
     'manual-boot-gdb'      => \$opt_manual_boot_gdb,
     'manual-dbx'           => \$opt_manual_dbx,
@@ -6904,16 +6937,8 @@ sub gdb_arguments {
   }
 
   $$args = [];
-  if ($opt_gterm) {
-    mtr_add_arg($$args, "--title");
-    mtr_add_arg($$args, "$type");
-    mtr_add_arg($$args, "--wait");
-    mtr_add_arg($$args, "--");
-  } else {
-    mtr_add_arg($$args, "-title");
-    mtr_add_arg($$args, "$type");
-    mtr_add_arg($$args, "-e");
-  }
+  my $term_exe;
+  set_term_args($opt_mtr_term_args, $term_exe, $$args, $type);
 
   if ($exe_libtool) {
     mtr_add_arg($$args, $exe_libtool);
@@ -6925,11 +6950,7 @@ sub gdb_arguments {
   mtr_add_arg($$args, "$gdb_init_file");
   mtr_add_arg($$args, "$$exe");
 
-  if ($opt_gterm) {
-    $$exe = "gnome-terminal";
-  } else {
-    $$exe = "xterm";
-  }
+  $$exe = $term_exe;
 }
 
 # Modify the exe and args so that program is run in lldb
@@ -6957,16 +6978,15 @@ sub lldb_arguments {
   }
 
   $$args = [];
-  mtr_add_arg($$args, "-title");
-  mtr_add_arg($$args, "$type");
-  mtr_add_arg($$args, "-e");
+  my $term_exe;
+  set_term_args($opt_mtr_term_args, $term_exe, $$args, $type);
 
-  mtr_add_arg($$args, "lldb");
+  mtr_add_arg($$args, $opt_lldb_cmd);
   mtr_add_arg($$args, "-s");
   mtr_add_arg($$args, "$lldb_init_file");
   mtr_add_arg($$args, "$$exe");
 
-  $$exe = "xterm";
+  $$exe = $term_exe;
 }
 
 # Modify the exe and args so that program is run in ddd
@@ -7515,6 +7535,20 @@ Options for debugging the product
                         0 for no limit. Set it's default with MTR_MAX_TEST_FAIL.
   strace-client         Create strace output for mysqltest client.
   strace-server         Create strace output for mysqltest server.
+
+Environment variables controlling debugging parameters
+  MTR_TERM              Configures the terminal command to run the debugger.
+                        Defaults to xterm, but most other visual terminals
+                        can also be specified. Examples:
+                        MTR_TERM="gnome-terminal --title %title% --wait -x"
+                        MTR_TERM="urxwt -title %title% -e"
+                        Note: older version of gnome-terminal did not support
+                        --wait - those versions aren't compatible.
+  MTR_LLDB              Configures the lldb executable when debugging with
+                        lldb, the default is "lldb". This is useful for
+                        using lldb on a non default path, or on distributions
+                        with versioned lldb binaries. Example:
+                        MTR_LLDB=lldb-8.0
 
 Options for lock_order
 
