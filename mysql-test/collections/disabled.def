@@ -99,6 +99,8 @@ rpl_gtid.rpl_gtid_while_super_read_only : Bug#8423 Fails on PS, even on earlier 
 
 # rpl_nogtid suite tests
 rpl_nogtid.rpl_perfschema_applier_xa_status_check : BUG#27914287 Disabled until the WL#9075 (Performance Schema, XA Transactions) be implemented
+rpl_nogtid.rpl_semi_sync_group_commit_deadlock : BUG#80581 percona https://bugs.mysql.com/bug.php?id=80581
+rpl_nogtid.rpl_semi_sync_non_group_commit_deadlock : BUG#80581 percona https://bugs.mysql.com/bug.php?id=80581
 rpl_nogtid.rpl_binlog_format_errors               : BUG#29776083 EXPLICIT BINLOG INJECTION WITH SELF LOGGING ENGINES IS BROKEN
 
 # rpl suite tests
@@ -118,7 +120,6 @@ sysschema.v_wait_classes_global_by_avg_latency : BUG#21550054 Test fails too oft
 rocksdb.cons_snapshot_serializable : BUG#0 MyRocks does not yet support ISO serializable
 rocksdb.level_read_uncommitted : BUG#0 MyRocks does not yet suppore ISO read uncommitted
 rocksdb.level_serializable : BUG#0 MyRocks does not yet support ISO serializable
-rocksdb.mysqlbinlog_gtid_skip_empty_trans_rocksdb : BUG#25 MYR-25
 rocksdb.slow_query_log : BUG#26 MYR-26
 # 8.0
 rocksdb.allow_to_start_after_corruption : BUG#4584 PS-4584
