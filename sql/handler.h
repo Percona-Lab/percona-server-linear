@@ -2125,6 +2125,14 @@ using upgrade_get_compression_dict_data_t =
     bool (*)(THD *thd, compression_dict_data_vec_t &names_vector);
 
 /**
+ @brief
+ This is used by encryption threads. It updates innodb's copy of
+ default_table_encryption variable according to the parameter.
+ @param value for innodb's copy of default_table_encryption
+*/
+using fix_default_table_encryption_t = void (*)(ulong);
+
+/**
   @brief
   Enable or Disable SE write ahead logging.
 
@@ -2905,6 +2913,7 @@ struct handlerton {
   notify_truncate_table_t notify_truncate_table;
   rotate_encryption_master_key_t rotate_encryption_master_key;
   fix_tablespaces_empty_uuid_t fix_tablespaces_empty_uuid;
+  fix_default_table_encryption_t fix_default_table_encryption;
   upgrade_get_compression_dict_data_t upgrade_get_compression_dict_data;
   redo_log_set_state_t redo_log_set_state;
 
