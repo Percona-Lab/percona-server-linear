@@ -2162,7 +2162,7 @@ void Fil_shard::space_add(fil_space_t *space, fil_encryption_t mode) {
       fil_crypt_threads_event &&
       (mode == FIL_ENCRYPTION_ON ||
        (mode == FIL_ENCRYPTION_DEFAULT &&
-        srv_encrypt_tables == SRV_ENCRYPT_TABLES_KEYRING_ON))) {
+        srv_default_table_encryption == DEFAULT_TABLE_ENC_KEYRING_ON))) {
     /* Key rotation is not enabled, need to inform background
     encryption threads. */
     UT_LIST_ADD_LAST(m_rotation_list, space);
@@ -2758,8 +2758,12 @@ dberr_t Fil_shard::get_file_size(fil_node_t *file, bool read_only_mode) {
   recovery error due to differing encryption flags, ensure that the
   fil_space_t instance has the same setting as the header page. First
   clear the encryption flag, then set it from the flags found in the
-  file. */
-  if (recv_recovery_is_on()) {
+  file.
+  It is also possible that for tables, general tablespaces encryption flag
+  is updated in DD but server crashed before encryption flag is updated on
+  disk.
+  Below we print warning in such case. */
+  if (space->crypt_data == nullptr && recv_recovery_is_on()) {
     fsp_flags_unset_encryption(space->flags);
     space->flags |= flags & FSP_FLAGS_MASK_ENCRYPTION;
   }
@@ -2774,7 +2778,7 @@ dberr_t Fil_shard::get_file_size(fil_node_t *file, bool read_only_mode) {
   // in case of Keyring encryption it can so happen that there will be a crash
   // after all pages of tablespace is rotated and DD is updated, but page0 of
   // the tablespace has not been yet update. We handle this here.
-  if (space->crypt_data != NULL &&
+  if (space->crypt_data != nullptr &&
       ((FSP_FLAGS_GET_ENCRYPTION(fil_space_flags) &&
         space->crypt_data->min_key_version == 0) ||
        (!FSP_FLAGS_GET_ENCRYPTION(fil_space_flags) &&
@@ -6106,7 +6110,7 @@ static dberr_t fil_create_tablespace(
   // Create crypt data if the tablespace is either encrypted or user has
   // requested it to remain unencrypted. */
   if (mode == FIL_ENCRYPTION_ON || mode == FIL_ENCRYPTION_OFF ||
-      (srv_encrypt_tables == SRV_ENCRYPT_TABLES_ONLINE_TO_KEYRING ||
+      (srv_default_table_encryption == DEFAULT_TABLE_ENC_ONLINE_TO_KEYRING ||
        keyring_encryption_key_id.was_encryption_key_id_set)) {
     crypt_data = fil_space_create_crypt_data(
         mode, keyring_encryption_key_id.id);
