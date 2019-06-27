@@ -907,6 +907,7 @@ static inline bool is_instant(const Alter_inplace_info *ha_alter_info) {
       ha_alter_info->handler_flags & ~(INNOBASE_INPLACE_IGNORE);
 
   if ((Encryption::none_explicitly_specified(
+           ha_alter_info->create_info->used_fields,
            ha_alter_info->create_info->encrypt_type.str) &&
        (Encryption::is_keyring(old_table->s->encrypt_type.str) ||
         Encryption::is_empty(old_table->s->encrypt_type.str))) ||
@@ -4360,6 +4361,9 @@ template <typename Table>
 
   ha_innobase_inplace_ctx *ctx;
   KeyringEncryptionKeyIdInfo keyring_encryption_key_id;
+  bool none_explicitly_specified = Encryption::none_explicitly_specified(
+      ha_alter_info->create_info->used_fields,
+      ha_alter_info->create_info->encrypt_type.str);
 
   DBUG_TRACE;
 
@@ -4744,15 +4748,6 @@ template <typename Table>
 
     const char *encrypt;
     encrypt = ha_alter_info->create_info->encrypt_type.str;
-    /* If encryption option is specified, then it must be
-    innodb-file-per-table tablespace. Otherwise case would
-    have already been blocked at
-    create_option_tablespace_is_valid(). */
-    if (encrypt) {
-      ut_ad(flags2 & DICT_TF2_USE_FILE_PER_TABLE);
-      ut_ad(!DICT_TF_HAS_SHARED_SPACE(flags));
-    }
-
     key_id = ha_alter_info->create_info->encryption_key_id;
 
     // re-encrypting, check that key used to encrypt table is present
@@ -4777,7 +4772,7 @@ template <typename Table>
       } else if (Encryption::is_keyring(old_table->s->encrypt_type.str) &&
                  (old_table->s->encryption_key_id !=
                       ha_alter_info->create_info->encryption_key_id ||
-                  Encryption::none_explicitly_specified(encrypt))) {
+                  none_explicitly_specified)) {
         // it is KEYRING encryption - check if old's table encryption key is
         // available
         if (Encryption::tablespace_key_exists(
@@ -4792,14 +4787,12 @@ template <typename Table>
       }
     }
 
-    if (Encryption::none_explicitly_specified(encrypt))
+    if (none_explicitly_specified)
       mode = FIL_ENCRYPTION_OFF;
     else if (Encryption::is_keyring(encrypt) ||
-             ((srv_encrypt_tables == SRV_ENCRYPT_TABLES_ONLINE_TO_KEYRING ||
-               srv_encrypt_tables ==
-                   SRV_ENCRYPT_TABLES_ONLINE_TO_KEYRING_FORCE) &&
-              !Encryption::none_explicitly_specified(
-                  ha_alter_info->create_info->encrypt_type.str) &&
+             (srv_default_table_encryption ==
+                  DEFAULT_TABLE_ENC_ONLINE_TO_KEYRING &&
+              !none_explicitly_specified &&
               !Encryption::is_master_key_encryption(encrypt)) ||
              ha_alter_info->create_info->was_encryption_key_id_set) {
       mode = Encryption::is_keyring(encrypt) ? FIL_ENCRYPTION_ON
@@ -4825,9 +4818,8 @@ template <typename Table>
 
       if (mode == FIL_ENCRYPTION_ON ||
           (mode == FIL_ENCRYPTION_DEFAULT &&
-           (srv_encrypt_tables == SRV_ENCRYPT_TABLES_ONLINE_TO_KEYRING ||
-            srv_encrypt_tables ==
-                SRV_ENCRYPT_TABLES_ONLINE_TO_KEYRING_FORCE))) {
+           srv_default_table_encryption ==
+               DEFAULT_TABLE_ENC_ONLINE_TO_KEYRING)) {
         DICT_TF2_FLAG_SET(ctx->new_table, DICT_TF2_ENCRYPTION_FILE_PER_TABLE);
       }
     } else if (!(ctx->new_table->flags2 & DICT_TF2_USE_FILE_PER_TABLE) &&
@@ -5621,6 +5613,7 @@ bool ha_innobase::prepare_inplace_alter_table_impl(
 
   if (ha_alter_info->handler_flags & Alter_inplace_info::CHANGE_CREATE_OPTION ||
       (Encryption::should_be_keyring_encrypted(
+           ha_alter_info->create_info->used_fields,
            ha_alter_info->create_info->encrypt_type.str) &&
        innobase_spatial_exist(
            altered_table))) {  // We need to make sure spatial index was not
