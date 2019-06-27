@@ -8803,7 +8803,6 @@ void Encryption::get_master_key(ulint *master_key_id, byte **master_key) {
   /* Check for s_master_key_id again, as a parallel rotation might have caused
   it to change. */
   if (s_master_key_id == ENCRYPTION_DEFAULT_MASTER_KEY_ID) {
-    ut_ad(strlen(server_uuid) > 0);
     memset(s_uuid, 0x0, sizeof(s_uuid));
 
     /* If m_master_key is ENCRYPTION_DEFAULT_MASTER_KEY_ID, it means there's
@@ -8905,13 +8904,7 @@ bool Encryption::fill_encryption_info(byte *key, byte *iv, byte *encrypt_info,
   /* Get master key from key ring. For bootstrap, we use a default
   master key which master_key_id is 0. */
   if (encrypt_key) {
-    if (is_boot
-#ifndef UNIV_HOTBACKUP
-        || (strlen(server_uuid) == 0)
-#endif
-    ) {
-      master_key_id = 0;
-
+    if (is_boot || strlen(server_uuid) == 0) {
       master_key = static_cast<byte *>(ut_zalloc_nokey(ENCRYPTION_KEY_LEN));
 
       ut_ad(ENCRYPTION_KEY_LEN >= sizeof(ENCRYPTION_DEFAULT_MASTER_KEY));

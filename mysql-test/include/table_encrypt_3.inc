@@ -203,7 +203,7 @@ CREATE TABLE tde_db.t_encrypt (a int, b text) ENCRYPTION="Y" TABLESPACE=`s_alt1`
 SHOW WARNINGS;
 DROP TABLESPACE s_alt1;
 
---error ER_CANNOT_USE_ENCRYPTION_CLAUSE
+--error ER_ILLEGAL_HA_CREATE_OPTION
 CREATE TEMPORARY TABLE tde_db.t_encrypt (a int, b text) ENCRYPTION="Y" ENGINE=InnoDB;
 SHOW WARNINGS;
 
@@ -433,16 +433,12 @@ send call tde_db.read_t_encrypt();
 --echo # In connection con5 - Running "alter instance"
 connect (con5,localhost,root,,);
 --send_eval call tde_db.rotate_master_key($number_of_MK_rotations)
---echo # In connection con6 - Running "alter instance"
+--echo # In connection con6 - Running "create table"
 connect (con6,localhost,root,,);
---send_eval call tde_db.rotate_master_key($number_of_MK_rotations)
+--send call tde_db.create_encrypt_table("Y")
 --enable_query_log
 --echo # In connection con7 - Running "create table"
 connect (con7,localhost,root,,);
-send call tde_db.create_encrypt_table("Y");
---enable_query_log
---echo # In connection con8 - Running "create table"
-connect (con8,localhost,root,,);
 send call tde_db.create_encrypt_table("N");
 --enable_query_log
 
@@ -488,12 +484,6 @@ connection con7;
 reap;
 --enable_query_log
 disconnect con7;
---echo # In connection con8
-connection con8;
---disable_query_log
-reap;
---enable_query_log
-disconnect con8;
 
 
 connection default;
