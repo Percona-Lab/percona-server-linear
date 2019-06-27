@@ -211,6 +211,13 @@ class Encryption {
   @return true if no algorithm requested */
   [[nodiscard]] static bool is_none(const char *algorithm) noexcept;
 
+  /** Check if the NO algorithm was explicitly specified.
+  @param[in]      algorithm       Encryption algorithm to check
+  @return true if no algorithm explicitly requested */
+  static bool none_explicitly_specified(ulong create_info_used_fields,
+                                        const char *algorithm) noexcept
+      MY_ATTRIBUTE((warn_unused_result));
+
   static bool is_master_key_encryption(const char *algorithm) noexcept
       MY_ATTRIBUTE((warn_unused_result));
   [[nodiscard]] static bool is_empty(const char *algorithm) noexcept;
@@ -219,7 +226,8 @@ class Encryption {
 
   [[nodiscard]] static bool is_online_encryption_on() noexcept;
 
-  static bool should_be_keyring_encrypted(const char *algorithm) noexcept
+  static bool should_be_keyring_encrypted(ulong create_info_used_fields,
+                                          const char *algorithm) noexcept
       MY_ATTRIBUTE((warn_unused_result));
 
   /** Generate random encryption value for key and iv.
