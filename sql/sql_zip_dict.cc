@@ -21,6 +21,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "sql/sql_zip_dict.h"
 
 #include <iostream>
+#include "sql/dd/impl/bootstrap/bootstrap_ctx.h"  // DD_bootstrap_ctx
 #include "sql/dd/impl/bootstrap/bootstrapper.h"
 #include "sql/dd/impl/transaction_impl.h"
 #include "sql/dd/impl/utils.h"                 // execute_query
@@ -103,13 +104,27 @@ bool bootstrap(THD *thd) {
   DBUG_EXECUTE_IF("skip_compression_dict_create", skip_bootstrap = true;
                   return false;);
 
+  dd::String_type dict_table_str_enc{dict_table_str};
+
+  if (dd::bootstrap::DD_bootstrap_ctx::instance().is_dd_encrypted()) {
+    dict_table_str_enc += " ENCRYPTION='Y'";
+  }
+
+  dd::end_transaction(thd, false);
+
   // Create mysql.compression_dictionary table
-  if (execute_query(thd, dict_table_str)) {
+  if (execute_query(thd, dict_table_str_enc)) {
     return true;
   }
 
+  dd::String_type dict_cols_table_str_enc{dict_cols_table_str};
+
+  if (dd::bootstrap::DD_bootstrap_ctx::instance().is_dd_encrypted()) {
+    dict_cols_table_str_enc += " ENCRYPTION='Y'";
+  }
+
   // Create mysql.compression_dictionary_cols table
-  if (execute_query(thd, dict_cols_table_str)) {
+  if (execute_query(thd, dict_cols_table_str_enc)) {
     return true;
   }
 
@@ -383,7 +398,7 @@ int create_zip_dict(THD *thd, const char *name, ulong name_len,
   }
 
   table->next_number_field->set_null();
-  //table->auto_increment_field_not_null = true;
+  // table->auto_increment_field_not_null = true;
   table->record[0][0] = ts->default_values[0];
   table->file->ha_start_bulk_insert(1);  // 1 is the estimated rows to insert
 
@@ -398,7 +413,7 @@ int create_zip_dict(THD *thd, const char *name, ulong name_len,
     my_error(error, MYF(0), name, 64);
     table->file->ha_release_auto_increment();
     table->file->ha_end_bulk_insert();
-    //table->auto_increment_field_not_null = false;
+    // table->auto_increment_field_not_null = false;
     close_thread_tables(thd);
     thd->mdl_context.release_transactional_locks();
     DBUG_RETURN(error);
@@ -470,7 +485,7 @@ int create_zip_dict(THD *thd, const char *name, ulong name_len,
 
   table->file->ha_release_auto_increment();
   table->file->ha_end_bulk_insert();
-  //table->auto_increment_field_not_null = false;
+  // table->auto_increment_field_not_null = false;
 
   close_thread_tables(thd);
   thd->mdl_context.release_transactional_locks();
