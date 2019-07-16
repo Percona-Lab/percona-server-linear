@@ -3005,7 +3005,7 @@ bool srv_enable_redo_encryption_rk(THD *thd) {
 }
 
 /* Set encryption for UNDO tablespace with given space id. */
-bool set_undo_tablespace_encryption(space_id_t space_id, mtr_t *mtr,
+bool set_undo_tablespace_encryption(THD *thd, space_id_t space_id, mtr_t *mtr,
                                     bool is_boot) {
   ut_ad(fsp_is_undo_tablespace(space_id));
   fil_space_t *space = fil_space_get(space_id);
@@ -3024,6 +3024,9 @@ bool set_undo_tablespace_encryption(space_id_t space_id, mtr_t *mtr,
   /* Fill up encryption info to be set */
   if (!Encryption::fill_encryption_info(key, iv, encrypt_info, is_boot, true)) {
     ib::error(ER_IB_MSG_1052, space->name);
+    if (thd != nullptr) {
+      ib_senderrf(thd, IB_LOG_LEVEL_WARN, ER_IB_MSG_1052, space->name);
+    }
     return true;
   }
 
@@ -3033,6 +3036,9 @@ bool set_undo_tablespace_encryption(space_id_t space_id, mtr_t *mtr,
   if (!fsp_header_write_encryption(space->id, new_flags, encrypt_info, true,
                                    false, mtr)) {
     ib::error(ER_IB_MSG_1053, space->name);
+    if (thd != nullptr) {
+      ib_senderrf(thd, IB_LOG_LEVEL_WARN, ER_IB_MSG_1053, space->name);
+    }
     return true;
   }
 
@@ -3041,6 +3047,10 @@ bool set_undo_tablespace_encryption(space_id_t space_id, mtr_t *mtr,
   err = fil_set_encryption(space->id, Encryption::AES, key, iv);
   if (err != DB_SUCCESS) {
     ib::error(ER_IB_MSG_1054, space->name, int{err}, ut_strerr(err));
+    if (thd != nullptr) {
+      ib_senderrf(thd, IB_LOG_LEVEL_WARN, ER_IB_MSG_1054, space->name, int{err},
+                  ut_strerr(err));
+    }
     return true;
   }
 
@@ -3048,7 +3058,7 @@ bool set_undo_tablespace_encryption(space_id_t space_id, mtr_t *mtr,
 }
 
 /* Enable UNDO tablespace encryption */
-bool srv_enable_undo_encryption(bool is_boot) {
+bool srv_enable_undo_encryption(THD *thd, bool is_boot) {
   /* Make sure undo::ddl_mutex is owned. */
   ut_ad(mutex_own(&undo::ddl_mutex));
 
@@ -3078,7 +3088,7 @@ bool srv_enable_undo_encryption(bool is_boot) {
     mtr_start(&mtr);
     mtr_x_lock_space(space, &mtr);
 
-    if (set_undo_tablespace_encryption(undo_space->id(), &mtr, is_boot)) {
+    if (set_undo_tablespace_encryption(thd, undo_space->id(), &mtr, is_boot)) {
       mtr_commit(&mtr);
       undo_space->rsegs()->s_unlock();
       undo::spaces->s_unlock();
@@ -3103,44 +3113,6 @@ static void srv_master_sleep(void) {
   srv_main_thread_op_info = "sleeping";
   std::this_thread::sleep_for(std::chrono::seconds(1));
   srv_main_thread_op_info = "";
-}
-
-/** Check redo and undo log encryption and rotate default master key. */
-static void srv_sys_check_set_encryption() {
-  if (!srv_undo_log_encrypt) {
-    return;
-  }
-
-  /* Rotate default master key for undo log encryption if it is set */
-  ut_ad(!undo::spaces->empty());
-
-  mutex_enter(&undo::ddl_mutex);
-
-  bool encrypt_undo = false;
-  undo::spaces->s_lock();
-  for (auto &undo_ts : undo::spaces->m_spaces) {
-    fil_space_t *space = fil_space_get(undo_ts->id());
-    ut_ad(space != nullptr);
-
-    /* Encryption for undo tablespace must already have been set. This is
-    safeguard to encrypt it if not done earlier. */
-    ut_ad(FSP_FLAGS_GET_ENCRYPTION(space->flags));
-    if (!FSP_FLAGS_GET_ENCRYPTION(space->flags)) {
-      ib::warn(ER_IB_MSG_1285, space->name, "srv_undo_log_encrypt");
-      /* No need to loop further as srv_enable_undo_encryption() would
-      loop through all UNDO tablespaces and encrypt. */
-      encrypt_undo = true;
-      break;
-    }
-  }
-  undo::spaces->s_unlock();
-
-  if (encrypt_undo) {
-    ut_d(bool ret =) srv_enable_undo_encryption(false);
-    ut_ad(!ret);
-  }
-  undo_rotate_default_master_key();
-  mutex_exit(&undo::ddl_mutex);
 }
 
 /** Waits on event in provided slot.
