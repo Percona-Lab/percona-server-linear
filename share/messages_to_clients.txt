@@ -9605,6 +9605,9 @@ ER_DA_REDO_ENCRYPTION_CANT_PARSE_KEY
 ER_DA_REDO_ENCRYPTION_KEYRING
   eng "Redo log cannot be encrypted if the keyring is not loaded."
 
+ER_DA_UNDO_NO_KEYRING
+  eng "Undo log can't be encrypted if the keyring is not loaded."
+
 
 #
 # Start of Percona Server 8.0 server error log messages
@@ -9667,6 +9670,9 @@ ER_REDO_ENCRYPTION_CANT_PARSE_KEY
 
 ER_REDO_ENCRYPTION_KEYRING
   eng "Redo log cannot be encrypted if the keyring is not loaded."
+
+ER_UNDO_NO_KEYRING
+  eng "Undo log can't be encrypted if the keyring is not loaded."
 
 #
 # End of Percona Server error messages
