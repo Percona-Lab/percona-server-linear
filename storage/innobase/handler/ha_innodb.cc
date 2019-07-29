@@ -23296,7 +23296,7 @@ static MYSQL_SYSVAR_ENUM(
     NULL, NULL, DEFAULT_ROW_FORMAT_DYNAMIC, &innodb_default_row_format_typelib);
 
 static MYSQL_SYSVAR_ENUM(redo_log_encrypt, srv_redo_log_encrypt,
-                         PLUGIN_VAR_OPCMDARG,
+                         PLUGIN_VAR_OPCMDARG | PLUGIN_VAR_NOPERSIST,
                          "Enable or disable Encryption of REDO tablespace."
                          "Possible values: OFF, ON, MASTER_KEY, KEYRING_KEY.",
                          innodb_redo_log_encrypt_validate,
@@ -24566,7 +24566,7 @@ static int innodb_redo_log_encrypt_validate(THD *thd, SYS_VAR *var, void *save,
 
   bool legit_value = false;
   uint use = 0;
-  for (; use < array_elements(redo_log_encrypt_names); use++) {
+  for (; use < array_elements(redo_log_encrypt_names) - 1; use++) {
     if (innobase_strcasecmp(redo_log_encrypt_input,
                             redo_log_encrypt_names[use]) == 0) {
       legit_value = true;
