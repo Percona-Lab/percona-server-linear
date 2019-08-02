@@ -110,7 +110,7 @@ int Rdb_index_merge::merge_file_create() {
   } else {
     char filename[FN_REFLEN];
     fd = create_temp_file(filename, m_tmpfile_path, "myrocks",
-                          O_CREAT | O_EXCL | O_RDWR, MYF(MY_WME));
+                          O_CREAT | O_EXCL | O_RDWR, UNLINK_FILE, MYF(MY_WME));
     if (fd >= 0) {
 #ifndef __WIN__
       /*
@@ -587,7 +587,7 @@ size_t Rdb_index_merge::merge_buf_info::prepare(File fd, ulonglong f_offset) {
     size of each chunk.
   */
   const uchar *block_ptr = m_block.get();
-  merge_read_uint64(&block_ptr, &m_total_size);
+  merge_read_uint64(&block_ptr, (__uint64_t*)(&m_total_size));
   m_curr_offset += RDB_MERGE_CHUNK_LEN;
   return m_total_size;
 }
