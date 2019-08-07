@@ -288,6 +288,12 @@ class Encryption {
   @return DB_SUCCESS or error code */
   [[nodiscard]] static dberr_t validate(const char *option) noexcept;
 
+  /** Validate the algorithm string for tablespace
+  @param[in]	option		Encryption option
+  @return DB_SUCCESS or error code */
+  MY_NODISCARD static dberr_t validate_for_tablespace(
+      const char *option) noexcept;
+
   /** Convert to a "string".
   @param[in]  type  The encryption type
   @return the string representation */
