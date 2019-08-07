@@ -265,6 +265,12 @@ class Encryption {
   static dberr_t validate(const char *option) noexcept
       MY_ATTRIBUTE((warn_unused_result));
 
+  /** Validate the algorithm string for tablespace
+  @param[in]	option		Encryption option
+  @return DB_SUCCESS or error code */
+  MY_NODISCARD static dberr_t validate_for_tablespace(
+      const char *option) noexcept;
+
   /** Convert to a "string".
   @param[in]  type  The encryption type
   @return the string representation */
@@ -304,7 +310,9 @@ class Encryption {
   @param[in,out]  value Encryption value */
   static void random_value(byte *value) noexcept;
 
-  // TODO:Robert: Czy to powinno być tutaj robione ?
+  /** Create tablespace key
+  @param[in,out]	tablespace_key	tablespace key - null if failure
+  @param[in]		key_id		tablespace key id */
   static void create_tablespace_key(byte **tablespace_key, uint key_id);
 
   /** Create new master key for key rotation.
@@ -329,6 +337,12 @@ class Encryption {
 
   static bool get_tablespace_key(uint key_id, uint tablespace_key_version,
                                  byte **tablespace_key, size_t *key_len);
+
+  /** Create tablespace key
+  @param[in]	key_id          keyring encryption key info
+  @return true  failure
+          false success */
+  static bool create_tablespace_key(const EncryptionKeyId key_id);
 
   /** Get master key by key id.
   @param[in]      master_key_id master key id

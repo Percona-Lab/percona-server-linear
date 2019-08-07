@@ -1358,6 +1358,24 @@ void warn_about_deprecated_binary(THD *thd)
 
 %token<lexer.keyword> KEYRING_SYM 1190                         /* MYSQL */
 /*
+   Tokens from Percona Server 5.7 and older
+*/
+%token<lexer.keyword> CHANGED_PAGE_BITMAPS_SYM 1300
+%token<lexer.keyword> CLIENT_STATS_SYM 1301
+%token CLUSTERING_SYM 1302
+%token<lexer.keyword> COMPRESSION_DICTIONARY_SYM 1303
+%token<lexer.keyword> INDEX_STATS_SYM 1304
+%token<lexer.keyword> TABLE_STATS_SYM 1305
+%token<lexer.keyword> THREAD_STATS_SYM 1306
+%token<lexer.keyword> USER_STATS_SYM 1307
+%token<lexer.keyword> ENCRYPTION_KEY_ID_SYM 1308
+
+/*
+   Tokens from Percona Server 8.0
+*/
+%token<lexer.keyword> EFFECTIVE_SYM 1350
+
+/*
   Precedence rules used to resolve the ambiguity when using keywords as idents
   in the case e.g.:
 
@@ -1377,24 +1395,6 @@ void warn_about_deprecated_binary(THD *thd)
 %nonassoc TEXT_STRING
 %left KEYWORD_USED_AS_KEYWORD
 
-
-/*
-   Tokens from Percona Server 5.7 and older
-*/
-%token<lexer.keyword> CHANGED_PAGE_BITMAPS_SYM 1300
-%token<lexer.keyword> CLIENT_STATS_SYM 1301
-%token CLUSTERING_SYM 1302
-%token<lexer.keyword> COMPRESSION_DICTIONARY_SYM 1303
-%token<lexer.keyword> INDEX_STATS_SYM 1304
-%token<lexer.keyword> TABLE_STATS_SYM 1305
-%token<lexer.keyword> THREAD_STATS_SYM 1306
-%token<lexer.keyword> USER_STATS_SYM 1307
-%token<lexer.keyword> ENCRYPTION_KEY_ID_SYM 1308
-
-/*
-   Tokens from Percona Server 8.0
-*/
-%token<lexer.keyword> EFFECTIVE_SYM 1350
 
 /*
   Resolve column attribute ambiguity -- force precedence of "UNIQUE KEY" against
@@ -2128,6 +2128,7 @@ void warn_about_deprecated_binary(THD *thd)
         ts_option_undo_buffer_size
         ts_option_wait
         ts_option_encryption
+        ts_option_encryption_key_id
         ts_option_engine_attribute
 
 %type <explain_format_type> opt_explain_format_type
@@ -5910,6 +5911,7 @@ tablespace_option:
         | ts_option_comment
         | ts_option_file_block_size
         | ts_option_encryption
+        | ts_option_encryption_key_id
         | ts_option_engine_attribute
         ;
 
@@ -5940,6 +5942,7 @@ alter_tablespace_option:
         | ts_option_engine
         | ts_option_wait
         | ts_option_encryption
+        | ts_option_encryption_key_id
         | ts_option_engine_attribute
         ;
 
@@ -6125,6 +6128,13 @@ ts_option_encryption:
           ENCRYPTION_SYM opt_equal TEXT_STRING_sys
           {
             $$= NEW_PTN PT_alter_tablespace_option_encryption($3);
+          }
+        ;
+
+ts_option_encryption_key_id:
+          ENCRYPTION_KEY_ID_SYM opt_equal real_ulong_num
+          {
+            $$= NEW_PTN PT_alter_tablespace_option_encryption_key_id($3);
           }
         ;
 
