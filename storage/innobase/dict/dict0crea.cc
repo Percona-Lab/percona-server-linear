@@ -107,6 +107,7 @@ dberr_t dict_build_table_def(
 /** Build a tablespace to store various objects.
 @param[in,out]	trx		DD transaction
 @param[in,out]	tablespace	Tablespace object describing what to build.
+@param[in]      keyring_encryption_key_id info on keyring encryption key
 @return DB_SUCCESS or error code. */
 dberr_t dict_build_tablespace(
     trx_t *trx, Tablespace *tablespace, fil_encryption_t mode,
@@ -238,6 +239,7 @@ static ibt::Tablespace *determine_session_temp_tblsp(
 /** Builds a tablespace to contain a table, using file-per-table=1.
 @param[in,out]	table	Table to build in its own tablespace.
 @param[in,out]	trx	Transaction
+@param[in]      keyring_encryption_key_id info on keyring encryption key
 @return DB_SUCCESS or error code */
 dberr_t dict_build_tablespace_for_table(
     dict_table_t *table, trx_t *trx, fil_encryption_t mode,
