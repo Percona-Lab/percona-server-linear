@@ -386,10 +386,12 @@ kept in non-LRU list while on failure the 'table' object will be freed.
                                 DB_SUCCESS added to the data dictionary cache)
 @param[in]	compression	compression algorithm to use, can be nullptr
 @param[in,out]	trx		transasction
+@param[in]	mode		keyring encryption mode
+@param[in]	keyring_encryption_key_id	keyring encryption info
 @return error code or DB_SUCCESS */
 dberr_t row_create_table_for_mysql(
     dict_table_t *table, const char *compression, trx_t *trx,
-    fil_encryption_t mode, /*!< in: encryption mode */
+    const fil_encryption_t mode, /*!< in: encryption mode */
     const KeyringEncryptionKeyIdInfo
         &keyring_encryption_key_id) /*!< in: encryption key_id */
     MY_ATTRIBUTE((warn_unused_result));

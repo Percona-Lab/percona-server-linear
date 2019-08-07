@@ -5490,6 +5490,8 @@ dberr_t fil_rename_tablespace_by_id(space_id_t space_id, const char *old_name,
 @param[in]	size		Initial size of the tablespace file in pages,
                                 must be >= FIL_IBD_FILE_INITIAL_SIZE
 @param[in]	type		FIL_TYPE_TABLESPACE or FIL_TYPE_TEMPORARY
+@param[in]	mode		keyring encryption mode
+@param[in]	keyring_encryption_key_id info on keyring encryption key
 @return DB_SUCCESS or error code */
 static dberr_t fil_create_tablespace(
     space_id_t space_id, const char *name, const char *path, uint32_t flags,
@@ -5689,11 +5691,10 @@ static dberr_t fil_create_tablespace(
   if (mode == FIL_ENCRYPTION_ON || mode == FIL_ENCRYPTION_OFF ||
       (srv_default_table_encryption == DEFAULT_TABLE_ENC_ONLINE_TO_KEYRING ||
        keyring_encryption_key_id.was_encryption_key_id_set)) {
-    crypt_data = fil_space_create_crypt_data(
-        mode, keyring_encryption_key_id.id);
+    crypt_data =
+        fil_space_create_crypt_data(mode, keyring_encryption_key_id.id);
 
-    if (crypt_data->should_encrypt() ||
-        keyring_encryption_key_id.was_encryption_key_id_set) {
+    if (crypt_data->should_encrypt()) {
       crypt_data->encrypting_with_key_version =
           crypt_data->key_get_latest_version();
       crypt_data->load_needed_keys_into_local_cache();
@@ -5765,10 +5766,12 @@ static dberr_t fil_create_tablespace(
 @param[in]	flags		Tablespace flags
 @param[in]	size		Initial size of the tablespace file in pages,
                                 must be >= FIL_IBD_FILE_INITIAL_SIZE
+@param[in]      mode            keyring encryption mode
+@param[in]      keyring_encryption_key_id info on keyring encryption key
 @return DB_SUCCESS or error code */
 dberr_t fil_ibd_create(
     space_id_t space_id, const char *name, const char *path, uint32_t flags,
-    page_no_t size, fil_encryption_t mode,
+    page_no_t size, const fil_encryption_t mode,
     const KeyringEncryptionKeyIdInfo &keyring_encryption_key_id) {
   ut_a(size >= FIL_IBD_FILE_INITIAL_SIZE);
   ut_ad(!srv_read_only_mode);
@@ -9556,6 +9559,7 @@ Compression::Type fil_get_compression(space_id_t space_id) {
 @param[in] algorithm		Encryption algorithm
 @param[in] key			Encryption key
 @param[in] iv			Encryption iv
+@param[in] acquire_mutex  if true acquire fil_sys mutex, else false
 @return DB_SUCCESS or error code */
 dberr_t fil_set_encryption(space_id_t space_id, Encryption::Type algorithm,
                            byte *key, byte *iv, bool acquire_mutex) {

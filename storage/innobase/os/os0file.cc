@@ -6032,7 +6032,7 @@ Requests a synchronous positioned read operation of page 0 of IBD file
 @param[in]	n		number of bytes to read, starting from offset
 @param[in]	exit_on_err	if true then exit on error
 @return DB_SUCCESS or error code */
-dberr_t os_file_read_first_page_func(IORequest &type, const char* file_name, os_file_t file, void *buf,
+dberr_t os_file_read_first_page_func(IORequest &type, const char *file_name, os_file_t file, void *buf,
                                      ulint n, bool exit_on_err) {
   ut_ad(type.is_read());
 
@@ -8634,6 +8634,16 @@ bool Encryption::tablespace_key_exists_or_create_new_one_if_does_not_exist(
 
   my_free(tablespace_key);
   return true;
+}
+
+bool Encryption::create_tablespace_key(EncryptionKeyId key_id) {
+  byte *tablespace_key = nullptr;
+  Encryption::create_tablespace_key(&tablespace_key, key_id);
+  if (tablespace_key == nullptr) {
+    return true;
+  }
+  my_free(tablespace_key);
+  return false;
 }
 
 void Encryption::get_latest_tablespace_key_or_create_new_one(
