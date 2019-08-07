@@ -109,7 +109,8 @@ st_alter_tablespace::st_alter_tablespace(
       nodegroup_id{opts.nodegroup_id},
       wait_until_completed{opts.wait_until_completed},
       ts_comment{opts.ts_comment.str},
-      encryption{opts.encryption.str} {
+      encryption{opts.encryption.str},
+      explicit_encryption{opts.encryption.str != nullptr} {
   if (opts.autoextend_size.has_value()) {
     autoextend_size = opts.autoextend_size.value();
   }
