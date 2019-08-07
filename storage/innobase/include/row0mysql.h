@@ -370,6 +370,8 @@ kept in non-LRU list while on failure the 'table' object will be freed.
 @param[in]      create_info     HA_CREATE_INFO object
 @param[in,out]  trx             transaction
 @param[in]      heap            temp memory heap or nullptr
+@param[in]      mode            keyring encryption mode
+@param[in]      keyring_encryption_key_id       keyring encryption info
 @return error code or DB_SUCCESS */
 [[nodiscard]] dberr_t row_create_table_for_mysql(
     dict_table_t *&table, const char *compression,
