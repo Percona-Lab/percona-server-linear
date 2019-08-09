@@ -10110,7 +10110,7 @@ dberr_t fil_temp_update_encryption(fil_space_t *space) {
 /** Rotate the tablespace key by new master key.
 @param[in]	space	tablespace object
 @return true if the re-encrypt suceeds */
-static bool encryption_rotate_low(fil_space_t *space) {
+bool encryption_rotate_low(fil_space_t *space) {
   bool success = true;
   if (space->encryption_type == Encryption::AES) {
     mtr_t mtr;
@@ -10175,17 +10175,20 @@ bool Fil_shard::needs_encryption_rotate(fil_space_t *space) {
     return false;
   }
 
+  /* Skip if space is not master encrypted */
+
+  if (space->encryption_type != Encryption::AES) {
+    return false;
+  }
+
+  /* Skip unencypted tablespaces. Encrypted redo log
+  tablespaces is handled in function log_rotate_encryption.
+  Skip session temporary tablespaces. They are handled separately
+  by ibt::Tablespace_pool::rotate_encryption_keys() */
   /* Skip unencypted tablespaces. Encrypted redo log
   tablespaces is handled in function log_rotate_encryption. */
   if (fsp_is_system_or_temp_tablespace(space->id) ||
       space->purpose == FIL_TYPE_LOG) {
-    return false;
-  }
-
-  /* Skip the tablespace when it's in default key status,
-  since it's the first server startup after bootstrap,
-  and the server uuid is not ready yet. */
-  if (Encryption::get_master_key_id() == Encryption::DEFAULT_MASTER_KEY_ID) {
     return false;
   }
 
