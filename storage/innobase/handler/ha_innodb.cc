@@ -4681,6 +4681,9 @@ bool innobase_encryption_key_rotation() {
     goto error_exit;
   }
 
+  /* Rotate encrypted session temporary tablespaces */
+  ibt::tbsp_pool->rotate_encryption_keys();
+
   my_free(master_key);
 
 error_exit:
@@ -4771,15 +4774,7 @@ bool innobase_fix_tablespaces_empty_uuid() {
 
   /* Rotate log tablespace */
 
-  bool failure = !fil_encryption_rotate_global(space_ids);
-
   my_free(master_key);
-
-  /* If rotation failure, return error */
-  if (failure) {
-    my_error(ER_CANNOT_FIND_KEY_IN_KEYRING, MYF(0));
-    return (true);
-  }
 
   return (false);
 }
