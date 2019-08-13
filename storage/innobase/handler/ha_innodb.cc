@@ -15526,10 +15526,9 @@ int ha_innobase::truncate_impl(const char *name, TABLE *form,
     ib_senderrf(thd, IB_LOG_LEVEL_ERROR, ER_TABLESPACE_DISCARDED, norm_name);
     return HA_ERR_NO_SUCH_TABLE;
   } else if (!innodb_table->is_readable()) {
-    return innodb_table->keyring_encryption_info.page0_has_crypt_data ==
-                        true
-                    ? HA_ERR_DECRYPTION_FAILED
-                    : HA_ERR_TABLESPACE_MISSING;
+    return innodb_table->keyring_encryption_info.page0_has_crypt_data == true
+               ? HA_ERR_DECRYPTION_FAILED
+               : HA_ERR_TABLESPACE_MISSING;
   }
 
   if (UNIV_UNLIKELY(innodb_table->is_corrupt)) return HA_ERR_CRASHED;
@@ -15967,13 +15966,41 @@ static int innobase_alter_encrypt_tablespace(handlerton *hton, THD *thd,
   /* If new tablespace definition says it's encrypted */
   bool is_new_encrypted = !Encryption::is_none(newenc.data());
 
-  if (!is_old_encrypted && is_new_encrypted) {
+  // It is only possible to mark tablespace to be skipped by encryption threads
+  // if it is not already encrypted.
+  if (!is_old_encrypted && !is_new_encrypted &&
+      alter_info->explicit_encryption) {
+    if (!fil_crypt_exclude_tablespace_from_rotation(space)) {
+      my_error(ER_EXCLUDE_ENCRYPTION_THREADS_RUNNING, MYF(0), space->name);
+      return convert_error_code_to_mysql(DB_ERROR, 0, NULL);
+    }
+    return error;
+  } else if (!is_old_encrypted && is_new_encrypted) {
+    // TODO: PS-5323 should disallow reaching this code if encryption threads
+    // are enabled. Thus it should be safe to remove the crypt_data here. Here
+    // we encrypt with MK, the tablespace was previously excluded from rotation.
+    if (space->crypt_data != nullptr) {
+      ut_ad(space->crypt_data->type == CRYPT_SCHEME_UNENCRYPTED);
+      fil_space_destroy_crypt_data(&space->crypt_data);
+      space->crypt_data = nullptr;
+      rw_lock_x_lock(&space->latch);
+      space->encryption_type = Encryption::NONE;
+      rw_lock_x_unlock(&space->latch);
+    }
     /* Encrypt tablespace */
     to_encrypt = true;
   } else if (is_old_encrypted && !is_new_encrypted) {
+    if (space->crypt_data) {
+      my_error(ER_EXPLICIT_DECRYPTION_OF_ONLINE_ENCRYPTED_TABLESPACE, MYF(0),
+               space->name);
+      return convert_error_code_to_mysql(DB_ERROR, 0, NULL);
+    }
     /* Unencrypt tablespace */
     to_encrypt = false;
   } else {
+    // TODO: Needs to be addressed by PS-5323. What to do when user requested
+    // re-encryption from online-threads encrypted tablespace to MK encrypted
+    // tablespace.
     /* Nothing to do */
     return error;
   }
@@ -16716,9 +16743,9 @@ int ha_innobase::records(ha_rows *num_rows) /*!< out: number of rows */
   } else if (m_prebuilt->table->file_unreadable) {
     if (m_prebuilt->table->keyring_encryption_info.page0_has_crypt_data)
       return m_prebuilt->table->keyring_encryption_info
-                          .keyring_encryption_key_is_missing
-                      ? HA_ERR_ENCRYPTION_KEY_MISSING
-                      : HA_ERR_DECRYPTION_FAILED;
+                     .keyring_encryption_key_is_missing
+                 ? HA_ERR_ENCRYPTION_KEY_MISSING
+                 : HA_ERR_DECRYPTION_FAILED;
 
     ib_senderrf(m_user_thd, IB_LOG_LEVEL_ERROR, ER_TABLESPACE_MISSING,
                 table->s->table_name.str);
@@ -18327,7 +18354,7 @@ int ha_innobase::check(THD *thd,                /*!< in: user thread handle */
 
         if (err == DB_IO_DECRYPT_FAIL) {
           ib_senderrf(thd, IB_LOG_LEVEL_ERROR,
-                      ER_XB_MSG_4,
+                      ER_DA_ENCRYPTION_TABLE_CHECK_FAILED,
                       index->table->name.m_name);
         } else {
           push_warning_printf(thd, Sql_condition::SL_WARNING, ER_NOT_KEYFILE,
@@ -18399,7 +18426,7 @@ int ha_innobase::check(THD *thd,                /*!< in: user thread handle */
     if (ret != DB_SUCCESS) {
       if (ret == DB_IO_DECRYPT_FAIL) {
         ib_senderrf(thd, IB_LOG_LEVEL_ERROR,
-                    ER_XB_MSG_4,
+                    ER_DA_ENCRYPTION_TABLE_CHECK_FAILED,
                     index->table->name.m_name);
       } else {
         /* Assume some kind of corruption. */
@@ -21680,9 +21707,32 @@ static int innodb_track_changed_pages_validate(THD *thd, SYS_VAR *var,
                                                void *save,
                                                struct st_mysql_value *value) {
   long long intbuf = 0;
-  if (value->val_int(value, &intbuf)) {
-    /* The value is NULL. That is invalid. */
-    return 1;
+
+  /* ON, OFF string values are valid as well.
+   * Anyway, this check is enabled only for debug builds
+   * as the variable is dynamic only in debug builds,
+   * so let's handle ON, OFF values like for bool
+   */
+  if (value->value_type(value) == STRING_RESULT) {
+    char buff[STRING_BUFFER_USUAL_SIZE];
+    int length = 0;
+    const char * res;
+    if (!(res = value->val_str(value, buff, &length))) {
+      return 1;
+    } else if (!my_strnncoll(system_charset_info, (const uchar *)res, length,
+                             (const uchar *)"OFF", 3)) {
+      intbuf = 0;
+    } else if (!my_strnncoll(system_charset_info, (const uchar *)res, length,
+                             (const uchar *)"ON", 2)) {
+      intbuf = 1;
+    } else {
+      return 1;
+    }
+  } else {
+    if (value->val_int(value, &intbuf)) {
+      /* The value is NULL. That is invalid. */
+      return 1;
+    }
   }
 
   if (srv_thread_is_active(srv_threads.m_changed_page_tracker)) {
@@ -22195,11 +22245,11 @@ static int innodb_encryption_threads_validate(
 {
   long long intbuf;
 
-  DBUG_ENTER("innodb_encryption_threads_validate");
+  DBUG_TRACE;
 
   if (value->val_int(value, &intbuf)) {
     /* The value is NULL. That is invalid. */
-    DBUG_RETURN(1);
+    return 1;
   }
 
   if (srv_n_fil_crypt_threads_requested == 0 &&
@@ -22212,7 +22262,7 @@ static int innodb_encryption_threads_validate(
                       "InnoDB: cannot enable encryption threads, "
                       "keyring plugin is not available",
                       MYF(0));
-      DBUG_RETURN(1);
+      return 1;
     }
     if (Encryption::is_keyring_alive() == false) {
       my_printf_error(
@@ -22221,7 +22271,7 @@ static int innodb_encryption_threads_validate(
           "properly initialized. Cannot enable encryption threads.",
           MYF(0));
       unlock_keyrings(NULL);
-      DBUG_RETURN(1);
+      return 1;
     }
   } else if (intbuf == 0 && srv_n_fil_crypt_threads_requested >
                                 0) {  // We are disabling encryption
@@ -22231,7 +22281,7 @@ static int innodb_encryption_threads_validate(
 
   *reinterpret_cast<ulong *>(save) = static_cast<ulong>(intbuf);
 
-  DBUG_RETURN(0);
+  return 0;
 }
 
 /******************************************************************
@@ -22500,13 +22550,6 @@ static MYSQL_SYSVAR_UINT(
     " cache by the specified value dynamically, at the time.",
     NULL, innodb_merge_threshold_set_all_debug_update,
     DICT_INDEX_MERGE_THRESHOLD_DEFAULT, 1, 50, 0);
-
-static MYSQL_SYSVAR_ULONG(
-    semaphore_wait_timeout_debug, srv_fatal_semaphore_wait_threshold,
-    PLUGIN_VAR_RQCMDARG,
-    "Number of seconds that a semaphore can be held. If semaphore wait crosses"
-    "this value, server will crash",
-    NULL, NULL, 600, 100, 600, 0);
 #endif /* UNIV_DEBUG */
 
 static MYSQL_SYSVAR_ULONG(
@@ -22824,10 +22867,10 @@ static MYSQL_SYSVAR_ENUM(
     empty_free_list_algorithm, srv_empty_free_list_algorithm,
     PLUGIN_VAR_OPCMDARG,
     "The algorithm to use for empty free list handling.  Allowed values: "
-    "LEGACY: Original Oracle MySQL handling with single page flushes; "
-    "BACKOFF: (the default) Wait until cleaner produces a free page.",
+    "LEGACY: (the default) Original Oracle MySQL handling with single page flushes; "
+    "BACKOFF: Wait until cleaner produces a free page.",
     innodb_srv_empty_free_list_algorithm_validate, nullptr,
-    SRV_EMPTY_FREE_LIST_BACKOFF, &innodb_empty_free_list_algorithm_typelib);
+    SRV_EMPTY_FREE_LIST_LEGACY, &innodb_empty_free_list_algorithm_typelib);
 
 static MYSQL_SYSVAR_ULONG(buffer_pool_instances, srv_buf_pool_instances,
                           PLUGIN_VAR_RQCMDARG | PLUGIN_VAR_READONLY,
@@ -23964,7 +24007,6 @@ static SYS_VAR *innobase_system_variables[] = {
     MYSQL_SYSVAR(buf_flush_list_now),
     MYSQL_SYSVAR(track_redo_log_now),
     MYSQL_SYSVAR(merge_threshold_set_all_debug),
-    MYSQL_SYSVAR(semaphore_wait_timeout_debug),
 #endif /* UNIV_DEBUG */
 #if defined UNIV_DEBUG || defined UNIV_PERF_DEBUG
     MYSQL_SYSVAR(page_hash_locks),

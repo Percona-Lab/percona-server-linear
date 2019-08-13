@@ -6178,7 +6178,7 @@ flags
 @return false on success */
 static bool dd_update_tablespace_dd_flags(
     THD *thd, const char *space_name, volatile bool *is_space_being_removed,
-    std::function<void(uint32 &)> update) {
+    std::function<void(uint32 &, dd::Tablespace *)> update) {
   Disable_autocommit_guard autocommit_guard(thd);
   dd::cache::Dictionary_client *client = dd::get_dd_client(thd);
   dd::cache::Dictionary_client::Auto_releaser releaser(client);
@@ -6230,7 +6230,7 @@ static bool dd_update_tablespace_dd_flags(
     return (true);
   }
 
-  update(dd_space_flags);
+  update(dd_space_flags, dd_space);
 
   /* Update DD flags for tablespace */
   dd_space->se_private_data().set(dd_space_key_strings[DD_SPACE_FLAGS],
@@ -6251,8 +6251,9 @@ static bool dd_update_tablespace_dd_flags(
 
 bool dd_set_encryption_flag(THD *thd, const char *space_name,
                             volatile bool *is_space_being_removed) {
-  auto update_func = [](uint32_t &dd_space_flags) {
+  auto update_func = [](uint32_t &dd_space_flags, dd::Tablespace *dd_space) {
     dd_space_flags |= (1U << FSP_FLAGS_POS_ENCRYPTION);
+    dd_space->options().set("encryption", "Y");
   };
   return dd_update_tablespace_dd_flags(thd, space_name, is_space_being_removed,
                                        update_func);
@@ -6260,8 +6261,9 @@ bool dd_set_encryption_flag(THD *thd, const char *space_name,
 
 bool dd_clear_encryption_flag(THD *thd, const char *space_name,
                               volatile bool *is_space_being_removed) {
-  auto update_func = [](uint32_t &dd_space_flags) {
+  auto update_func = [](uint32_t &dd_space_flags, dd::Tablespace *dd_space) {
     dd_space_flags &= ~(1U << FSP_FLAGS_POS_ENCRYPTION);
+    dd_space->options().set("encryption", "N");
   };
   return dd_update_tablespace_dd_flags(thd, space_name, is_space_being_removed,
                                        update_func);
@@ -6326,7 +6328,6 @@ bool dd_fix_mysql_ibd_encryption_flag_if_needed(THD *thd,
   return dd_set_flags(thd, dict_sys_t::s_dd_space_name, space_flags,
                       &is_space_being_removed);
 }
-
 
 void dict_table_t::get_table_name(std::string &schema, std::string &table) {
   std::string dict_table_name(name.m_name);
