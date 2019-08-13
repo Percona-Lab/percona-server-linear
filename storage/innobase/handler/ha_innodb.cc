@@ -15966,11 +15966,8 @@ int ha_innobase::truncate_impl(const char *name, TABLE *form,
   if (dict_table_is_discarded(innodb_table)) {
     ib_senderrf(thd, IB_LOG_LEVEL_ERROR, ER_TABLESPACE_DISCARDED, norm_name);
     return HA_ERR_NO_SUCH_TABLE;
-  } else if (!innodb_table->is_readable()) {
-    return innodb_table->keyring_encryption_info.page0_has_crypt_data ==
-                        true
-                    ? HA_ERR_DECRYPTION_FAILED
-                    : HA_ERR_TABLESPACE_MISSING;
+  } else if (innodb_table->ibd_file_missing) {
+    return HA_ERR_TABLESPACE_MISSING;
   }
 
   if (UNIV_UNLIKELY(innodb_table->is_corrupt)) return HA_ERR_CRASHED;
@@ -17287,12 +17284,6 @@ int ha_innobase::records(ha_rows *num_rows) /*!< out: number of rows */
     return HA_ERR_NO_SUCH_TABLE;
 
   } else if (m_prebuilt->table->ibd_file_missing) {
-    if (m_prebuilt->table->keyring_encryption_info.page0_has_crypt_data)
-      return m_prebuilt->table->keyring_encryption_info
-                          .keyring_encryption_key_is_missing
-                      ? HA_ERR_ENCRYPTION_KEY_MISSING
-                      : HA_ERR_DECRYPTION_FAILED;
-
     ib_senderrf(m_user_thd, IB_LOG_LEVEL_ERROR, ER_TABLESPACE_MISSING,
                 table->s->table_name.str);
 
@@ -18913,25 +18904,19 @@ int ha_innobase::check(THD *thd,                /*!< in: user thread handle */
       CHECK TABLE. */
       srv_fatal_semaphore_wait_extend.fetch_add(1);
 
-      dberr_t err = btr_validate_index(index, m_prebuilt->trx, false);
+      bool valid = btr_validate_index(index, m_prebuilt->trx, false);
 
       /* Restore the fatal lock wait timeout after
       CHECK TABLE. */
       srv_fatal_semaphore_wait_extend.fetch_sub(1);
 
-      if (err != DB_SUCCESS) {
+      if (!valid) {
         is_ok = false;
 
-        if (err == DB_IO_DECRYPT_FAIL) {
-          ib_senderrf(thd, IB_LOG_LEVEL_ERROR,
-                      ER_XB_MSG_4,
-                      index->table->name.m_name);
-        } else {
-          push_warning_printf(thd, Sql_condition::SL_WARNING, ER_NOT_KEYFILE,
-                              "InnoDB: The B-tree of"
-                              " index %s is corrupted.",
-                              index->name());
-        }
+        push_warning_printf(thd, Sql_condition::SL_WARNING, ER_NOT_KEYFILE,
+                            "InnoDB: The B-tree of"
+                            " index %s is corrupted.",
+                            index->name());
         continue;
       }
     }
@@ -18994,17 +18979,11 @@ int ha_innobase::check(THD *thd,                /*!< in: user thread handle */
       break;
     }
     if (ret != DB_SUCCESS) {
-      if (ret == DB_IO_DECRYPT_FAIL) {
-        ib_senderrf(thd, IB_LOG_LEVEL_ERROR,
-                    ER_XB_MSG_4,
-                    index->table->name.m_name);
-      } else {
-        /* Assume some kind of corruption. */
-        push_warning_printf(thd, Sql_condition::SL_WARNING, ER_NOT_KEYFILE,
-                            "InnoDB: The B-tree of"
-                            " index %s is corrupted.",
-                            index->name());
-      }
+      /* Assume some kind of corruption. */
+      push_warning_printf(thd, Sql_condition::SL_WARNING, ER_NOT_KEYFILE,
+                          "InnoDB: The B-tree of"
+                          " index %s is corrupted.",
+                          index->name());
       is_ok = false;
       dict_set_corrupted(index);
     }
@@ -23375,10 +23354,10 @@ static MYSQL_SYSVAR_ENUM(
     empty_free_list_algorithm, srv_empty_free_list_algorithm,
     PLUGIN_VAR_OPCMDARG,
     "The algorithm to use for empty free list handling.  Allowed values: "
-    "LEGACY: Original Oracle MySQL handling with single page flushes; "
-    "BACKOFF: (the default) Wait until cleaner produces a free page.",
+    "LEGACY: (the default) Original Oracle MySQL handling with single page flushes; "
+    "BACKOFF: Wait until cleaner produces a free page.",
     innodb_srv_empty_free_list_algorithm_validate, nullptr,
-    SRV_EMPTY_FREE_LIST_BACKOFF, &innodb_empty_free_list_algorithm_typelib);
+    SRV_EMPTY_FREE_LIST_LEGACY, &innodb_empty_free_list_algorithm_typelib);
 
 static MYSQL_SYSVAR_ULONG(buffer_pool_instances, srv_buf_pool_instances,
                           PLUGIN_VAR_RQCMDARG | PLUGIN_VAR_READONLY,
@@ -24462,7 +24441,6 @@ static SYS_VAR *innobase_system_variables[] = {
     MYSQL_SYSVAR(checkpoint_disabled),
     MYSQL_SYSVAR(buf_flush_list_now),
     MYSQL_SYSVAR(merge_threshold_set_all_debug),
-    MYSQL_SYSVAR(semaphore_wait_timeout_debug),
 #endif /* UNIV_DEBUG */
 #if defined UNIV_DEBUG || defined UNIV_PERF_DEBUG
     MYSQL_SYSVAR(page_hash_locks),
