@@ -6302,15 +6302,6 @@ static bool dict_is_mysql_plugin_space_encrypted(
   return FSP_FLAGS_GET_ENCRYPTION(space->flags);
 }
 
-/** Detect if innodb_encrypt_tables is set either to ON or FORCE or
-ONLINE_TO_KEYRING*
-@return true if innodb_encrypt_tables is equal to ON or FORCE or
-ONLINE_TO_KEYRING* */
-static bool dict_should_be_keyring_encrypted() {
-  return srv_default_table_encryption == DEFAULT_TABLE_ENC_ON ||
-         srv_default_table_encryption == DEFAULT_TABLE_ENC_ONLINE_TO_KEYRING;
-}
-
 /** Reads mysql.ibd's page0 from buffer if the tablespace is already loaded
 into Fil_system cache
 @return tuple <0> success - true if no error
