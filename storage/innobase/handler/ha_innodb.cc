@@ -4807,9 +4807,13 @@ bool innobase_fix_tablespaces_empty_uuid() {
   }
 
   /* We only need to handle the case when an encrypted tablespace
-  is created at startup. If it is 0, there is no encrypted tablespace,
-  If it is > 1, it means we already have fixed the UUID */
-  if (Encryption::get_master_key_id() != 1) {
+  is created at startup. If it is > 1, it means we already have fixed
+  the UUID */
+  if (Encryption::get_master_key_id() > 1) {
+    return (false);
+  }
+
+  if (!default_master_key_used) {
     return (false);
   if (master_key == nullptr) {
     my_error(ER_CANNOT_FIND_KEY_IN_KEYRING, MYF(0));
@@ -4832,6 +4836,7 @@ bool innobase_fix_tablespaces_empty_uuid() {
 
   space_ids.push_back(srv_sys_space.space_id());
   space_ids.push_back(srv_tmp_space.space_id());
+  space_ids.push_back(dict_sys_t::s_dict_space_id);
 
 #ifdef UNIV_DEBUG
   /* Currently all session temp tablespaces that use empty uuid
@@ -4858,15 +4863,7 @@ bool innobase_fix_tablespaces_empty_uuid() {
 
   /* Rotate log tablespace */
 
-  bool failure = !fil_encryption_rotate_global(space_ids);
-
   my_free(master_key);
-
-  /* If rotation failure, return error */
-  if (failure) {
-    my_error(ER_CANNOT_FIND_KEY_IN_KEYRING, MYF(0));
-    return (true);
-  }
 
   return (false);
 }
