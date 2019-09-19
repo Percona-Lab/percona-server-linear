@@ -61,6 +61,11 @@ using Block_ptr = std::unique_ptr<Block, Block_deleter>;
 /** Disk sector size of aligning write buffer for DIRECT_IO */
 extern ulint os_io_ptr_align;
 
+enum class Encryption_rotation : std::uint8_t {
+  NO_ROTATION,
+  MASTER_KEY_TO_KEYRING
+};
+
 /** Encryption algorithm. */
 class Encryption {
  public:
@@ -75,8 +80,6 @@ class Encryption {
 
     KEYRING = 2
   };
-
-  enum Encryption_rotation { NO_ROTATION, MASTER_KEY_TO_KEYRING };
 
   /** Encryption information format version */
   enum Version {
@@ -106,6 +109,8 @@ class Encryption {
   static constexpr char KEY_MAGIC_RK[] = "lRK";
 
   static constexpr char KEY_MAGIC_PS_V1[] = "PSA";
+
+  static constexpr char KEY_MAGIC_PS_V2[] = "PSB";
 
   /** Encryption master key prifix */
   static constexpr char MASTER_KEY_PREFIX[] = "INNODBKey";
@@ -172,12 +177,11 @@ class Encryption {
         m_klen(0),
         m_key_allocated(false),
         m_iv(nullptr),
-        m_tablespace_iv(nullptr),
         m_tablespace_key(nullptr),
         m_key_version(0),
         m_key_id(0),
         m_checksum(0),
-        m_encryption_rotation(NO_ROTATION),
+        m_encryption_rotation(Encryption_rotation::NO_ROTATION),
         m_key_versions_cache(nullptr) {
     m_key_id_uuid[0] = '\0';
   }
@@ -190,13 +194,11 @@ class Encryption {
         m_klen(0),
         m_key_allocated(false),
         m_iv(nullptr),
-        m_tablespace_iv(nullptr),
         m_tablespace_key(nullptr),
         m_key_version(0),
         m_key_id(0),
         m_checksum(0),
-        m_encryption_rotation(NO_ROTATION),
-        m_key_versions_cache(nullptr) {
+        m_encryption_rotation(Encryption_rotation::NO_ROTATION) {
     m_key_id_uuid[0] = '\0';
 #ifdef UNIV_DEBUG
     switch (m_type) {
@@ -225,7 +227,6 @@ class Encryption {
     std::swap(m_klen, other.m_klen);
     std::swap(m_key_allocated, other.m_key_allocated);
     std::swap(m_iv, other.m_iv);
-    std::swap(m_tablespace_iv, other.m_tablespace_iv);
     std::swap(m_tablespace_key, other.m_tablespace_key);
     std::swap(m_key_version, other.m_key_version);
     std::swap(m_key_id, other.m_key_id);
@@ -509,14 +510,6 @@ class Encryption {
   @param[in]  tablespace_key  tablespace encryption key **/
   void set_tablespace_key(byte *tablespace_key);
 
-  /** Get tablespace iv
-  @return tablespace iv **/
-  byte *get_tablespace_iv() const;
-
-  /** Set tablespace iv
-  @param[in]  tablespace_iv  tablespace iv **/
-  void set_tablespace_iv(byte *tablespace_iv);
-
   /** Get key version
   @return  key version **/
   ulint get_key_version() const;
@@ -599,12 +592,6 @@ class Encryption {
 
   /** Encrypt initial vector */
   byte *m_iv;
-
-  // We decide as the last step in decrypt (after reading the page)
-  // when re_encryption_type is MK_TO_RK whether page is
-  // encrypted with MK or RK => thus we do not know which tablespace_iv we are
-  // going to use RK or MK
-  byte *m_tablespace_iv;
 
   byte *m_tablespace_key;
 
