@@ -1750,7 +1750,8 @@ static dberr_t verify_post_encryption_checksum(const IORequest &type,
           encryption.is_encrypted_and_compressed(buf));
     }
 
-    if (encryption.get_encryption_rotation() == Encryption::NO_ROTATION &&
+    if (encryption.get_encryption_rotation() ==
+            Encryption_rotation::NO_ROTATION &&
         !is_crypt_checksum_correct) {  // There is no re-encryption going on
       const auto space_id =
           mach_read_from_4(buf + FIL_PAGE_ARCH_LOG_NO_OR_SPACE_ID);
@@ -1763,7 +1764,8 @@ static dberr_t verify_post_encryption_checksum(const IORequest &type,
   }
 
   if (encryption.get_encryption_rotation() ==
-      Encryption::MASTER_KEY_TO_KEYRING) {  // There is re-encryption going on
+      Encryption_rotation::MASTER_KEY_TO_KEYRING) {  // There is re-encryption
+                                                     // going on
     encryption.set_type(
         is_crypt_checksum_correct
             ? Encryption::KEYRING  // assume page is RK encrypted
@@ -1828,17 +1830,14 @@ static bool load_key_needed_for_decryption(const IORequest &type,
     encryption.set_key_version(key_version_read_from_page);
   } else {
     ut_ad(encryption.get_type() == Encryption::AES);
-    if (encryption.get_encryption_rotation() == Encryption::NO_ROTATION)
+    if (encryption.get_encryption_rotation() ==
+        Encryption_rotation::NO_ROTATION)
       return true;  // we are all set - needed key was alread loaded into
                     // encryption module
 
     ut_ad(encryption.get_encryption_rotation() ==
-          Encryption::MASTER_KEY_TO_KEYRING);
-    ut_ad(encryption.get_tablespace_iv() != nullptr);
-    encryption.set_initial_vector(
-        encryption.get_tablespace_iv());  // iv comes from tablespace
-                                          // header for MK encryption
-    ut_ad(encryption.get_tablespace_key() != nullptr);
+              Encryption_rotation::MASTER_KEY_TO_KEYRING &&
+          encryption.get_tablespace_key() != nullptr);
     encryption.set_key(encryption.get_tablespace_key(), Encryption::KEY_LEN,
                        false);
   }
