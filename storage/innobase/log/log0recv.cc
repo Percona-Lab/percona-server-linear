@@ -1637,7 +1637,11 @@ static byte *recv_parse_or_apply_log_rec_body(mlog_id_t type, byte *ptr,
           } else if (memcmp(ptr_copy, Encryption::KEY_MAGIC_PS_V1,
                             Encryption::MAGIC_SIZE) == 0 &&
                      apply) {
-            return (fil_parse_write_crypt_data(ptr, end_ptr, block, len));
+            return (fil_parse_write_crypt_data_v1(space_id, ptr, end_ptr, len));
+          } else if (memcmp(ptr_copy, Encryption::KEY_MAGIC_PS_V2,
+                            Encryption::MAGIC_SIZE) == 0 &&
+                     apply) {
+            return (fil_parse_write_crypt_data_v2(space_id, ptr, end_ptr, len));
           }
         }
         break;
@@ -3726,9 +3730,7 @@ dberr_t recv_recovery_from_checkpoint_start(log_t &log, lsn_t flush_lsn) {
 
       /* Check if the redo log from an older known redo log
       version is from a clean shutdown. */
-      err = recv_log_recover_pre_8_0_4(log, checkpoint_no, checkpoint_lsn);
-
-      return (err);
+      return (recv_log_recover_pre_8_0_4(log, checkpoint_no, checkpoint_lsn));
 
     default:
       ib::error(ER_IB_MSG_733, ulong{log.format},
@@ -3768,6 +3770,7 @@ dberr_t recv_recovery_from_checkpoint_start(log_t &log, lsn_t flush_lsn) {
   lsn_t recovered_lsn;
 
   recovered_lsn = recv_sys->recovered_lsn;
+
 
   ut_a(recv_needed_recovery || checkpoint_lsn == recovered_lsn);
 
