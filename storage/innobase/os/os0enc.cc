@@ -239,6 +239,7 @@ constexpr char Encryption::KEY_MAGIC_V2[];
 constexpr char Encryption::KEY_MAGIC_V3[];
 constexpr char Encryption::KEY_MAGIC_RK[];
 constexpr char Encryption::KEY_MAGIC_PS_V1[];
+constexpr char Encryption::KEY_MAGIC_PS_V2[];
 
 constexpr char Encryption::MASTER_KEY_PREFIX[];
 constexpr char Encryption::DEFAULT_MASTER_KEY[];
@@ -262,7 +263,6 @@ Encryption::Encryption(const Encryption &other) noexcept
       m_key(other.m_key),
       m_klen(other.m_klen),
       m_iv(other.m_iv),
-      m_tablespace_iv(other.m_tablespace_iv),
       m_tablespace_key(other.m_tablespace_key),
       m_key_version(other.m_key_version),
       m_key_id(other.m_key_id),
@@ -2009,12 +2009,6 @@ void Encryption::set_tablespace_key(byte *tablespace_key) {
   m_tablespace_key = tablespace_key;
 }
 
-byte *Encryption::get_tablespace_iv() const { return m_tablespace_iv; }
-
-void Encryption::set_tablespace_iv(byte *tablespace_iv) {
-  m_tablespace_iv = tablespace_iv;
-}
-
 ulint Encryption::get_key_version() const { return m_key_version; }
 
 void Encryption::set_key_version(ulint key_version) {
@@ -2036,7 +2030,7 @@ void Encryption::set_key_id_uuid(const char *key_id_uuid) {
   }
 }
 
-Encryption::Encryption_rotation Encryption::get_encryption_rotation() const {
+Encryption_rotation Encryption::get_encryption_rotation() const {
   return m_encryption_rotation;
 }
 
