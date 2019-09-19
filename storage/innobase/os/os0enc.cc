@@ -50,6 +50,7 @@ constexpr char Encryption::KEY_MAGIC_V2[];
 constexpr char Encryption::KEY_MAGIC_V3[];
 constexpr char Encryption::KEY_MAGIC_RK[];
 constexpr char Encryption::KEY_MAGIC_PS_V1[];
+constexpr char Encryption::KEY_MAGIC_PS_V2[];
 
 constexpr char Encryption::MASTER_KEY_PREFIX[];
 constexpr char Encryption::DEFAULT_MASTER_KEY[];
@@ -69,7 +70,6 @@ Encryption::Encryption(const Encryption &other) noexcept
       m_klen(other.m_klen),
       m_key_allocated(other.m_key_allocated),
       m_iv(other.m_iv),
-      m_tablespace_iv(other.m_tablespace_iv),
       m_tablespace_key(other.m_tablespace_key),
       m_key_version(other.m_key_version),
       m_key_id(other.m_key_id),
@@ -1773,12 +1773,6 @@ void Encryption::set_tablespace_key(byte *tablespace_key) {
   m_tablespace_key = tablespace_key;
 }
 
-byte *Encryption::get_tablespace_iv() const { return m_tablespace_iv; }
-
-void Encryption::set_tablespace_iv(byte *tablespace_iv) {
-  m_tablespace_iv = tablespace_iv;
-}
-
 ulint Encryption::get_key_version() const { return m_key_version; }
 
 void Encryption::set_key_version(ulint key_version) {
@@ -1789,7 +1783,7 @@ ulint Encryption::get_key_id() const { return m_key_id; }
 
 void Encryption::set_key_id(ulint key_id) { m_key_id = key_id; }
 
-Encryption::Encryption_rotation Encryption::get_encryption_rotation() const {
+Encryption_rotation Encryption::get_encryption_rotation() const {
   return m_encryption_rotation;
 }
 
@@ -1809,8 +1803,7 @@ bool Encryption::dblwr_encrypt_page(fil_space_t *space, page_t *in_page,
 
   IORequest write_request(IORequest::WRITE);
   write_request.encryption_key(space->encryption_key, space->encryption_klen,
-                               false, space->encryption_iv, 0, 0, nullptr,
-                               nullptr);
+                               false, space->encryption_iv, 0, 0, nullptr);
   write_request.encryption_algorithm(Encryption::AES);
 
   page_size_t page_size(space->flags);
@@ -1843,8 +1836,7 @@ bool Encryption::dblwr_decrypt_page(fil_space_t *space, page_t *page) {
   IORequest decrypt_request;
 
   decrypt_request.encryption_key(space->encryption_key, space->encryption_klen,
-                                 false, space->encryption_iv, 0, 0, nullptr,
-                                 nullptr);
+                                 false, space->encryption_iv, 0, 0, nullptr);
 
   decrypt_request.encryption_algorithm(Encryption::AES);
 
