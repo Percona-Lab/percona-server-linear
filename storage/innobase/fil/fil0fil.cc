@@ -34,6 +34,7 @@ The tablespace memory cache */
 #include <errno.h>
 #include <fcntl.h>
 #include <sys/types.h>
+#include <scope_guard.h>
 
 #include "arch0page.h"
 #include "btr0btr.h"
@@ -6299,12 +6300,33 @@ dberr_t fil_ibd_open(bool validate, fil_type_t purpose, space_id_t space_id,
     is_encrypted = FSP_FLAGS_GET_ENCRYPTION(flags);
   }
 
-  ut_ad(!is_encrypted || df.is_open());
+  fil_space_crypt_t *crypt_data = nullptr;
 
-  const byte *first_page = df.is_open() ? df.get_first_page() : nullptr;
-  fil_space_crypt_t *crypt_data =
-      first_page ? fil_space_read_crypt_data(page_size_t(flags), first_page)
-                 : nullptr;
+  {  // Read keyring encryption data
+    bool close_df = false;
+    auto guard = create_scope_guard([&close_df, &df]() {
+      if (close_df) df.close();
+    });
+
+    if (is_encrypted && !df.is_open()) {
+      // df.validate_to_dd closes df
+      if (df.open_read_only(strict) != DB_SUCCESS) {
+        ut_ad(!df.is_open());
+        return DB_CANNOT_OPEN_FILE;
+      }
+      close_df = true;
+    }
+
+    const byte *first_page = df.is_open() ? df.get_first_page() : nullptr;
+    crypt_data = first_page
+                     ? fil_space_read_crypt_data(page_size_t(flags), first_page)
+                     : nullptr;
+
+    keyring_encryption_info.page0_has_crypt_data = crypt_data != nullptr;
+    keyring_encryption_info.is_mk_to_keyring_rotation =
+        crypt_data != nullptr && crypt_data->encryption_rotation ==
+                                     Encryption_rotation::MASTER_KEY_TO_KEYRING;
+  }
 
   space = fil_space_create(space_name, space_id, flags, purpose, crypt_data);
 
@@ -8003,7 +8025,6 @@ inline void fil_io_set_keyring_encryption(IORequest &req_type,
   byte *key = NULL;
   ulint key_len = 32;  // 32*8=256
   byte *iv = NULL;
-  byte *tablespace_iv = NULL;
   byte *tablespace_key = NULL;
   uint key_version = 0;
   uint key_id = FIL_DEFAULT_ENCRYPTION_KEY;
@@ -8028,11 +8049,10 @@ inline void fil_io_set_keyring_encryption(IORequest &req_type,
   }
 
   if (req_type.is_read()) {
-    tablespace_iv = space->crypt_data->tablespace_iv;
     tablespace_key = space->crypt_data->tablespace_key;
     ut_ad(space->crypt_data->encryption_rotation !=
-              Encryption::MASTER_KEY_TO_KEYRING ||
-          space->crypt_data->tablespace_key != NULL);
+              Encryption_rotation::MASTER_KEY_TO_KEYRING ||
+          space->crypt_data->tablespace_key != nullptr);
     // retrieve key with min_key_version from local cache. In normal situation
     // this is the key needed for decryption. In rare cases when re-encryption
     // was aborted - due to server crash or shutdown there can be one more key
@@ -8056,7 +8076,7 @@ inline void fil_io_set_keyring_encryption(IORequest &req_type,
   }
 
   req_type.encryption_key(key, key_len, false, iv, key_version, key_id,
-                          tablespace_iv, tablespace_key);
+                          tablespace_key);
 
   req_type.encryption_rotation(space->crypt_data->encryption_rotation);
 
@@ -8073,10 +8093,10 @@ static void fil_io_set_mk_encryption(IORequest &req_type, fil_space_t *space) {
   uint version = space->encryption_redo_key != nullptr
                      ? space->encryption_redo_key->version
                      : REDO_LOG_ENCRYPT_NO_VERSION;
-  req_type.encryption_key(key, 32, false, space->m_encryption_metadata.m_iv, version, 0,
-                          nullptr, nullptr);
+  req_type.encryption_key(key, 32, false, space->m_encryption_metadata.m_iv,
+                          version, 0, nullptr);
 
-  req_type.encryption_rotation(Encryption::NO_ROTATION);
+  req_type.encryption_rotation(Encryption_rotation::NO_ROTATION);
 }
 
 static bool fil_keyring_skip_encryption(const page_id_t &page_id) {
@@ -8147,8 +8167,8 @@ void fil_io_set_encryption(IORequest &req_type, const page_id_t &page_id,
   } else {
     ut_ad(space->m_encryption_metadata.m_type == Encryption::AES);
     req_type.encryption_key(space->m_encryption_metadata.m_key, 32, false,
-                            space->m_encryption_metadata.m_iv, 0, 0, NULL,
-                            NULL);  // not relevant for Master Key encryption
+                            space->m_encryption_metadata.m_iv, 0, 0,
+                            nullptr);  // not relevant for Master Key encryption
 
     /* Don't encrypt the page 0 of all tablespaces */
     if (page_id.page_no() == 0) {
@@ -9051,7 +9071,6 @@ static dberr_t fil_iterate(const Fil_page_iterator &iter, buf_block_t *block,
           Encryption::KEY_LEN, false,
           encrypted_with_keyring ? iter.m_crypt_data->iv : iter.m_encryption_iv,
           0, iter.m_encryption_key_id,
-          encrypted_with_keyring ? iter.m_crypt_data->tablespace_iv : NULL,
           encrypted_with_keyring ? iter.m_crypt_data->tablespace_key : NULL);
 
       read_request.encryption_algorithm(Encryption::AES);
@@ -9059,7 +9078,7 @@ static dberr_t fil_iterate(const Fil_page_iterator &iter, buf_block_t *block,
         read_request.encryption_rotation(
             iter.m_crypt_data->encryption_rotation);
       } else
-        read_request.encryption_rotation(Encryption::NO_ROTATION);
+        read_request.encryption_rotation(Encryption_rotation::NO_ROTATION);
     }
 
     err = os_file_read(read_request, iter.m_filepath, iter.m_file, io_buffer,
@@ -9106,13 +9125,13 @@ static dberr_t fil_iterate(const Fil_page_iterator &iter, buf_block_t *block,
       write_request.encryption_key(iter.m_encryption_key, Encryption::KEY_LEN,
                                    false, iter.m_encryption_iv,
                                    iter.m_encryption_key_version,
-                                   iter.m_encryption_key_id, nullptr, nullptr);
+                                   iter.m_encryption_key_id, nullptr);
       write_request.encryption_algorithm(Encryption::AES);
     } else if (offset != 0 && iter.m_crypt_data) {
       write_request.encryption_key(iter.m_encryption_key, Encryption::KEY_LEN,
                                    false, iter.m_encryption_iv,
                                    iter.m_encryption_key_version,
-                                   iter.m_crypt_data->key_id, NULL, NULL);
+                                   iter.m_crypt_data->key_id, nullptr);
 
       write_request.encryption_algorithm(Encryption::KEYRING);
 
