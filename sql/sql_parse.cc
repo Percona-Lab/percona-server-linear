@@ -4922,6 +4922,11 @@ int mysql_execute_command(THD *thd, bool first_level) {
     case SQLCOM_SHOW_STATUS_LIBRARY:
     case SQLCOM_SHOW_VARIABLES:
     case SQLCOM_SHOW_WARNS:
+    case SQLCOM_SHOW_USER_STATS:
+    case SQLCOM_SHOW_TABLE_STATS:
+    case SQLCOM_SHOW_INDEX_STATS:
+    case SQLCOM_SHOW_CLIENT_STATS:
+    case SQLCOM_SHOW_THREAD_STATS:
     case SQLCOM_CLONE:
     case SQLCOM_LOCK_INSTANCE:
     case SQLCOM_UNLOCK_INSTANCE:
@@ -6744,8 +6749,13 @@ static uint kill_one_thread(THD *thd, my_thread_id id, bool only_kill_query) {
       slayage if both are string-equal.
     */
 
-    if (sctx->check_access(SUPER_ACL) ||
-        sctx->has_global_grant(STRING_WITH_LEN("CONNECTION_ADMIN")).first ||
+    const bool is_utility_connection = acl_is_utility_user(
+        tmp->m_security_ctx->user().str, tmp->m_security_ctx->host().str,
+        tmp->m_security_ctx->ip().str);
+
+    if (((sctx->check_access(SUPER_ACL) ||
+          sctx->has_global_grant(STRING_WITH_LEN("CONNECTION_ADMIN")).first) &&
+         !is_utility_connection) ||
         sctx->user_matches(tmp->security_context())) {
       /*
         Process the kill:
