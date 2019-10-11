@@ -668,8 +668,6 @@ std::chrono::milliseconds get_srv_replication_delay() {
 
 ulint srv_pass_corrupt_table = 0; /* 0:disable 1:enable */
 
-bool srv_redo_log_thread_started = false;
-
 /*-------------------------------------------*/
 ulong srv_n_spin_wait_rounds = 30;
 ulong srv_spin_wait_delay = 6;
@@ -2903,12 +2901,12 @@ void undo_rotate_default_master_key() {
 }
 
 bool srv_enable_redo_encryption(THD *thd) {
-  if (srv_redo_log_encrypt == REDO_LOG_ENCRYPT_MK) {
-    return srv_enable_redo_encryption_mk(thd);
-  }
-
-  if (srv_redo_log_encrypt == REDO_LOG_ENCRYPT_RK) {
-    return srv_enable_redo_encryption_rk(thd);
+  switch (srv_redo_log_encrypt) {
+    case REDO_LOG_ENCRYPT_ON:
+    case REDO_LOG_ENCRYPT_MK:
+      return srv_enable_redo_encryption_mk(thd);
+    case REDO_LOG_ENCRYPT_RK:
+      return srv_enable_redo_encryption_rk(thd);
   }
 
   return false;
