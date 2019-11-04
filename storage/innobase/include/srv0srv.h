@@ -297,8 +297,8 @@ struct Srv_threads {
   /** true if tablespace alter encrypt thread is created */
   bool m_ts_alter_encrypt_thread_active;
 
-  /** true if there is keyring encryption thread running */
-  bool m_encryption_threads_active;
+  /** No of key rotation threads started */
+  size_t m_crypt_threads_n = 0;
 
   /** When the master thread notices that shutdown has started (by noticing
   srv_shutdown_state >= SRV_SHUTDOWN_PRE_DD_AND_SYSTEM_TRANSACTIONS), it exits
@@ -467,8 +467,7 @@ extern ulong srv_rollback_segments;
 /** Maximum size of undo tablespace. */
 extern unsigned long long srv_max_undo_tablespace_size;
 
-extern uint srv_n_fil_crypt_threads;
-extern uint srv_n_fil_crypt_threads_started;
+extern uint srv_n_fil_crypt_threads_requested;
 
 /** Rate at which UNDO records should be purged. */
 extern ulong srv_purge_rseg_truncate_frequency;
@@ -487,11 +486,6 @@ extern bool srv_sys_tablespace_encrypt;
 
 /** Enable or disable encryption of pages in parallel doublewrite buffer file */
 extern bool srv_parallel_dblwr_encrypt;
-
-/** Whether the redo log tracker thread has been started. Does not take into
-account whether the tracking is currently enabled (see srv_track_changed_pages
-for that) */
-extern bool srv_redo_log_thread_started;
 
 /** Whether the redo log tracking is currently enabled. Note that it is
 possible for the log tracker thread to be running and the tracking to be
