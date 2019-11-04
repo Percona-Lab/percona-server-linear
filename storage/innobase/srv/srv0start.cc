@@ -1635,6 +1635,7 @@ void srv_init_log_online(void) {
        changed page bitmap */
     srv_threads.m_changed_page_tracker = os_thread_create(
         srv_log_tracking_thread_key, srv_redo_log_follow_thread);
+    srv_threads.m_changed_page_tracker.start();
   }
 }
 
@@ -1779,7 +1780,7 @@ void srv_shutdown_exit_threads() {
         os_event_set(log_scrub_event);
       }
 
-      if (srv_n_fil_crypt_threads_started) {
+      if (srv_threads.m_crypt_threads_n) {
         os_event_set(fil_crypt_threads_event);
       }
     }
@@ -2122,6 +2123,10 @@ dberr_t srv_start(bool create_new_db) {
   ut_d(sync_check_enable());
 
   srv_boot();
+
+  extern ib_mutex_t master_key_id_mutex;
+  /* Create mutex to protect encryption master_key_id. */
+  mutex_create(LATCH_ID_MASTER_KEY_ID_MUTEX, &master_key_id_mutex);
 
   ib::info(ER_IB_MSG_1126) << (ut_crc32_cpu_enabled ? "Using" : "Not using")
                            << " CPU crc32 instructions";
@@ -2608,6 +2613,16 @@ files_checked:
     this point there will be only ONE page in the buf_LRU
     and there must be no page in the buf_flush list. */
     buf_pool_invalidate();
+
+    /* Start monitor thread early enough so that e.g. crash recovery failing to
+    find free pages in the buffer pool is diagnosed. */
+    if (!srv_read_only_mode) {
+      /* Create the thread which prints InnoDB monitor info */
+      srv_threads.m_monitor =
+          os_thread_create(srv_monitor_thread_key, srv_monitor_thread);
+      srv_threads.m_monitor.start();
+      srv_start_state_set(SRV_START_STATE_MONITOR);
+    }
 
     /* We always try to do a recovery, even if the database had
     been shut down normally: this is the normal startup path */
@@ -3416,7 +3431,11 @@ void srv_pre_dd_shutdown() {
 
   /* Since this point we do not expect accesses to DD coming from InnoDB. */
 
-  while (srv_threads.m_encryption_threads_active) {
+  for (;;) {
+    const auto threads_count = srv_threads.m_crypt_threads_n;
+    if (threads_count == 0) {
+      break;
+    }
     ib::info(ER_XB_MSG_WAIT_FOR_KEYRING_ENCRYPT_THREAD)
         << "Waiting for"
            " keyring encryption threads"
@@ -3942,6 +3961,7 @@ void log_ensure_scrubbing_thread(void) {
   log_scrub_thread_active = srv_scrub_log;
   if (log_scrub_thread_active) {
     log_scrub_event = os_event_create();
-    os_thread_create(log_scrub_thread_key, log_scrub_thread);
+    auto thread = os_thread_create(log_scrub_thread_key, log_scrub_thread);
+    thread.start();
   }
 }
