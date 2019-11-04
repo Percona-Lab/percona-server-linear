@@ -416,7 +416,7 @@ Datafile::ValidateOutput Datafile::validate_to_dd(space_id_t space_id,
         output.keyring_encryption_info.keyring_encryption_min_key_version !=
             0)) &&
       FSP_FLAGS_GET_ENCRYPTION(flags) != FSP_FLAGS_GET_ENCRYPTION(m_flags)) {
-    if (srv_n_fil_crypt_threads == 0) {
+    if (srv_n_fil_crypt_threads_requested == 0) {
       ib::warn() << "In file '" << m_filepath
                  << "' (tablespace id = " << m_space_id
                  << ") encryption flag is "
@@ -701,10 +701,14 @@ Datafile::ValidateOutput Datafile::validate_first_page(space_id_t space_id,
   can't be open. And for importing, we skip checking it. */
   if (FSP_FLAGS_GET_ENCRYPTION(m_flags) && !for_import) {
     if (crypt_data == nullptr) {
-      m_encryption_key = static_cast<byte *>(
-          ut::zalloc_withkey(UT_NEW_THIS_FILE_PSI_KEY, Encryption::KEY_LEN));
-      m_encryption_iv = static_cast<byte *>(
-          ut::zalloc_withkey(UT_NEW_THIS_FILE_PSI_KEY, Encryption::KEY_LEN));
+      if (m_encryption_key == nullptr) {
+        m_encryption_key = static_cast<byte *>(
+            ut::zalloc_withkey(UT_NEW_THIS_FILE_PSI_KEY, Encryption::KEY_LEN));
+      }
+      if (m_encryption_iv == nullptr) {
+        m_encryption_iv = static_cast<byte *>(
+            ut::zalloc_withkey(UT_NEW_THIS_FILE_PSI_KEY, Encryption::KEY_LEN));
+      }
 #ifdef UNIV_ENCRYPT_DEBUG
       fprintf(stderr, "Got from file %u:", m_space_id);
 #endif
