@@ -2103,6 +2103,16 @@ dberr_t srv_start(bool create_new_db) {
     and there must be no page in the buf_flush list. */
     buf_pool_invalidate();
 
+    /* Start monitor thread early enough so that e.g. crash recovery failing to
+    find free pages in the buffer pool is diagnosed. */
+    if (!srv_read_only_mode) {
+      /* Create the thread which prints InnoDB monitor info */
+      srv_threads.m_monitor =
+          os_thread_create(srv_monitor_thread_key, 0, srv_monitor_thread);
+      srv_threads.m_monitor.start();
+      srv_monitor_thread_created = true;
+    }
+
     /* Open all data files in the system tablespace:
     we keep them open until database shutdown. */
     fil_open_system_tablespace_files();
@@ -3012,7 +3022,11 @@ void srv_pre_dd_shutdown() {
   /* Since this point we do not expect accesses to DD coming from InnoDB. */
   ut_d(trx_sys_before_pre_dd_shutdown_validate());
 
-  while (srv_threads.m_encryption_threads_active) {
+  for (;;) {
+    const auto threads_count = srv_threads.m_crypt_threads_n;
+    if (threads_count == 0) {
+      break;
+    }
     ib::info(ER_XB_MSG_WAIT_FOR_KEYRING_ENCRYPT_THREAD)
         << "Waiting for"
            " keyring encryption threads"
