@@ -872,6 +872,7 @@ IF(MY_COMPILER_IS_GNU)
   IF(HAS_WARN_FLAG)
     ADD_COMPILE_FLAGS(
       geometry_rtree.cc
+      join_optimizer/access_path.cc
       COMPILE_FLAGS ${HAS_WARN_FLAG}
       )
   ENDIF()
@@ -929,6 +930,9 @@ IF(HAVE_NO_BUILTIN_MEMCMP)
   )
 ENDIF()
 
+IF(MY_COMPILER_IS_GNU AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 14)
+  ADD_COMPILE_FLAGS(sql_planner.cc COMPILE_FLAGS "-Wno-array-bounds")
+ENDIF()
 
 ADD_STATIC_LIBRARY(sql_main ${SQL_SOURCE} LINK_LIBRARIES ext::icu)
 ADD_DEPENDENCIES(sql_main GenServerSource)
@@ -977,6 +981,11 @@ ADD_DEPENDENCIES(sql_gis GenError)
 TARGET_LINK_LIBRARIES(sql_gis sql_dd sql_main)
 TARGET_LINK_LIBRARIES(sql_gis extra::boost)
 SET_TARGET_PROPERTIES(sql_gis PROPERTIES LINK_INTERFACE_MULTIPLICITY 3)
+
+# Suppress warnings for clang-18 or newer
+IF(CMAKE_CXX_COMPILER_ID MATCHES "Clang" AND NOT CMAKE_CXX_COMPILER_VERSION VERSION_LESS 18)
+  TARGET_COMPILE_OPTIONS(sql_gis PRIVATE -Wno-enum-constexpr-conversion)
+ENDIF()
 
 # This typically saves a few hundred megabytes of disk space.
 IF(COMPRESS_DEBUG_SECTIONS)
