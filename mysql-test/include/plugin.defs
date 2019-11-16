@@ -48,7 +48,7 @@ mypluglib                               plugin_output_directory  no SIMPLE_PARSE
 libpluginmecab                          plugin_output_directory  no MECAB
 adt_null                                plugin_output_directory  no AUDIT_NULL
 keyring_udf                             plugin_output_directory  no KEYRING_UDF keyring_udf
-data_masking                            plugin_output_directory DATA_MASKING_PLUGIN data_masking
+data_masking                            plugin_output_directory  no DATA_MASKING_PLUGIN data_masking
 keyring_file                            plugin_output_directory  no KEYRING_PLUGIN        keyring_file
 test_security_context                   plugin_output_directory  no TEST_SECURITY_CONTEXT  test_security_context
 libdaemon_example                       plugin_output_directory  no DAEMONEXAMPLE
@@ -166,7 +166,8 @@ tokudb_backup      plugin_output_directory  no  TOKUDB_BACKUP   tokudb_backup
 ha_rocksdb         plugin_output_directory  no  ROCKSDB         rocksdb,rocksdb_cfstats,rocksdb_dbstats,rocksdb_perf_context,rocksdb_perf_context_global,rocksdb_cf_options,rocksdb_compaction_history,rocksdb_compaction_stats,rocksdb_active_compaction_stats,rocksdb_global_info,rocksdb_ddl,rocksdb_index_file_map,rocksdb_locks,rocksdb_trx,rocksdb_deadlock,rocksdb_sst_props
 auth_pam           plugin_output_directory  no  AUTH_PAM
 auth_pam_compat    plugin_output_directory  no  AUTH_PAM_COMPAT
-authentication_ldap_simple          plugin_output_directory  AUTH_LDAP             authentication_ldap_simple
-keyring_vault      plugin_output_directory      KEYRING_VAULT_PLUGIN keyring_vault
-test_udf_wrappers  plugin_output_directory  TEST_UDF_WRAPPERS_LIB
-binlog_utils_udf   plugin_output_directory  BINLOG_UTILS_UDF_LIB
+authentication_ldap_simple          plugin_output_directory  no  AUTH_LDAP             authentication_ldap_simple
+keyring_vault      plugin_output_directory  no  KEYRING_VAULT_PLUGIN keyring_vault
+test_udf_wrappers  plugin_output_directory  no  TEST_UDF_WRAPPERS_LIB
+binlog_utils_udf   plugin_output_directory  no  BINLOG_UTILS_UDF_LIB
+procfs             plugin_output_directory  no  PROCFS_PLUGIN procfs
