@@ -2134,6 +2134,22 @@ static bool fill_dd_table_from_create_info(
     table_options->set("encrypt_type", encrypt_type);
   }
 
+  // assign explicit encryption. explict_encryption can come from ENCRYPTION
+  // clause usage (used_fields) or from DD (create_info->explicit_encryption -
+  // this means table originally was created with explicit_encryption
+  // (ENCRYPTION clause was used with CREATE)).
+  if ((create_info->used_fields & HA_CREATE_USED_ENCRYPT) ||
+      create_info->explicit_encryption) {
+    // clear explicit encryption if SE does not support encryption
+    if (!(hton->flags & HTON_SUPPORTS_TABLE_ENCRYPTION)) {
+      table_options->set("explicit_encryption", false);
+    } else {
+      table_options->set("explicit_encryption", true);
+    }
+  } else {
+    table_options->set("explicit_encryption", false);
+  }
+
   if (create_info->was_encryption_key_id_set) {
     table_options->set("encryption_key_id", create_info->encryption_key_id);
   }
@@ -2504,7 +2520,7 @@ bool rename_foreign_keys(THD *thd MY_ATTRIBUTE((unused)),
     if (is_generated_foreign_key_name(old_table_name_norm,
                                       old_table_name_norm_len, hton, *fk)) {
       char table_name[NAME_LEN + 1];
-      my_stpncpy(table_name, new_tab->name().c_str(), sizeof(table_name));
+      my_strncpy_trunc(table_name, new_tab->name().c_str(), sizeof(table_name));
       if (lower_case_table_names == 2)
         my_casedn_str(system_charset_info, table_name);
       dd::String_type new_name(table_name);
