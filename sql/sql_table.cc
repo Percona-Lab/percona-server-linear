@@ -7154,7 +7154,7 @@ static bool prepare_key(THD *thd, HA_CREATE_INFO *create_info,
                     ER_ILLEGAL_HA_CREATE_OPTION, MYF(0),
                     ha_resolve_storage_engine_name(subpart_elem->engine_type),
                     "CLUSTERING");
-		return true;
+                return true;
               }
             }
           } else if (unlikely(!ha_check_storage_engine_flag(
@@ -7163,14 +7163,14 @@ static bool prepare_key(THD *thd, HA_CREATE_INFO *create_info,
             my_error(ER_ILLEGAL_HA_CREATE_OPTION, MYF(0),
                      ha_resolve_storage_engine_name(part_elem->engine_type),
                      "CLUSTERING");
-	    return true;
+            return true;
           }
         }
       } else if (unlikely(!ha_check_storage_engine_flag(
                      file->ht, HTON_SUPPORTS_CLUSTERED_KEYS))) {
         my_error(ER_ILLEGAL_HA_CREATE_OPTION, MYF(0),
                  ha_resolve_storage_engine_name(file->ht), "CLUSTERING");
-	return true;
+        return true;
       }
       if (key->type & KEYTYPE_UNIQUE)
         key_info->flags = HA_NOSAME;
@@ -7927,7 +7927,7 @@ bool mysql_prepare_create_table(
       if (sql_field->column_format() == COLUMN_FORMAT_TYPE_COMPRESSED) {
         my_error(ER_UNSUPPORTED_COMPRESSED_COLUMN_TYPE, MYF(0),
                  sql_field->field_name);
-	return true;
+        return true;
       }
     }
 
@@ -7941,7 +7941,7 @@ bool mysql_prepare_create_table(
         sql_field->zip_dict_name.str != nullptr &&
         sql_field->zip_dict_name.length != 0) {
       if (compression_dict::acquire_dict_mdl(thd, MDL_SHARED_READ)) {
-	      return true;
+        return true;
       }
 
       uint64 zip_dict_id =
@@ -7950,7 +7950,7 @@ bool mysql_prepare_create_table(
       if (zip_dict_id == 0) {
         my_error(ER_COMPRESSION_DICTIONARY_DOES_NOT_EXIST, MYF(0),
                  sql_field->zip_dict_name.str);
-	return true;
+        return true;
       }
       sql_field->zip_dict_id = zip_dict_id;
     }
@@ -8048,8 +8048,8 @@ bool mysql_prepare_create_table(
                       key_info_buffer, key_info, &key_part_info, keys_to_check,
                       key_number, file, &auto_increment))
         return true;
-      for (const auto &it : alter_info->delayed_key_list) {
-        if (it == key) {
+      for (const auto &it2 : alter_info->delayed_key_list) {
+        if (it2 == key) {
           alter_info->delayed_key_info[alter_info->delayed_key_count++] =
               *key_info;
           break;
@@ -8609,8 +8609,7 @@ static bool create_table_impl(
     return true;
   }
 
-  if (check_engine(thd, db, table_name, create_info, alter_info))
-    return true;
+  if (check_engine(thd, db, table_name, create_info, alter_info)) return true;
 
   // Secondary engine cannot be defined for temporary tables.
   if (create_info->secondary_engine.str != nullptr &&
@@ -8903,19 +8902,26 @@ static bool validate_table_encryption(THD *thd, HA_CREATE_INFO *create_info) {
                                tt != Tablespace_type::SPACE_TYPE_SHARED);
     uses_system_tablespace = tt == Tablespace_type::SPACE_TYPE_SYSTEM;
     if (uses_system_tablespace) {
-      dd::Encrypt_result result = dd::is_system_tablespace_encrypted(thd);
-      if (result.error) return true;
-      uses_encrypted_tablespace = result.value;
+      dd::Encrypt_result result2 = dd::is_system_tablespace_encrypted(thd);
+      if (result2.error) return true;
+      uses_encrypted_tablespace = result2.value;
     }
   }
 
   /*
     Stop if table's uses general tablespace and the requested encryption
     type does not match the general tablespace encryption type.
+    We allow to create table inside encrypted tablespace when ONLINE_TO_KEYRING
+    is specified. This table will be created in encrypted tablespace - which we
+    aim for and can be rotated to Keyring (given encryption threads are ON).
   */
   bool requested_type = dd::is_encrypted(create_info->encrypt_type);
+
   if ((uses_general_tablespace || uses_system_tablespace) &&
-      requested_type != uses_encrypted_tablespace) {
+      ((requested_type != uses_encrypted_tablespace) &&
+       (!uses_encrypted_tablespace ||
+        global_system_variables.default_table_encryption !=
+            DEFAULT_TABLE_ENC_ONLINE_TO_KEYRING))) {
     my_error(ER_INVALID_ENCRYPTION_REQUEST, MYF(0),
              requested_type ? "'encrypted'" : "'unencrypted'",
              uses_encrypted_tablespace ? "'encrypted'" : "'unencrypted'");
@@ -9026,6 +9032,13 @@ bool mysql_create_table_no_lock(THD *thd, const char *db,
   if (schema == nullptr) {
     my_error(ER_BAD_DB_ERROR, MYF(0), db);
     return true;
+  }
+
+  // Fix create_info->explicit_encryption. For alter it is retrieved
+  // from share.
+  if (!(create_info->options & HA_LEX_CREATE_INTERNAL_TMP_TABLE) &&
+      (create_info->used_fields & HA_CREATE_USED_ENCRYPT)) {
+    create_info->explicit_encryption = true;
   }
 
   // Determine table encryption type, and check if user is allowed to create.
@@ -10684,15 +10697,6 @@ bool mysql_create_like_table(THD *thd, TABLE_LIST *table, TABLE_LIST *src_table,
   */
   if (src_table_obj && !src_table_obj->is_explicit_tablespace()) {
     local_create_info.tablespace = nullptr;
-  }
-
-  /*
-    Do not keep ENCRYPTION clause for unencrypted table.
-    We raise error if we are creating encrypted temporary table later.
-  */
-  if (local_create_info.encrypt_type.str &&
-      !dd::is_encrypted(local_create_info.encrypt_type)) {
-    local_create_info.encrypt_type = {nullptr, 0};
   }
 
   /*
@@ -15620,7 +15624,7 @@ static bool remove_secondary_keys(
 
   if (table->file->check_if_supported_inplace_alter(table, &ha_alter_info) ==
       HA_ALTER_INPLACE_NOT_SUPPORTED)
-	  return true;
+    return true;
 
   for (const auto index : *altered_table_def->indexes()) {
     const char *dd_index_name = index->name().c_str();
@@ -15648,9 +15652,9 @@ static bool remove_secondary_keys(
   if (table->file->ha_prepare_inplace_alter_table(table, &ha_alter_info,
                                                   table_def, td.get()) ||
       table->file->ha_inplace_alter_table(table, &ha_alter_info, table_def,
-                                          altered_table_def) ||
-      table->file->ha_commit_inplace_alter_table(
-          table, &ha_alter_info, true, table_def, altered_table_def)) {
+                                          td.get()) ||
+      table->file->ha_commit_inplace_alter_table(table, &ha_alter_info, true,
+                                                 table_def, td.get())) {
     table->file->ha_commit_inplace_alter_table(table, &ha_alter_info, false,
                                                table_def, td.get());
     return true;
@@ -15710,34 +15714,34 @@ static bool restore_secondary_keys(
       HA_ALTER_INPLACE_NOT_SUPPORTED)
     DBUG_RETURN(-1);
 
+  /* Use previously clonned altered_table_def (the one with disabled keys)
+     and enable keys */
+
   if (table->file->ha_prepare_inplace_alter_table(
-          table, &ha_alter_info, table_def, altered_table_def) ||
-      table->file->ha_inplace_alter_table(table, &ha_alter_info, table_def,
+          table, &ha_alter_info, td.get(), altered_table_def) ||
+      table->file->ha_inplace_alter_table(table, &ha_alter_info, td.get(),
                                           altered_table_def) ||
-      table->file->ha_commit_inplace_alter_table(
-          table, &ha_alter_info, true, table_def, altered_table_def)) {
+      table->file->ha_commit_inplace_alter_table(table, &ha_alter_info, true,
+                                                 td.get(), altered_table_def)) {
     table->file->ha_commit_inplace_alter_table(table, &ha_alter_info, false,
-                                               table_def, altered_table_def);
+                                               td.get(), altered_table_def);
     DBUG_RETURN(true);
   }
-
   DBUG_RETURN(false);
 }
 
 /**
-  /* Use previously clonned altered_table_def (the one with disabled keys)
-     and enable keys */
-
   Auxiliary class implementing RAII principle for getting permission for/
-          table, &ha_alter_info, td.get(), altered_table_def) ||
-      table->file->ha_inplace_alter_table(table, &ha_alter_info, td.get(),
+  notification about finished ALTER TABLE from interested storage engines.
+
   @see handlerton::notify_alter_table for details.
-      table->file->ha_commit_inplace_alter_table(table, &ha_alter_info, true,
-                                                 td.get(), altered_table_def)) {
+*/
+
 class Alter_table_hton_notification_guard {
-                                               td.get(), altered_table_def);
+ public:
   Alter_table_hton_notification_guard(THD *thd, const MDL_key *key)
       : m_hton_notified(false), m_thd(thd), m_key(*key) {}
+
   bool notify() {
     if (!ha_notify_alter_table(m_thd, &m_key, HA_NOTIFY_PRE_EVENT)) {
       m_hton_notified = true;
@@ -16685,12 +16689,12 @@ bool mysql_alter_table(THD *thd, const char *new_db, const char *new_name,
         // Not possible, error out.
         my_error(ER_ALTER_OPERATION_NOT_SUPPORTED, MYF(0), "ALGORITHM=INSTANT",
                  "ALGORITHM=INPLACE/COPY");
-	return true;
+        return true;
       case Alter_info::ALTER_TABLE_ALGORITHM_COPY:
       case Alter_info::ALTER_TABLE_ALGORITHM_INPLACE:
         break;
       default:
-	return 0;
+        return 0;
     }
   }
 
@@ -17294,13 +17298,12 @@ bool mysql_alter_table(THD *thd, const char *new_db, const char *new_name,
                  " for query "
                      << thd->query().str << " table_db: " << alter_ctx.new_db
                      << " table_name: " << alter_ctx.new_name);
-	return true;
+        return true;
       }
       /* New table is successfully created, check if any columns have
       compression dictionary and add entry for them in
       mysql.compression_dictionary_cols table */
-      if (compression_dict::cols_table_insert(thd, *new_table_def))
-	return true;
+      if (compression_dict::cols_table_insert(thd, *new_table_def)) return true;
 
       goto end_inplace;
     } else {
@@ -17525,25 +17528,23 @@ bool mysql_alter_table(THD *thd, const char *new_db, const char *new_name,
           &dd_disabled_sec_keys);
     }
 
-    bool error = false;
+    bool error2 = false;
     if (copy_data_between_tables(thd, thd->m_stage_progress_psi, table,
                                  new_table, alter_info->create_list, &copied,
                                  &deleted, alter_info->keys_onoff, &alter_ctx,
                                  optimize_keys)) {
-      error = true;
+      error2 = true;
     }
 
     if (optimize_keys &&
-        restore_secondary_keys(
-            thd, create_info, new_table, alter_info,
-            is_tmp_table ? table->s->tmp_table_def : old_table_def, table_def,
-            &dd_disabled_sec_keys)) {
-      error = true;
+        restore_secondary_keys(thd, create_info, new_table, alter_info,
+                               table_def, &dd_disabled_sec_keys)) {
+      error2 = true;
     }
 
     new_table->file->ha_extra(HA_EXTRA_END_ALTER_COPY);
 
-    if (error) {
+    if (error2) {
       goto err_new_table_cleanup;
     }
 
@@ -18835,7 +18836,7 @@ static bool check_engine(THD *thd, const char *db_name, const char *table_name,
     my_error(ER_ILLEGAL_HA_CREATE_OPTION, MYF(0),
              ha_resolve_storage_engine_name(*new_engine), "COMPRESSED COLUMNS");
     *new_engine = 0;
-	return true;
+    return true;
   }
 
   // The storage engine must support secondary engines.
