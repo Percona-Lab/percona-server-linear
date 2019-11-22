@@ -300,33 +300,44 @@ class Encryption {
   @return the string representation */
   [[nodiscard]] static const char *to_string(Type type) noexcept;
 
-  /** Check if the string is "empty" or "none".
+  /** Check if the string is "" or "n".
   @param[in]  algorithm  Encryption algorithm to check
   @return true if no algorithm requested */
   [[nodiscard]] static bool is_none(const char *algorithm) noexcept;
 
   /** Check if the NO algorithm was explicitly specified.
+  @param[in]      explicit_encryption was ENCRYPTION clause
+                  specified explicitly
   @param[in]      algorithm       Encryption algorithm to check
   @return true if no algorithm explicitly requested */
-  static bool none_explicitly_specified(
-      ulong create_info_used_fields,
-      const char *algorithm) noexcept MY_ATTRIBUTE((warn_unused_result));
+  MY_NODISCARD static bool none_explicitly_specified(
+      bool explicit_encryption, const char *algorithm) noexcept;
 
-  static bool is_master_key_encryption(
-      const char *algorithm) noexcept MY_ATTRIBUTE((warn_unused_result));
+  /** Check if the string is "y" or "Y".
+  @param[in]      algorithm       Encryption algorithm to check
+  @return true if no algorithm requested */
+  MY_NODISCARD static bool is_master_key_encryption(
+      const char *algorithm) noexcept;
+
   MY_NODISCARD static bool is_empty(const char *algorithm) noexcept;
 
   MY_NODISCARD static bool is_keyring(const char *algoritm) noexcept;
 
   MY_NODISCARD static bool is_online_encryption_on() noexcept;
 
-  static bool should_be_keyring_encrypted(ulong create_info_used_fields,
-                                          const char *algorithm) noexcept
-      MY_ATTRIBUTE((warn_unused_result));
+  MY_NODISCARD static bool should_be_keyring_encrypted(
+      bool explicit_encryption, const char *algorithm) noexcept;
 
   /** Generate random encryption value for key and iv.
   @param[in,out]  value Encryption value */
   static void random_value(byte *value) noexcept;
+
+  /** Create tablespace key
+  @param[in,out]	tablespace_key	tablespace key - null if failure
+  @param[in]		key_id		tablespace key id
+  @param[in]  uuid tablespace key uuid */
+  static void create_tablespace_key(byte **tablespace_key, uint key_id,
+                                    const char *uuid);
 
   /** Copy the given encryption metadata to the given Encryption_metadata
   object, if both key != nullptr and iv != nullptr. Generate randomly the
