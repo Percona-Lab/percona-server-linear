@@ -2842,16 +2842,12 @@ bool Encryption::is_none(const char *algorithm) noexcept {
   return (false);
 }
 
-bool Encryption::is_master_key_encryption(const char *algorithm) noexcept {
-  return innobase_strcasecmp(algorithm, "y") == 0;
-}
-
 /** Check if the NO algorithm was explicitly specified.
 @param[in]      algorithm       Encryption algorithm to check
 @return true if no algorithm explicitly requested */
-bool Encryption::none_explicitly_specified(ulong create_info_used_fields,
+bool Encryption::none_explicitly_specified(bool explicit_encryption,
                                            const char *algorithm) noexcept {
-  if (create_info_used_fields & HA_CREATE_USED_ENCRYPT) {
+  if (explicit_encryption) {
     ut_ad(algorithm != nullptr);
     return innobase_strcasecmp(algorithm, "n") == 0;
   }
@@ -11974,7 +11970,9 @@ dberr_t create_table_info_t::enable_encryption(dict_table_t *table) {
   space_id_t space_id = 0;
   dd::Object_id dd_space_id = dd::INVALID_OBJECT_ID;
   ulint actual_n_cols;
-  fil_encryption_t keyring_encryption_option = FIL_ENCRYPTION_DEFAULT;
+
+  bool keyring_encryption_option_none = Encryption::none_explicitly_specified(
+      m_create_info->explicit_encryption, m_create_info->encrypt_type.str);
 
   uint32_t i_c = 0;
   uint32_t c_c = 0;
@@ -12346,9 +12344,9 @@ dberr_t create_table_info_t::enable_encryption(dict_table_t *table) {
     fts_add_doc_id_column(table, heap);
   }
 
-  err = (Encryption::is_master_key_encryption(m_create_info->encrypt_type.str))
-            ? enable_master_key_encryption(table)
-            : enable_keyring_encryption(table, keyring_encryption_option);
+  if (!keyring_encryption_option_none) {
+    err = enable_encryption(table);
+  }
   if (err != DB_SUCCESS) {
     dict_mem_table_free(table);
     mem_heap_free(heap);
@@ -13018,7 +13016,8 @@ bool create_table_info_t::create_option_tablespace_is_valid() {
 
   if (!m_use_shared_space) {
     if (!m_use_file_per_table) {
-      if (m_create_info->encrypt_type.str != nullptr && is_temp) {
+      if (m_create_info->encrypt_type.str != nullptr &&
+          m_create_info->explicit_encryption && is_temp) {
         /* Temporary tablespace is being used for table */
         my_printf_error(ER_ILLEGAL_HA_CREATE_OPTION,
                         "InnoDB: ENCRYPTION is not accepted"
@@ -13481,63 +13480,6 @@ const char *create_table_info_t::create_options_are_invalid() {
   }
 
   return (ret);
-}
-
-void ha_innobase::adjust_encryption_key_id(HA_CREATE_INFO *create_info,
-                                           dd::Properties *options) noexcept {
-  if (false == create_info->was_encryption_key_id_set) {
-    if (Encryption::should_be_keyring_encrypted(
-            create_info->used_fields, create_info->encrypt_type.str)) {
-      create_info->encryption_key_id =
-          THDVAR(current_thd, default_encryption_key_id);
-      create_info->was_encryption_key_id_set = true;
-    }
-  } else if (Encryption::is_master_key_encryption(
-                 create_info->encrypt_type.str) ||
-             Encryption::none_explicitly_specified(
-                 create_info->used_fields, create_info->encrypt_type.str)) {
-    // if it is encrypted table with Master key encryption or marked as not to
-    // be encrypted and alter table does not have ENCRYPTION_KEY_ID - mark
-    // encryption key id as not set.
-
-    push_warning_printf(
-        current_thd, Sql_condition::SL_WARNING, HA_WRONG_CREATE_OPTION,
-        Encryption::none_explicitly_specified(create_info->used_fields,
-                                              create_info->encrypt_type.str)
-            ? "InnoDB: Ignored ENCRYPTION_KEY_ID %u when "
-              "encryption is disabled."
-            : "InnoDB: Ignored ENCRYPTION_KEY_ID %u when "
-              "Master Key encryption is enabled.",
-        create_info->encryption_key_id);
-    create_info->encryption_key_id = FIL_DEFAULT_ENCRYPTION_KEY;
-    create_info->was_encryption_key_id_set = false;
-    options->remove("encryption_key_id");
-  }
-
-  if (options && create_info->was_encryption_key_id_set &&
-      (create_info->tablespace == nullptr ||
-       strcmp(create_info->tablespace, dict_sys_t::s_file_per_table_name) ==
-           0)) {
-    options->set("encryption_key_id", create_info->encryption_key_id);
-  }
-}
-
-/** Adjust encryption options.
-@param[in,out]  create_info Additional create information.
-@param[in,out]  table_def dd::Table object to be modified.*/
-void ha_innobase::adjust_encryption_options(HA_CREATE_INFO *create_info,
-                                            dd::Table *table_def) noexcept {
-  bool is_intrinsic =
-      (create_info->options & HA_LEX_CREATE_INTERNAL_TMP_TABLE) != 0;
-
-  bool is_tmp = (create_info->options & HA_LEX_CREATE_TMP_TABLE) != 0;
-
-  if (is_intrinsic || is_tmp) {
-    return;
-  }
-
-  adjust_encryption_key_id(create_info,
-                           table_def ? &(table_def->options()) : nullptr);
 }
 
 /** Update create_info.  Used in SHOW CREATE TABLE et al. */

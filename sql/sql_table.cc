@@ -9161,9 +9161,9 @@ static bool validate_table_encryption(THD *thd, HA_CREATE_INFO *create_info) {
                                tt != Tablespace_type::SPACE_TYPE_SHARED);
     uses_system_tablespace = tt == Tablespace_type::SPACE_TYPE_SYSTEM;
     if (uses_system_tablespace) {
-      dd::Encrypt_result result = dd::is_system_tablespace_encrypted(thd);
-      if (result.error) return true;
-      uses_encrypted_tablespace = result.value;
+      dd::Encrypt_result result2 = dd::is_system_tablespace_encrypted(thd);
+      if (result2.error) return true;
+      uses_encrypted_tablespace = result2.value;
     }
   }
 
@@ -9173,7 +9173,7 @@ static bool validate_table_encryption(THD *thd, HA_CREATE_INFO *create_info) {
   */
   bool requested_type = dd::is_encrypted(create_info->encrypt_type);
   if ((uses_general_tablespace || uses_system_tablespace) &&
-      requested_type != uses_encrypted_tablespace) {
+      ((requested_type != uses_encrypted_tablespace))) {
     my_error(ER_INVALID_ENCRYPTION_REQUEST, MYF(0),
              requested_type ? "'encrypted'" : "'unencrypted'",
              uses_encrypted_tablespace ? "'encrypted'" : "'unencrypted'");
@@ -9284,6 +9284,13 @@ bool mysql_create_table_no_lock(THD *thd, const char *db,
   if (schema == nullptr) {
     my_error(ER_BAD_DB_ERROR, MYF(0), db);
     return true;
+  }
+
+  // Fix create_info->explicit_encryption. For alter it is retrieved
+  // from share.
+  if (!(create_info->options & HA_LEX_CREATE_INTERNAL_TMP_TABLE) &&
+      (create_info->used_fields & HA_CREATE_USED_ENCRYPT)) {
+    create_info->explicit_encryption = true;
   }
 
   // Do not accept AUTOEXTEND_SIZE clauses for
@@ -11083,15 +11090,6 @@ bool mysql_create_like_table(THD *thd, TABLE_LIST *table, TABLE_LIST *src_table,
   */
   if (src_table_obj && !src_table_obj->is_explicit_tablespace()) {
     local_create_info.tablespace = nullptr;
-  }
-
-  /*
-    Do not keep ENCRYPTION clause for unencrypted table.
-    We raise error if we are creating encrypted temporary table later.
-  */
-  if (local_create_info.encrypt_type.str &&
-      !dd::is_encrypted(local_create_info.encrypt_type)) {
-    local_create_info.encrypt_type = {nullptr, 0};
   }
 
   /*
@@ -16522,6 +16520,31 @@ static bool handle_rename_functional_index(THD *thd, Alter_info *alter_info,
 
   return false;
 }
+
+class Diagnostics_area_man {
+  THD *m_thd;
+  Diagnostics_area *da_prev;
+  Diagnostics_area da;
+
+ public:
+  Diagnostics_area_man(THD *thd)
+      : m_thd(thd), da_prev(thd->get_stmt_da()), da(false) {
+    // Don't copy existing conditions from the old DA so we don't get them
+    // twice when we call copy_non_errors_from_da below.
+    m_thd->push_diagnostics_area(&da, false);
+  }
+
+  ~Diagnostics_area_man() {
+    m_thd->pop_diagnostics_area();
+
+    if (da.is_error()) {
+      da_prev->set_error_status(da.mysql_errno(), da.message_text(),
+                                da.returned_sqlstate());
+      da_prev->push_warning(m_thd, da.mysql_errno(), da.returned_sqlstate(),
+                            Sql_condition::SL_ERROR, da.message_text());
+    }
+  }
+};
 
 /**
   Alter table
