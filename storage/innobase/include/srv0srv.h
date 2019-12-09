@@ -140,7 +140,6 @@ struct srv_stats_t {
 
   /** Number of rows inserted */
   ulint_ctr_64_t n_rows_inserted;
-
   /** Number of system rows read. */
   ulint_ctr_64_t n_system_rows_read;
 
@@ -334,7 +333,6 @@ extern Log_DDL *log_ddl;
 extern bool srv_is_upgrade_mode;
 extern bool srv_downgrade_logs;
 extern bool srv_upgrade_old_undo_found;
-extern bool srv_has_crypt_data_v1_rotating_from_mk;
 #endif /* INNODB_DD_TABLE */
 
 extern bool srv_downgrade_partition_files;
