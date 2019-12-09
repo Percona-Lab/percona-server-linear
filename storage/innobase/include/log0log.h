@@ -891,9 +891,12 @@ It just need to flush the file header block with current master key.
 @param[in]	iv	encryption iv
 @param[in]	is_boot	if it is for bootstrap
 @param[in]	redo_log_encrypt	encryption type
+@param[in]	version	                key's version (used for KEYRING
+                                    encryption)
 @return true if success. */
 bool log_write_encryption(byte *key, byte *iv, bool is_boot,
-                          redo_log_encrypt_enum redo_log_encrypt);
+                          redo_log_encrypt_enum redo_log_encrypt,
+                          uint version = 0);
 
 /** Rotate the redo log encryption
 It will re-encrypt the redo log encryption metadata and write it to
@@ -901,15 +904,15 @@ redo log file header.
 @return true if success. */
 bool log_rotate_encryption();
 
+/* Checks if there is a new redo key when using keyring encryption. */
+void log_check_new_key_version();
+
 /** Computes lsn up to which sync flush should be done or returns 0
 if there is no need to execute sync flush now.
 @param[in,out]  log  redo log
 @return lsn for which we want to have oldest_lsn >= lsn in each BP,
         or 0 if there is no need for sync flush */
 lsn_t log_sync_flush_lsn(log_t &log);
-
-/* Checks if there is a new redo key when using keyring encryption. */
-void log_check_new_key_version();
 
 /** Requests a sharp checkpoint write for provided or greater lsn.
 @param[in,out]	log	redo log

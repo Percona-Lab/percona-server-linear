@@ -106,7 +106,13 @@ class Encryption {
   information version. */
   static constexpr char KEY_MAGIC_V3[] = "lCC";
 
-  static constexpr char KEY_MAGIC_RK[] = "lRK";
+  /** Encryption magic bytes before 8.0.19, it's for checking KEYRING
+  redo log information version. */
+  static constexpr char KEY_MAGIC_RK_V1[] = "lRK";
+
+  /** Encryption magic bytes for 8.0.19+, it's for checking KEYRING
+  redo log information version. */
+  static constexpr char KEY_MAGIC_RK_V2[] = "RKB";
 
   static constexpr char KEY_MAGIC_PS_V1[] = "PSA";
 
@@ -232,6 +238,7 @@ class Encryption {
     std::swap(m_key_id, other.m_key_id);
     std::swap(m_checksum, other.m_checksum);
     std::swap(m_encryption_rotation, other.m_encryption_rotation);
+    std::swap(m_key_id_uuid, other.m_key_id_uuid);
   }
 
   ~Encryption();
@@ -318,30 +325,34 @@ class Encryption {
 
   /** Create tablespace key
   @param[in,out]	tablespace_key	tablespace key - null if failure
-  @param[in]		key_id		tablespace key id */
-  static void create_tablespace_key(byte **tablespace_key, uint key_id);
+  @param[in]		key_id		tablespace key id
+  @param[in]  uuid tablespace key uuid */
+  static void create_tablespace_key(byte **tablespace_key, uint key_id,
+                                    const char *uuid);
 
   /** Create new master key for key rotation.
   @param[in,out]  master_key  master key */
   static void create_master_key(byte **master_key) noexcept;
 
   static bool tablespace_key_exists_or_create_new_one_if_does_not_exist(
-      uint key_id);
+      uint key_id, const char *uuid);
 
-  static bool tablespace_key_exists(uint key_id);
+  static bool tablespace_key_exists(uint key_id, const char *uuid);
 
   static bool is_encrypted_and_compressed(const byte *page);
 
-  static uint encryption_get_latest_version(uint key_id);
+  static uint encryption_get_latest_version(uint key_id, const char *uuid);
 
-  static void get_latest_tablespace_key(uint key_id,
+  static void get_latest_tablespace_key(uint key_id, const char *uuid,
                                         uint *tablespace_key_version,
                                         byte **tablespace_key);
 
-  static void get_latest_tablespace_key_or_create_new_one(
-      uint key_id, uint *tablespace_key_version, byte **tablespace_key);
+  static void get_latest_key_or_create(uint tablespace_key_id, const char *uuid,
+                                       uint *tablespace_key_version,
+                                       byte **tablespace_key);
 
-  static bool get_tablespace_key(uint key_id, uint tablespace_key_version,
+  static bool get_tablespace_key(uint key_id, const char *uuid,
+                                 uint tablespace_key_version,
                                  byte **tablespace_key, size_t *key_len);
 
   /** Create tablespace key
@@ -363,6 +374,10 @@ class Encryption {
   static void get_master_key(uint32_t *master_key_id,
                              byte **master_key) noexcept;
 
+  /** Checks if keyring is installed and it is operational.
+   *  This is done by trying to fetch/create
+   *  dummy percona_keyring_test key
+  @return true if success */
   static bool is_keyring_alive();
 
   static bool can_page_be_keyring_encrypted(ulint page_type);
@@ -515,6 +530,14 @@ class Encryption {
   @param[in]  tablespace_key  tablespace encryption key **/
   void set_tablespace_key(byte *tablespace_key);
 
+  /** Get key id UUID
+  @return key id UUID **/
+  const char *get_key_id_uuid() const;
+
+  /** Set key id UUID
+  @param[in]  key_id_uuid  key id UUID **/
+  void set_key_id_uuid(const char *key_id_uuid);
+
   /** Get key version
   @return  key version **/
   ulint get_key_version() const;
@@ -530,14 +553,6 @@ class Encryption {
   /** Set key id
   @param[in]  key_id  key id **/
   void set_key_id(ulint key_id);
-
-  /** Get key id UUID
-  @return  key id UUID **/
-  const char *get_key_id_uuid() const;
-
-  /** Set key id UUID
-  @param[in]  key_id_uuid  key id UUID **/
-  void set_key_id_uuid(const char *key_id_uuid);
 
   /** Get encryption rotation
   @return  encryption rotation **/
@@ -626,9 +641,10 @@ class Encryption {
   static void get_latest_system_key(const char *system_key_name, byte **key,
                                     uint *key_version, size_t *key_length);
 
-  static void fill_key_name(char *key_name, uint key_id);
+  static void fill_key_name(char *key_name, uint key_id, const char *uuid);
 
-  static void fill_key_name(char *key_name, uint key_id, uint key_version);
+  static void fill_key_name(char *key_name, uint key_id, const char *uuid,
+                            uint key_version);
 };
 
 /** Encrypt a page in doublewerite buffer. The page is

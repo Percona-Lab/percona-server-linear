@@ -1810,9 +1810,9 @@ static bool load_key_needed_for_decryption(const IORequest &type,
     byte *key_read;
 
     size_t key_len;
-    if (Encryption::get_tablespace_key(encryption.get_key_id(),
-                                       key_version_read_from_page, &key_read,
-                                       &key_len) == false) {
+    if (Encryption::get_tablespace_key(
+            encryption.get_key_id(), encryption.get_key_id_uuid(),
+            key_version_read_from_page, &key_read, &key_len) == false) {
       return false;
     }
 
@@ -6136,8 +6136,8 @@ dberr_t os_file_read_first_page_func(IORequest &type, const char *file_name,
     uint32_t flags = fsp_header_get_flags(static_cast<byte *>(buf));
     const page_size_t page_size(flags);
     ut_ad(page_size.physical() <= n);
-    err = os_file_read_page(type, file_name, file, buf, 0, page_size.physical(), nullptr,
-                            true, nullptr);
+    err = os_file_read_page(type, file_name, file, buf, 0, page_size.physical(),
+                            nullptr, true, nullptr);
     if (err == DB_SUCCESS) {
       srv_stats.page0_read.add(1);
     }
@@ -6180,8 +6180,8 @@ static dberr_t os_file_copy_read_write(os_file_t src_file,
       request_size = size;
     }
 
-    err = os_file_read_func(read_request, nullptr, src_file, buf_ptr, src_offset,
-                            request_size, nullptr);
+    err = os_file_read_func(read_request, nullptr, src_file, buf_ptr,
+                            src_offset, request_size, nullptr);
 
     if (err != DB_SUCCESS) {
       return (err);
@@ -6291,7 +6291,8 @@ dberr_t os_file_read_no_error_handling_func(IORequest &type,
                                             ulint *o) {
   ut_ad(type.is_read());
 
-  return (os_file_read_page(type, file_name, file, buf, offset, n, o, false, nullptr));
+  return (os_file_read_page(type, file_name, file, buf, offset, n, o, false,
+                            nullptr));
 }
 
 /** NOTE! Use the corresponding macro os_file_write(), not directly this
@@ -7969,8 +7970,9 @@ class SimulatedAIOHandler {
   /** Do the file read
   @param[in,out]	slot		Slot that has the IO context */
   void read(Slot *slot) {
-    dberr_t err = os_file_read_func(slot->type, slot->name, slot->file.m_file, slot->ptr,
-                                    slot->offset, slot->len, nullptr);
+    dberr_t err =
+        os_file_read_func(slot->type, slot->name, slot->file.m_file, slot->ptr,
+                          slot->offset, slot->len, nullptr);
     ut_a(err == DB_SUCCESS);
   }
 
