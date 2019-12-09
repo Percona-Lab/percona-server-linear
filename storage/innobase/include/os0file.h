@@ -1,7 +1,7 @@
 /***********************************************************************
 
 Copyright (c) 1995, 2021, Oracle and/or its affiliates.
-Copyright (c) 2009, Percona Inc.
+Copyright (c) 2009, 2017, Percona Inc.
 
 Portions of this file contain modifications contributed and copyrighted
 by Percona Inc.. Those modifications are
@@ -213,9 +213,9 @@ enum os_file_create_t {
 
   OS_FILE_ON_ERROR_NO_EXIT = 128, /*!< do not exit on unknown errors */
   OS_FILE_ON_ERROR_SILENT = 256   /*!< don't print diagnostic messages to
-                                  the log unless it is a fatal error,
-                                  this flag is only used if
-                                  ON_ERROR_NO_EXIT is set */
+                            the log unless it is a fatal error,
+                            this flag is only used if
+                            ON_ERROR_NO_EXIT is set */
 };
 
 /** Options for os_file_advise_func @{ */
@@ -545,12 +545,14 @@ class IORequest {
   @param[in] key_len	length of the encryption key
   @param[in] iv		The encryption iv to use */
   void encryption_key(byte *key, ulint key_len, bool key_allocated, byte *iv,
-                      uint key_version, uint key_id, byte *tablespace_key) {
+                      uint key_version, uint key_id, byte *tablespace_key,
+                      const char *uuid) {
     m_encryption.set_key(key, key_len, key_allocated);
     m_encryption.set_initial_vector(iv);
     m_encryption.set_key_version(key_version);
     m_encryption.set_key_id(key_id);
     m_encryption.set_tablespace_key(tablespace_key);
+    m_encryption.set_key_id_uuid(uuid);
   }
 
   void encryption_rotation(Encryption_rotation encryption_rotation) {
