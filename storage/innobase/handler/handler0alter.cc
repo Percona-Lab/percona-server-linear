@@ -105,6 +105,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "ha_innopart.h"
 #include "partition_info.h"
 
+extern char server_uuid[UUID_LENGTH + 1];
+
 /** Function to convert the Instant_Type to a comparable int */
 inline uint16_t instant_type_to_int(Instant_Type type) {
   return (static_cast<typename std::underlying_type<Log_Type>::type>(type));
@@ -4768,21 +4770,6 @@ template <typename Table>
         } else {
           my_free(master_key);
         }
-      } else if (Encryption::is_keyring(old_table->s->encrypt_type.str) &&
-                 (old_table->s->encryption_key_id !=
-                      ha_alter_info->create_info->encryption_key_id ||
-                  none_explicitly_specified)) {
-        // it is KEYRING encryption - check if old's table encryption key is
-        // available
-        if (Encryption::tablespace_key_exists(
-                old_table->s->encryption_key_id) == false) {
-          my_printf_error(ER_ILLEGAL_HA_CREATE_OPTION,
-                          "Cannot find key to decrypt table to ALTER. Please "
-                          "make sure that keyring is installed "
-                          " and key used to encrypt table is available.",
-                          MYF(0));
-          goto new_clustered_failed;
-        }
       }
     }
 
@@ -4801,8 +4788,8 @@ template <typename Table>
 
       // TODO: Add checking for error returned from keyring function, not only
       // checking if tablespace is null
-      Encryption::get_latest_tablespace_key_or_create_new_one(
-          key_id, &tablespace_key_version, &tablespace_key);
+      Encryption::get_latest_key_or_create(
+          key_id, server_uuid, &tablespace_key_version, &tablespace_key);
       if (tablespace_key == NULL) {
         dict_mem_table_free(ctx->new_table);
         my_printf_error(

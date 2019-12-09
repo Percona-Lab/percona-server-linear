@@ -395,6 +395,11 @@ static dberr_t srv_undo_tablespace_read_encryption(pfs_os_file_t fh,
     space->crypt_data = crypt_data;
   }
 
+  if (is_space_keyring_v1_encrypted(space)) {
+    ib::error(ER_UPGRADE_KEYRING_V1_ENCRYPTION);
+    return (DB_FAIL);
+  }
+
   /* Return if the encryption metadata is empty. */
   if (!Encryption::is_encrypted_with_v3(first_page + offset) &&
       !(srv_is_upgrade_mode &&
@@ -1568,6 +1573,15 @@ to tablespace object
 static dberr_t srv_sys_enable_encryption(bool create_new_db) {
   fil_space_t *space = fil_space_get(TRX_SYS_SPACE);
   dberr_t err = DB_SUCCESS;
+
+  // Fail startup if sys space is encrypted with crypt_data v1
+  // This should only happen on upgrade
+  if (srv_sys_space.keyring_encryption_info.page0_has_crypt_data &&
+      srv_sys_space.keyring_encryption_info.type != CRYPT_SCHEME_UNENCRYPTED &&
+      srv_sys_space.keyring_encryption_info.private_version == 1) {
+    ib::error(ER_UPGRADE_KEYRING_V1_ENCRYPTION);
+    return (DB_ERROR);
+  }
 
   if (create_new_db && srv_sys_tablespace_encrypt) {
     fsp_flags_set_encryption(space->flags);
@@ -3237,7 +3251,6 @@ static lsn_t srv_shutdown_log() {
     auto err = fil_write_flushed_lsn(lsn);
     ut_a(err == DB_SUCCESS);
   }
-
   buf_must_be_all_freed();
   ut_a(lsn == log_get_lsn(*log_sys));
 

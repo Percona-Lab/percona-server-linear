@@ -163,7 +163,7 @@ struct fil_space_crypt_t {
   /** Constructor. Does not initialize the members!
   The object is expected to be placed in a buffer that
   has been zero-initialized. */
-  fil_space_crypt_t(uint new_type, uint new_min_key_version, uint new_key_id,
+  fil_space_crypt_t(uint new_min_key_version, uint new_key_id, const char *uuid,
                     fil_encryption_t new_encryption,
                     Crypt_key_operation key_operation,
                     Encryption_rotation encryption_rotation =
@@ -247,8 +247,6 @@ struct fil_space_crypt_t {
 
   using Key_map = std::map<uint, byte *>;
   Key_map local_keys_cache;
-
-  char uuid[Encryption::SERVER_UUID_LEN + 1];
   fil_encryption_t encryption;  // Encryption setup
 
   // key being used for encryption
@@ -297,6 +295,8 @@ struct fil_space_crypt_t {
   // One starting with magic PSA and the second one starting with PSB.
   // Here we store which magic we read : 1 - PSA, 2 - PSB.
   size_t private_version{2};
+
+  char uuid[Encryption::SERVER_UUID_LEN + 1];
 };
 
 /** Status info about encryption */
@@ -328,48 +328,7 @@ struct redo_log_key final {
   ulint read_count;
   ulint write_count;
   bool present;
-
-  bool persisted() const noexcept { return version != 0; }
 };
-
-/** Handles the fetching/generation/storing/etc of keyring redo log keys.
-
-This class is *NOT* thread safe, as thread safety is not required.
-Data is only accessed/modified on the following points:
-* When the redo space is created, at startup
-* During redo log recovery, at startup
-* When the server UUID is generated, at startup
-* When the user requests a new key version, checked periodically in the
-   master thread
-
-As these can't happen in parallel, no lock is used. */
-class redo_log_keys final {
- public:
-  /** Loads the latest redo log key from the keyring.
-  @param[in]	generate If true, a key is generated if an existing key can't
-  be loaded. */
-  MY_NODISCARD
-  redo_log_key *load_latest_key(THD *thd, bool generate);
-  MY_NODISCARD
-  redo_log_key *load_key_version(THD *thd, uint version);
-
-  MY_NODISCARD
-  redo_log_key *generate_and_store_new_key(THD *thd);
-
-  /** These two methods are used during bootstrap encryption, when wo do not yet
-  have an uuid */
-  MY_NODISCARD
-  redo_log_key *generate_new_key_without_storing();
-
-  MY_NODISCARD
-  bool store_used_keys() noexcept;
-
- private:
-  using key_map = std::map<ulint, redo_log_key>;
-  key_map m_keys;
-};
-
-extern redo_log_keys redo_log_key_mgr;
 
 /**
 Exclude tablespace from encryption threads rotation
@@ -396,8 +355,8 @@ Create a fil_space_crypt_t object
 
 @param[in]	key_id		Encryption key id
 @return crypt object */
-fil_space_crypt_t *fil_space_create_crypt_data(
-    fil_encryption_t encrypt_mode, uint key_id,
+MY_NODISCARD fil_space_crypt_t *fil_space_create_crypt_data(
+    fil_encryption_t encrypt_mode, uint key_id, const char *uuid,
     Crypt_key_operation key_operation =
         Crypt_key_operation::FETCH_OR_GENERATE_KEY);
 
@@ -539,15 +498,25 @@ Return crypt statistics
 void fil_crypt_total_stat(fil_crypt_stat_t *stat);
 
 /**
-Get scrub status for a space (used by information_schema)
+Checks if tablespace is encrypted with KEYRING encryption v1
 
-@param[in]	space		Tablespace
-@param[out]	status		Scrub status
-return 0 if data found */
-void fil_space_get_scrub_status(const fil_space_t *space,
-                                fil_space_scrub_status_t *status);
+@param[in] space Tablespace
+return true - fully or partially encrypted with keyring
+              encryption v1
+       false - is not encrypted, fully or partially with
+              keyring encryption v1 */
+bool is_space_keyring_v1_encrypted(fil_space_t *space);
 
-//#include "fil0crypt.ic"
+/**
+Checks if tablespace is encrypted with KEYRING encryption v1
+
+@param[in] space_id Tablespace's id
+return true - fully or partially encrypted with keyring
+              encryption v1
+       false - is not encrypted, fully or partially with
+              keyring encryption v1 */
+bool is_space_keyring_v1_encrypted(space_id_t space_id);
+
 #endif /* !UNIV_INNOCHECKSUM */
 
 #endif /* fil0crypt_h */

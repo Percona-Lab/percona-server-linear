@@ -525,8 +525,7 @@ struct fil_space_t {
   /** Encryption metadata */
   Encryption_metadata m_encryption_metadata;
 
-  /** Only used for redo log encryption: the currently active key handle */
-  redo_log_key *encryption_redo_key;
+  ulint encryption_key_version;
 
   /** Encryption is in progress */
   Encryption::Progress encryption_op_in_progress{Encryption::Progress::NONE};
