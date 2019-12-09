@@ -1404,8 +1404,7 @@ static inline space_id_t dict_check_sys_tablespaces(bool validate) {
     and tablespaces that already are in the tablespace cache. */
     if (fsp_is_system_or_temp_tablespace(space_id) ||
         fsp_is_undo_tablespace(space_id) ||
-        !fsp_is_shared_tablespace(fsp_flags) ||
-        fil_space_exists_in_mem(space_id, space_name, false, true)) {
+        !fsp_is_shared_tablespace(fsp_flags)) {
       continue;
     }
 
@@ -1430,7 +1429,6 @@ static inline space_id_t dict_check_sys_tablespaces(bool validate) {
       ib::warn(ER_IB_MSG_191) << "Ignoring tablespace " << id_name_t(space_name)
                               << " because it could not be opened.";
     }
-
     if (!dict_sys_t::is_reserved(space_id)) {
       max_space_id = std::max(max_space_id, space_id);
     }
