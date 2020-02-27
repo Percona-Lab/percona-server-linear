@@ -182,6 +182,10 @@ enum dd_space_keys {
   DD_SPACE_VERSION,
   /** Current state attribute */
   DD_SPACE_STATE,
+  /** Space is partially or fully encrypted with encryption threads
+  To check whehter it is fully encrypted - check the encryption
+  space flag  it will be set if space is fully encrypted. */
+  DD_SPACE_ONLINE_ENC_PROGRESS,
   /** Sentinel */
   DD_SPACE__LAST
 };
@@ -215,7 +219,8 @@ static constexpr char reserved_implicit_name[] = "innodb_file_per_table";
 /** InnoDB private key strings for dd::Tablespace.
 @see dd_space_keys */
 const char *const dd_space_key_strings[DD_SPACE__LAST] = {
-    "flags", "id", "discard", "server_version", "space_version", "state"};
+    "flags",         "id",    "discard",          "server_version",
+    "space_version", "state", "online_encryption"};
 
 /** InnoDB private value strings for key string "state" in dd::Tablespace.
 @see dd_space_state_values */
@@ -1518,6 +1523,48 @@ the dictionary.
 @return true if it does. */
 bool dd_is_table_in_encrypted_tablespace(const dict_table_t *table);
 
+bool dd_is_table_in_encrypted_tablespace(const char *name);
+
+/* Sets tablespace's DD online encryption flag.
+@param[in] Thread       THD
+@param[in] space_name   name of the space for which DD encryption flag is to be
+@param[in] *is_space_being_removed - whether space is being removed */
+bool dd_set_online_encryption(THD *thd, const char *space_name,
+                              volatile bool *is_space_being_removed);
+
+/* Clear tablespace's DD online encryption flag.
+@param[in] Thread       THD
+@param[in] space_name   name of the space for which DD encryption flag is to be
+@param[in] *is_space_being_removed - whether space is being removed */
+bool dd_clear_online_encryption(THD *thd, const char *space_name,
+                                volatile bool *is_space_being_removed);
+
+/* Sets tablespace's DD encryption flag.
+@param[in] Thread       THD
+@param[in] space_name   name of the space for which DD encryption flag is to be
+@param[in] *is_space_being_removed - whether space is being removed
+set */
+bool dd_set_encryption_flag(THD *thd, const char *space_name,
+                            volatile bool *is_space_being_removed);
+
+/* Clears tablespace's DD encryption flag.
+@param[in] Thread       THD
+@param[in] space_name   name of the space for which DD encryption flag is to be
+@param[in] *is_space_being_removed - whether space is being removed
+@param[in] clear_online_encryption - true if DD's online_encryption should be
+           set to N
+cleared */
+bool dd_clear_encryption_flag(THD *thd, const char *space_name,
+                              volatile bool *is_space_being_removed,
+                              bool clear_online_encryption);
+
+/* If mysql_ibd's DD encryption flag is different from the encryption flag in
+ * space_flag   the mysql_ibd's encryption flag will be set to the
+ * one from space_flags.
+@param[in] Thread       THD
+@param[in] space_flags  with correct encryption flag */
+bool dd_fix_mysql_ibd_encryption_flag_if_needed(THD *thd, uint32_t space_flags);
+
 /** Parse the default value from dd::Column::se_private to dict_col_t
 @param[in]      se_private_data dd::Column::se_private
 @param[in,out]  col             InnoDB column object
@@ -1562,31 +1609,6 @@ void get_field_types(const dd::Table *dd_tab, const dict_table_t *m_table,
                      const Field *field, unsigned &col_len, ulint &mtype,
                      ulint &prtype);
 #endif
-
-bool dd_is_table_in_encrypted_tablespace(const char *name);
-
-/* Sets tablespace's DD encryption flag.
-@param[in] Thread       THD
-@param[in] space_name   name of the space for which DD encryption flag is to be
-@param[in] *is_space_being_removed - whether space is being removed
-set */
-bool dd_set_encryption_flag(THD *thd, const char *space_name,
-                            volatile bool *is_space_being_removed);
-
-/* Clears tablespace's DD encryption flag.
-@param[in] Thread       THD
-@param[in] space_name   name of the space for which DD encryption flag is to be
-@param[in] *is_space_being_removed - whether space is being removed
-cleared */
-bool dd_clear_encryption_flag(THD *thd, const char *space_name,
-                              volatile bool *is_space_being_removed);
-
-/* If mysql_ibd's DD encryption flag is different from the encryption flag in
- * space_flag   the mysql_ibd's encryption flag will be set to the
- * one from space_flags.
-@param[in] Thread       THD
-@param[in] space_flags  with correct encryption flag */
-bool dd_fix_mysql_ibd_encryption_flag_if_needed(THD *thd, uint32_t space_flags);
 
 #include "dict0dd.ic"
 #endif

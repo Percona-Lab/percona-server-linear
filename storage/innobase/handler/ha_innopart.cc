@@ -3052,7 +3052,7 @@ int ha_innopart::truncate_impl(const char *name, TABLE *form,
     if (dict_table_is_discarded(part_table)) {
       ib_senderrf(thd, IB_LOG_LEVEL_ERROR, ER_TABLESPACE_DISCARDED, norm_name);
       return HA_ERR_NO_SUCH_TABLE;
-    } else if (!part_table->is_readable()) {
+    } else if (part_table->ibd_file_missing) {
       return HA_ERR_TABLESPACE_MISSING;
     }
 
@@ -3149,7 +3149,7 @@ int ha_innopart::truncate_partition_low(dd::Table *dd_table) {
     if (dict_table_is_discarded(part_table)) {
       ib_senderrf(thd, IB_LOG_LEVEL_ERROR, ER_TABLESPACE_DISCARDED, table_name);
       return HA_ERR_NO_SUCH_TABLE;
-    } else if (!part_table->is_readable()) {
+    } else if (part_table->ibd_file_missing) {
       return HA_ERR_TABLESPACE_MISSING;
     }
 

@@ -471,7 +471,7 @@ static bool btr_scrub_table_needs_scrubbing(dict_table_t *table) {
     return false;
   }
 
-  if (!table->is_readable()) {
+  if (table->ibd_file_missing) {
     return false;
   }
 
