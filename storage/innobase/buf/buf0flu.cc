@@ -3415,9 +3415,9 @@ static void buf_flush_page_coordinator_thread(size_t n_page_cleaners) {
       n_flushed = n_flushed_list;
 
       if (is_sync_flush) {
-        MONITOR_INC_VALUE_CUMULATIVE(
-            MONITOR_FLUSH_SYNC_TOTAL_PAGE, MONITOR_FLUSH_SYNC_COUNT,
-            MONITOR_FLUSH_SYNC_PAGES, n_flushed_list);
+        MONITOR_INC_VALUE_CUMULATIVE(MONITOR_FLUSH_SYNC_TOTAL_PAGE,
+                                     MONITOR_FLUSH_SYNC_COUNT,
+                                     MONITOR_FLUSH_SYNC_PAGES, n_flushed_list);
       } else {
         if (n_flushed_list) {
           MONITOR_INC_VALUE_CUMULATIVE(
@@ -3714,6 +3714,7 @@ static void buf_lru_manager_thread(size_t buf_pool_instance) {
     }
   }
 }
+
 #if defined UNIV_DEBUG || defined UNIV_BUF_DEBUG
 
 /** Functor to validate the flush list. */

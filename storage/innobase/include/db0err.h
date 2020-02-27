@@ -200,9 +200,6 @@ enum dberr_t {
   /** Failed to read as read was beyond file size. */
   DB_FILE_READ_BEYOND_SIZE,
 
-  DB_PAGE_CORRUPTED = 999, /*!< Page read from tablespace is
-                           corrupted. */
-
   /* The following are partial failure codes */
 
   DB_FAIL = 1000,

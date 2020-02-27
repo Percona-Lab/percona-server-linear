@@ -1826,13 +1826,6 @@ static MY_ATTRIBUTE((warn_unused_result)) dberr_t
 
     mem_heap_empty(row_heap);
 
-    /* Do not continue if table pages are still encrypted */
-    if (!old_table->is_readable() || !new_table->is_readable()) {
-      err = DB_IO_DECRYPT_FAIL;
-      trx->error_key_num = 0;
-      goto func_exit;
-    }
-
     page_cur_move_to_next(cur);
 
     stage->n_pk_recs_inc();
@@ -3611,7 +3604,7 @@ dict_index_t *row_merge_create_index(trx_t *trx, dict_table_t *table,
   }
 
   /* Create B-tree */
-  mutex_exit(&dict_sys->mutex);
+  dict_sys_mutex_exit();
 
   dict_build_index_def(table, index, trx);
 
@@ -3620,7 +3613,7 @@ dict_index_t *row_merge_create_index(trx_t *trx, dict_table_t *table,
 
   if (err != DB_SUCCESS) {
     trx->error_state = err;
-    mutex_enter(&dict_sys->mutex);
+    dict_sys_mutex_enter();
     return nullptr;
   }
 
@@ -3630,7 +3623,7 @@ dict_index_t *row_merge_create_index(trx_t *trx, dict_table_t *table,
 
   err = dict_create_index_tree_in_mem(index, trx);
 
-  mutex_enter(&dict_sys->mutex);
+  dict_sys_mutex_enter();
 
   if (err != DB_SUCCESS) {
     if ((index->type & DICT_FTS) && table->fts) {
@@ -3866,9 +3859,8 @@ dberr_t row_merge_build_indexes(
   /* Reset the MySQL row buffer that is used when reporting duplicate keys. */
   innobase_rec_reset(table);
 
-  if (!old_table->is_readable() || !new_table->is_readable()) {
-    error = DB_IO_DECRYPT_FAIL;
-    ib::warn(ER_XB_MSG_4, table->s->table_name.str);
+  if (table->in_use->is_error()) {
+    error = DB_COMPUTE_VALUE_FAILED;
     goto func_exit;
   }
 
