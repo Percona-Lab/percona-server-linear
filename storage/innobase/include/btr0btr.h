@@ -547,8 +547,8 @@ the index.
                                should print hex dump of
                                record and page on error */
 /** Checks the consistency of an index tree.
-@return	DB_SUCCESS if ok, error code if not */
-[[nodiscard]] dberr_t btr_validate_index(
+ @return true if ok */
+[[nodiscard]] bool btr_validate_index(
     dict_index_t *index, /*!< in: index */
     const trx_t *trx,    /*!< in: transaction or 0 */
     bool lockout);       /*!< in: true if X-latch index is intended */
