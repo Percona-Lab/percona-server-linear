@@ -451,8 +451,7 @@ buf_block_t *buf_page_get_gen(const page_id_t &page_id,
                               const page_size_t &page_size, ulint rw_latch,
                               buf_block_t *guess, Page_fetch mode,
                               const char *file, ulint line, mtr_t *mtr,
-                              bool dirty_with_no_latch = false,
-                              dberr_t *err = nullptr);
+                              bool dirty_with_no_latch = false);
 
 /** Initializes a page to the buffer buf_pool. The page is usually not read
 from a file even if it cannot be found in the buffer buf_pool. This is one
@@ -1397,6 +1396,9 @@ class buf_page_t {
 
   /** Set page to clean state. */
   void set_clean() noexcept { set_oldest_lsn(0); }
+
+  /** Set page to clean state (used in buf_page_init_low()). */
+  void set_clean_low() noexcept { oldest_modification = 0; }
 
   /** @name General fields
   None of these bit-fields must be modified without holding

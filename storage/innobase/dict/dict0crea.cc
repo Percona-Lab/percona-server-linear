@@ -234,11 +234,11 @@ static ibt::Tablespace *determine_session_temp_tblsp(
       tblsp = innodb_session->get_instrinsic_temp_tblsp();
     } else {
       tblsp = innodb_session->get_usr_temp_tblsp();
-@param[in,out]	table		Table to build in its own tablespace.
-@param[in]	create_info	HA_CREATE_INFO object
-@param[in,out]	trx		Transaction
-@param[in]      keyring_encryption_key_id info on keyring encryption key
-@return DB_SUCCESS or error code */
+    }
+  }
+  return (tblsp);
+}
+
 dberr_t dict_build_tablespace_for_table(
     dict_table_t *table, const HA_CREATE_INFO *create_info, trx_t *trx,
     fil_encryption_t mode,
@@ -467,10 +467,10 @@ dberr_t dict_create_index_tree_in_mem(dict_index_t *index, trx_t *trx) {
     return (DB_SUCCESS);
   }
 
-  const bool unreadable =
-      !index->table->is_readable() || dict_table_is_discarded(index->table);
+  const bool missing =
+      index->table->ibd_file_missing || dict_table_is_discarded(index->table);
 
-  if (unreadable) {
+  if (missing) {
     index->page = FIL_NULL;
     index->trx_id = trx->id;
 

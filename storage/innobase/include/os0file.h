@@ -105,7 +105,7 @@ struct Block {
   byte *m_ptr;
   /** This padding is needed to avoid false sharing. TBD: of what exactly? We
   can't use alignas because std::vector<Block> uses std::allocator which in
-  C++14 doesn't have to handle overaligned types. (see § 20.7.9.1.5 of N4140
+  C++14 doesn't have to handle overaligned types. (see 20.7.9.1.5 of N4140
   draft) */
   byte pad[ut::INNODB_CACHE_LINE_SIZE];
   std::atomic<bool> m_in_use;
@@ -544,10 +544,11 @@ class IORequest {
   @param[in] key		The encryption key to use
   @param[in] key_len	length of the encryption key
   @param[in] iv		The encryption iv to use */
-  void encryption_key(byte *key, ulint key_len, bool key_allocated, byte *iv,
-                      uint key_version, uint key_id, byte *tablespace_key,
-                      const char *uuid) {
-    m_encryption.set_key(key, key_len, key_allocated);
+  void encryption_key(byte *key, ulint key_len, byte *iv, uint key_version,
+                      uint key_id, byte *tablespace_key, const char *uuid,
+                      std::map<uint, byte *> *key_versions_cache) {
+    m_encryption.set_key(key, key_len);
+    m_encryption.set_key_versions_cache(key_versions_cache);
     m_encryption.set_initial_vector(iv);
     m_encryption.set_key_version(key_version);
     m_encryption.set_key_id(key_id);
@@ -582,12 +583,15 @@ class IORequest {
 
   /** Clear all encryption related flags */
   void clear_encrypted() {
-    m_encryption.set_key(nullptr, 0, false);
-    m_encryption.set_initial_vector(nullptr);
     m_encryption.set_type(Encryption::NONE);
-    m_encryption.set_encryption_rotation(Encryption_rotation::NO_ROTATION);
+    m_encryption.set_key(nullptr, 0);
+    m_encryption.set_initial_vector(nullptr);
+    m_encryption.set_key_versions_cache(nullptr);
+    m_encryption.set_key_version(0);
     m_encryption.set_key_id(0);
     m_encryption.set_tablespace_key(nullptr);
+    m_encryption.set_key_id_uuid(nullptr);
+    m_encryption.set_encryption_rotation(Encryption_rotation::NO_ROTATION);
   }
 
   void mark_page_zip_compressed() { m_is_page_zip_compressed = true; }
@@ -2161,10 +2165,6 @@ till it succeeds.
 dberr_t os_file_write_retry(IORequest &type, const char *name,
                             pfs_os_file_t file, const void *buf,
                             os_offset_t offset, ulint n);
-
-/** Free a page after sync IO
-@param[in,out]	block		The block to free/release */
-void os_free_block(file::Block *block) noexcept;
 
 /** Submit buffered AIO requests on the given segment to the kernel. */
 void os_aio_dispatch_read_array_submit();

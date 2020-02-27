@@ -3937,14 +3937,13 @@ dberr_t Buf_fetch<T>::check_state(buf_block_t *&block) {
 template <typename T>
 void Buf_fetch<T>::read_page() {
   bool success{};
-  dberr_t err;
-
   auto sync = m_mode != Page_fetch::SCAN;
 
   if (sync) {
-    err = buf_read_page(m_page_id, m_page_size, m_trx);
-    success = (err == DB_SUCCESS);
+    success = buf_read_page(m_page_id, m_page_size, m_trx);
   } else {
+    dberr_t err;
+
     auto ret = buf_read_page_low(&err, false, 0, BUF_READ_ANY_PAGE, m_page_id,
                                  m_page_size, false, m_trx, false);
     success = ret > 0;
@@ -3970,15 +3969,6 @@ void Buf_fetch<T>::read_page() {
     DBUG_EXECUTE_IF("innodb_page_corruption_retries",
                     m_retries = BUF_PAGE_READ_MAX_RETRIES;);
   } else {
-    /* Pages whose encryption key is unavailable or used
-       key, encryption algorithm or encryption method is
-       incorrect are marked as encrypted in
-       buf_page_check_corrupt(). Unencrypted page could be
-       corrupted in a way where the key_id field is
-       nonzero. There is no checksum on field
-       FIL_PAGE_FILE_FLUSH_LSN_OR_KEY_VERSION. */
-    if (err == DB_IO_DECRYPT_FAIL) return;
-
     ib::fatal(ER_IB_MSG_74)
         << "Unable to read page " << m_page_id << " into the buffer pool after "
         << BUF_PAGE_READ_MAX_RETRIES
@@ -4144,24 +4134,15 @@ buf_block_t *Buf_fetch<T>::single_page() {
   Counter::inc(m_buf_pool->stat.m_n_page_gets, m_page_id.page_no());
 
   for (;;) {
-    dberr_t error = static_cast<T *>(this)->get(block);
-    if (error == DB_NOT_FOUND ||
-        (error == DB_IO_DECRYPT_FAIL && block == nullptr)) {
+    if (static_cast<T *>(this)->get(block) == DB_NOT_FOUND) {
       return (nullptr);
     }
     ut_a(!block->page.was_stale());
 
     if (is_optimistic()) {
       const auto bpage = &block->page;
-      auto block_mutex = buf_page_get_mutex(bpage);
 
-      mutex_enter(block_mutex);
-
-      const auto state = buf_page_get_io_fix(bpage);
-
-      mutex_exit(block_mutex);
-
-      if (state == BUF_IO_READ) {
+      if (bpage->was_io_fix_read()) {
         /* The page is being read to buffer pool, but we cannot wait around for
         the read to complete. */
 
@@ -4233,6 +4214,7 @@ buf_block_t *Buf_fetch<T>::single_page() {
 #endif /* UNIV_DEBUG */
 
   ut_ad(m_mode == Page_fetch::POSSIBLY_FREED ||
+        m_mode == Page_fetch::PEEK_IF_IN_POOL ||
         !block->page.file_page_was_freed);
 
   /* Check if this is the first access to the page */
@@ -4303,7 +4285,7 @@ buf_block_t *buf_page_get_gen(const page_id_t &page_id,
                               const page_size_t &page_size, ulint rw_latch,
                               buf_block_t *guess, Page_fetch mode,
                               const char *file, ulint line, mtr_t *mtr,
-                              bool dirty_with_no_latch, dberr_t *err) {
+                              bool dirty_with_no_latch) {
 #ifdef UNIV_DEBUG
   ut_ad(mtr->is_active());
 
@@ -4648,7 +4630,6 @@ const buf_block_t *buf_page_try_get_func(const page_id_t &page_id,
 static void buf_page_init_low(buf_page_t *bpage) noexcept {
   ut_ad(bpage->id.space() != UINT32_UNDEFINED);
   ut_ad(bpage->id.page_no() != UINT32_UNDEFINED);
-  ut_ad(mutex_own(buf_page_get_mutex(bpage)));
 
   bpage->flush_type = BUF_FLUSH_LRU;
   bpage->reinit_io_fix();
@@ -4657,7 +4638,7 @@ static void buf_page_init_low(buf_page_t *bpage) noexcept {
   bpage->freed_page_clock = 0;
   bpage->access_time = 0;
   bpage->set_newest_lsn(0);
-  bpage->set_clean();
+  bpage->set_clean_low();
 
   HASH_INVALIDATE(bpage, hash);
   bpage->is_corrupt = false;
@@ -5431,6 +5412,11 @@ void buf_page_free_stale_during_write(buf_page_t *bpage,
   /* Since we aborted a write request. We need to adjust the number of
   of outstanding write requests. */
   --buf_pool->n_flush[flush_type];
+
+  if (buf_pool->n_flush[flush_type] == 0 &&
+      buf_pool->init_flush[flush_type] == FALSE) {
+    os_event_set(buf_pool->no_flush[flush_type]);
+  }
 
   mutex_exit(&buf_pool->flush_state_mutex);
 

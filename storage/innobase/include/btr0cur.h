@@ -137,7 +137,7 @@ bool btr_cur_optimistic_latch_leaves(buf_block_t *block,
  Note that if mode is PAGE_CUR_LE, which is used in inserts, then
  cursor->up_match and cursor->low_match both will have sensible values.
  If mode is PAGE_CUR_GE, then up_match will a have a sensible value. */
-dberr_t btr_cur_search_to_nth_level(
+void btr_cur_search_to_nth_level(
     dict_index_t *index,   /*!< in: index */
     ulint level,           /*!< in: the tree level of search */
     const dtuple_t *tuple, /*!< in: data tuple; NOTE: n_fields_cmp in
@@ -202,10 +202,10 @@ end
 @param[in]      file        File name
 @param[in]      line        Line where called
 @param[in,out] mtr Mini-transaction */
-dberr_t btr_cur_open_at_index_side_func(bool from_left, dict_index_t *index,
-                                        ulint latch_mode, btr_cur_t *cursor,
-                                        ulint level, const char *file,
-                                        ulint line, mtr_t *mtr);
+void btr_cur_open_at_index_side_func(bool from_left, dict_index_t *index,
+                                     ulint latch_mode, btr_cur_t *cursor,
+                                     ulint level, const char *file, ulint line,
+                                     mtr_t *mtr);
 
 #define btr_cur_open_at_index_side(f, i, l, c, lv, m) \
   btr_cur_open_at_index_side_func(f, i, l, c, lv, __FILE__, __LINE__, m)
