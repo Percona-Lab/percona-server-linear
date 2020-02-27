@@ -198,6 +198,7 @@ static inline buf_block_t *btr_block_get_func(const page_id_t &page_id,
 @return the block descriptor */
 #define btr_block_get(page_id, page_size, mode, index, mtr) \
   btr_block_get_func(page_id, page_size, mode, __FILE__, __LINE__, index, mtr)
+
 /** Gets a buffer page and declares its latching order level.
 @param page_id Tablespace/page identifier
 @param page_size Page size
@@ -567,8 +568,9 @@ void btr_print_index(dict_index_t *index, /*!< in: index */
                               should print hex dump of
                               record and page on error */
 /** Checks the consistency of an index tree.
-@return	DB_SUCCESS if ok, error code if not */
-[[nodiscard]] dberr_t btr_validate_index(
+=======
+ @return true if ok */
+[[nodiscard]] bool btr_validate_index(
     dict_index_t *index, /*!< in: index */
     const trx_t *trx,    /*!< in: transaction or 0 */
     bool lockout);       /*!< in: true if X-latch index is intended */

@@ -1373,7 +1373,7 @@ static inline std::pair<bool, space_id_t> dict_check_sys_tablespaces(bool valida
 
     // For tables in cache check if they contain crypt_data in page0
     if (fil_space_exists_in_mem(space_id, space_name, false, true)) {
-      if (is_space_keyring_v1_encrypted(space_id)) {
+      if (is_space_keyring_pre_v3_encrypted(space_id)) {
         mtr_commit(&mtr);
         return std::make_pair(true, 0);  // will cause upgrade to fail
       }
@@ -1406,7 +1406,7 @@ static inline std::pair<bool, space_id_t> dict_check_sys_tablespaces(bool valida
       ib::warn(ER_IB_MSG_191) << "Ignoring tablespace " << id_name_t(space_name)
                               << " because it could not be opened.";
     } else {
-      if (is_space_keyring_v1_encrypted(space_id)) {
+      if (is_space_keyring_pre_v3_encrypted(space_id)) {
         ut::free(filepath);
         mtr_commit(&mtr);
         return std::make_pair(true, 0);  // will cause upgrade to fail
@@ -1624,7 +1624,7 @@ static inline std::pair<bool, space_id_t> dict_check_sys_tables(bool validate) {
     if (fil_space_exists_in_mem(space_id, space_name, false, true)) {
       ut::free(table_name.m_name);
       ut::free(space_name_from_dict);
-      if (is_space_keyring_v1_encrypted(space_id)) {
+      if (is_space_keyring_pre_v3_encrypted(space_id)) {
         mtr_commit(&mtr);
         return std::make_pair(true, 0);  // will cause upgrade to fail
       }
@@ -1670,6 +1670,8 @@ static inline std::pair<bool, space_id_t> dict_check_sys_tables(bool validate) {
     /* Check that the .ibd file exists. */
     Keyring_encryption_info keyring_encryption_info;
 
+    // We do not need to validate tablespace for online encryption as encryption
+    // threads do not work in 5.7. Only ENCRYPTION='KEYRING' works.
     dberr_t err = fil_ibd_open(validate, FIL_TYPE_TABLESPACE, space_id,
                                fsp_flags, space_name, filepath, true, true,
                                keyring_encryption_info);
@@ -1678,7 +1680,7 @@ static inline std::pair<bool, space_id_t> dict_check_sys_tables(bool validate) {
       ib::warn(ER_IB_MSG_194) << "Ignoring tablespace " << id_name_t(space_name)
                               << " because it could not be opened.";
     } else {
-      if (is_space_keyring_v1_encrypted(space_id)) {
+      if (is_space_keyring_pre_v3_encrypted(space_id)) {
         ut::free(table_name.m_name);
         ut::free(space_name_from_dict);
         ut::free(filepath);
@@ -2153,7 +2155,7 @@ static const char *dict_load_table_low(table_name_t &name, const rec_t *rec,
                                  n_v_col, 0, flags, flags2);
 
   (*table)->id = table_id;
-  (*table)->set_file_readable();
+  (*table)->ibd_file_missing = false;
 
   return (nullptr);
 }
@@ -2331,7 +2333,7 @@ void dict_load_tablespace(dict_table_t *table, mem_heap_t *heap,
   if (dict_table_is_discarded(table)) {
     ib::warn(ER_IB_MSG_204)
         << "Tablespace for table " << table->name << " is set as discarded.";
-    table->set_file_unreadable();
+    table->ibd_file_missing = true;
     return;
   }
 
@@ -2428,7 +2430,7 @@ void dict_load_tablespace(dict_table_t *table, mem_heap_t *heap,
 
   if (err != DB_SUCCESS) {
     /* We failed to find a sensible tablespace file */
-    table->set_file_unreadable();
+    table->ibd_file_missing = true;
   }
 
   table->keyring_encryption_info = keyring_encryption_info;
