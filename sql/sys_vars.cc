@@ -8100,3 +8100,7 @@ static Sys_var_bool Sys_persist_sensitive_variables_in_plaintext(
         GLOBAL_VAR(opt_persist_sensitive_variables_in_plaintext),
     CMD_LINE(OPT_ARG), DEFAULT(true), NO_MUTEX_GUARD, NOT_IN_BINLOG,
     ON_CHECK(nullptr), ON_UPDATE(nullptr), nullptr, sys_var::PARSE_EARLY);
+
+#ifndef NDEBUG
+    Debug_shutdown_actions Debug_shutdown_actions::instance;
+#endif
