@@ -2308,9 +2308,9 @@ a	b
 3	Moe
 #We will use the error message returned from server to differentiate between DELETE and TRUNCATE
 DELETE FROM federated.t2;
-ERROR HY000: Got error 10000 'Error on remote system: 1451: Cannot delete or update a parent row: a foreign key constraint fails (`federated`.`t1_child`, CONSTRAINT `dc` FOREIGN KEY (`a`) REFERENCES `t1` (`a`))' from FEDERATED
+ERROR HY000: Got error 10000 'Error on remote system: 1451: Cannot delete or update a parent row: a foreign key constraint fails (' from FEDERATED
 TRUNCATE TABLE federated.t2;
-ERROR HY000: Got error 10000 'Error on remote system: 1701: Cannot truncate a table referenced in a foreign key constraint (`federated`.`t1_child`, CONSTRAINT `dc`)' from FEDERATED
+ERROR HY000: Got error 10000 'Error on remote system: 1701: Cannot truncate a table referenced in a foreign key constraint (`feder' from FEDERATED
 SELECT * FROM federated.t2;
 a	b
 1	Larry
@@ -2444,6 +2444,33 @@ SELECT a, b FROM federated.t1;
 a	b
 DROP TABLE federated.t1;
 DROP TABLE federated.t1;
+#
+# Bug#105878: PS-7999: FEDERATED engine not reconnecting on wait_timeout exceeded
+#
+SET @OLD_SLAVE_WAIT_TIMEOUT= @@GLOBAL.WAIT_TIMEOUT;
+SET @@GLOBAL.WAIT_TIMEOUT= 4;
+CREATE TABLE test.t1 (id int PRIMARY KEY);
+INSERT INTO test.t1 VALUES(1);
+CREATE SERVER test FOREIGN DATA WRAPPER test1 OPTIONS(
+user 'root',
+password '',
+host '127.0.0.1',
+port SLAVE_PORT,
+database 'test');
+CREATE TABLE test.t1 (id int PRIMARY KEY) ENGINE=FEDERATED CONNECTION='test';
+SELECT * FROM test.t1;
+id
+1
+SELECT sleep(5);
+sleep(5)
+0
+SELECT * from test.t1;
+id
+1
+DROP TABLE test.t1;
+DROP SERVER test;
+DROP TABLE test.t1;
+SET @@GLOBAL.WAIT_TIMEOUT= @OLD_SLAVE_WAIT_TIMEOUT;
 SET @@GLOBAL.CONCURRENT_INSERT= @OLD_MASTER_CONCURRENT_INSERT;
 SET @@GLOBAL.CONCURRENT_INSERT= @OLD_SLAVE_CONCURRENT_INSERT;
 DROP TABLE IF EXISTS federated.t1;
