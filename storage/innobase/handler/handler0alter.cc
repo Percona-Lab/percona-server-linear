@@ -899,22 +899,13 @@ static inline bool is_instant(const Alter_inplace_info *ha_alter_info) {
 @param[in]      ha_alter_info   The DDL operation
 @return whether it is necessary to rebuild the table */
 [[nodiscard]] static bool innobase_need_rebuild(
-    const Alter_inplace_info *ha_alter_info, const TABLE *old_table) {
+    const Alter_inplace_info *ha_alter_info) {
   if (is_instant(ha_alter_info)) {
     return (false);
   }
 
   Alter_inplace_info::HA_ALTER_FLAGS alter_inplace_flags =
       ha_alter_info->handler_flags & ~(INNOBASE_INPLACE_IGNORE);
-
-  if (Encryption::none_explicitly_specified(
-          ha_alter_info->create_info->explicit_encryption,
-          ha_alter_info->create_info->encrypt_type.str) ||
-      (Encryption::is_keyring(ha_alter_info->create_info->encrypt_type.str) &&
-       !Encryption::is_keyring(old_table->s->encrypt_type.str)) ||
-      ha_alter_info->create_info->encryption_key_id !=
-          old_table->s->encryption_key_id)
-    return true;
 
   if (alter_inplace_flags == Alter_inplace_info::CHANGE_CREATE_OPTION &&
       !(ha_alter_info->create_info->used_fields &
@@ -1284,7 +1275,7 @@ enum_alter_inplace_result ha_innobase::check_if_supported_inplace_alter(
     operation is possible. */
   } else if (((ha_alter_info->handler_flags &
                Alter_inplace_info::ADD_PK_INDEX) ||
-              innobase_need_rebuild(ha_alter_info, altered_table)) &&
+              innobase_need_rebuild(ha_alter_info)) &&
              (innobase_fulltext_exist(altered_table) ||
               innobase_spatial_exist(altered_table))) {
     /* Refuse to rebuild the table online, if
@@ -1398,7 +1389,7 @@ bool ha_innobase::prepare_inplace_alter_table(TABLE *altered_table,
   ut_ad(new_dd_tab != nullptr);
 
   if (dict_sys_t::is_dd_table_id(m_prebuilt->table->id) &&
-      innobase_need_rebuild(ha_alter_info, table)) {
+      innobase_need_rebuild(ha_alter_info)) {
     ut_ad(!m_prebuilt->table->is_temporary());
     my_error(ER_NOT_ALLOWED_COMMAND, MYF(0));
     return true;
@@ -2987,8 +2978,8 @@ index for FTS index */
     new_primary = (altered_table->s->primary_key != MAX_KEY);
   }
 
-  const bool rebuild = new_primary || add_fts_doc_id ||
-                       innobase_need_rebuild(ha_alter_info, table);
+  const bool rebuild =
+      new_primary || add_fts_doc_id || innobase_need_rebuild(ha_alter_info);
 
   /* Reserve one more space if new_primary is true, and we might
   need to add the FTS_DOC_ID_INDEX */
@@ -4440,7 +4431,7 @@ template <typename Table>
       ctx->heap, ha_alter_info, altered_table, new_dd_tab,
       ctx->num_to_add_index, num_fts_index,
       row_table_got_default_clust_index(ctx->new_table), fts_doc_id_col,
-      add_fts_doc_id, add_fts_doc_id_idx, old_table);
+      add_fts_doc_id, add_fts_doc_id_idx);
 
   bool new_clustered = DICT_CLUSTERED & index_defs[0].m_ind_type;
 
@@ -4465,7 +4456,7 @@ template <typename Table>
   if (!ctx->online) {
     /* This is not an online operation (LOCK=NONE). */
   } else if (ctx->add_autoinc == ULINT_UNDEFINED && num_fts_index == 0 &&
-             (!innobase_need_rebuild(ha_alter_info, old_table) ||
+             (!innobase_need_rebuild(ha_alter_info) ||
               !innobase_fulltext_exist(altered_table))) {
     /* InnoDB can perform an online operation (LOCK=NONE). */
   } else {
@@ -4820,7 +4811,7 @@ template <typename Table>
                                           add_cols, ctx->heap, prebuilt);
     ctx->add_cols = add_cols;
   } else {
-    assert(!innobase_need_rebuild(ha_alter_info, old_table));
+    assert(!innobase_need_rebuild(ha_alter_info));
     assert(old_table->s->primary_key == altered_table->s->primary_key);
 
     for (dict_index_t *index = user_table->first_index(); index != nullptr;
@@ -5434,7 +5425,7 @@ bool ha_innobase::prepare_inplace_alter_table_impl(
         ha_alter_info, m_prebuilt->table, this->table, altered_table);
     /* Even if some operations can be done instantly without rebuilding, they
     are still disallowed to behave like before. */
-    if (innobase_need_rebuild(ha_alter_info, table) ||
+    if (innobase_need_rebuild(ha_alter_info) ||
         (type == Instant_Type::INSTANT_VIRTUAL_ONLY ||
          type == Instant_Type::INSTANT_ADD_DROP_COLUMN)) {
       my_error(ER_TABLESPACE_DISCARDED, MYF(0), indexed_table->name.m_name);
@@ -5490,7 +5481,7 @@ bool ha_innobase::prepare_inplace_alter_table_impl(
   is an implicit change to the previously selected default row format. We want
   to keep the table using the original default row_format. */
   if (old_dd_tab->table().row_format() != new_dd_tab->table().row_format() &&
-      !innobase_need_rebuild(ha_alter_info, altered_table)) {
+      !innobase_need_rebuild(ha_alter_info)) {
     adjust_row_format(this->table, altered_table, old_dd_tab, new_dd_tab);
   }
 
@@ -5877,7 +5868,7 @@ bool ha_innobase::prepare_inplace_alter_table_impl(
   if (!(ha_alter_info->handler_flags & INNOBASE_ALTER_DATA) ||
       ((ha_alter_info->handler_flags & ~INNOBASE_INPLACE_IGNORE) ==
            Alter_inplace_info::CHANGE_CREATE_OPTION &&
-       !innobase_need_rebuild(ha_alter_info, table))) {
+       !innobase_need_rebuild(ha_alter_info))) {
     if (heap) {
       ha_alter_info->handler_ctx = new (m_user_thd->mem_root)
           ha_innobase_inplace_ctx(m_prebuilt, drop_index, n_drop_index,
@@ -6131,7 +6122,7 @@ bool ha_innobase::inplace_alter_table_impl(TABLE *altered_table,
 
   if (((ha_alter_info->handler_flags & ~INNOBASE_INPLACE_IGNORE) ==
            Alter_inplace_info::CHANGE_CREATE_OPTION &&
-       !innobase_need_rebuild(ha_alter_info, table))) {
+       !innobase_need_rebuild(ha_alter_info))) {
     return all_ok();
   }
 
