@@ -216,23 +216,24 @@ update u2 set i2=100, value=100 where id=1;
 
 --source include/rpl_connection_slave.inc
 --echo [on slave]
-call mtr.add_suppression("Slave SQL.*Could not execute Update_rows event on table test.u2.*Error_code.*");
-call mtr.add_suppression("Slave: Can't find record in 'u2'.*");
+call mtr.add_suppression("Replica SQL.*Could not execute Update_rows event on table test.u2.*Error_code.*");
+call mtr.add_suppression("Replica: Can't find record in 'u2'.*");
+call mtr.add_suppression("The replica coordinator and worker threads are stopped, possibly leaving data in inconsistent state");
 # wait until we have the expected error
 --let $slave_sql_errno= convert_error(ER_KEY_NOT_FOUND)
 --source include/wait_for_slave_sql_error.inc
 
 # query the t2 table on the slave
 --source include/rpl_connection_slave.inc
-select count(*) from t2 force index(primary);
+select id from t2 force index(primary);
 select * from t2 where id=1;
 select i1 from t2 where i1=1;
 select i2 from t2 where i2=100;
 
 # query the u2 table on the slave
-select count(*) from u2 force index(primary);
-select count(*) from u2 force index(i1);
-select count(*) from u2 force index(i2);
+select id from u2 force index(primary);
+select i1 from u2 force index(i1);
+select i2 from u2 force index(i2);
 select * from u2 where id=1;
 select i1 from u2 where i1=1;
 select i2 from u2 where i2=100;
@@ -241,7 +242,7 @@ select i2 from u2 where i2=100;
 # cleanup the problem and restart it
 --disable_query_log
 insert into u2 values(1,1,1,1), (2,2,2,2);
-start slave sql_thread;
+start replica sql_thread;
 --source include/wait_for_slave_sql_to_start.inc
 --enable_query_log
 
@@ -251,6 +252,7 @@ start slave sql_thread;
 set @@global.rocksdb_read_free_rpl = PK_SK;
 --source include/start_slave.inc
 
+if (0) { # Percona Server disabled rocksdb_read_free_rpl_tables as it's dangerous to use
 --echo
 --echo # some tables with read-free replication on and some with it off
 --echo
@@ -284,21 +286,21 @@ update u2 set i2=100, value=100 where id=1;
 
 --source include/rpl_connection_slave.inc
 --echo [on slave]
-call mtr.add_suppression("Slave SQL.*Could not execute Update_rows event on table test.u2.*Error_code.*");
-call mtr.add_suppression("Slave: Can't find record in 'u2'.*");
+call mtr.add_suppression("Replica SQL.*Could not execute Update_rows event on table test.u2.*Error_code.*");
+call mtr.add_suppression("Replica: Can't find record in 'u2'.*");
 # wait until we have the expected error
 --let $slave_sql_errno= convert_error(ER_KEY_NOT_FOUND)
 --source include/wait_for_slave_sql_error.inc
 
 # query the t2 table on the slave
 --source include/rpl_connection_slave.inc
-select count(*) from t2 force index(primary);
+select id from t2 force index(primary);
 select * from t2 where id=1;
 select i1 from t2 where i1=1;
 select i2 from t2 where i2=100;
 
 # query the u2 table on the slave
-select count(*) from u2 force index(primary);
+select id from u2 force index(primary);
 select * from u2 where id=1;
 select i1 from u2 where i1=1;
 select i2 from u2 where i2=100;
@@ -307,7 +309,7 @@ select i2 from u2 where i2=100;
 # cleanup the problem and restart it
 --disable_query_log
 insert into u2 values(1,1,1,1), (2,2,2,2);
-start slave sql_thread;
+start replica sql_thread;
 --source include/wait_for_slave_sql_to_start.inc
 --enable_query_log
 
@@ -316,6 +318,7 @@ start slave sql_thread;
 --source include/stop_slave.inc
 set @@global.rocksdb_read_free_rpl_tables = ".*";
 --source include/start_slave.inc
+} # if (0)
 
 --echo
 --echo # secondary keys lose rows
@@ -342,9 +345,9 @@ update t3 set i2=100, value=100 where id=1;
 
 # query the t3 table on the slave
 --source include/rpl_connection_slave.inc
-select count(*) from t3 force index(primary);
-select count(*) from t3 force index(i1);
-select count(*) from t3 force index(i2);
+select id from t3 force index(primary);
+select i1 from t3 force index(i1);
+select i2 from t3 force index(i2);
 select * from t3 where id=1;
 select i1 from t3 where i1=1;
 select i2 from t3 where i2=100;
@@ -374,9 +377,9 @@ delete from t4 where id=1;
 # query the t4 table on the slave
 --source include/rpl_connection_slave.inc
 --echo [on slave]
-select count(*) from t4 force index(primary);
-select count(*) from t4 force index(i1);
-select count(*) from t4 force index(i2);
+select id from t4 force index(primary);
+select i1 from t4 force index(i1);
+select i2 from t4 force index(i2);
 select i1 from t4 where i1=100;
 
 --echo
