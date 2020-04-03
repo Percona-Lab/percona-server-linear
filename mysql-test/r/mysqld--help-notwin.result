@@ -1467,6 +1467,9 @@ The following options may be given as the first argument:
  --temptable-use-mmap 
  Use mmap files for temptables
  (Defaults to on; use --skip-temptable-use-mmap to disable.)
+ --tf-sequence-table-max-upper-bound=# 
+ Maximum number of records SEQUENCE_TABLE() table function
+ is allowed to generate.
  --thread-cache-size=# 
  How many threads we should keep in a cache for reuse
  --thread-handling=name 
@@ -1517,6 +1520,10 @@ The following options may be given as the first argument:
  running
  --utility-user=name Specifies a MySQL user that will be added to the internal
  list of users and recognized as the utility user.
+ --utility-user-dynamic-privileges=name 
+ Specifies the dynamic privileges that the utility user
+ will have in a comma delimited list. See the manual for a
+ complete list of privileges.
  --utility-user-password=name 
  Specifies the password required for the utility user.
  --utility-user-privileges=name 
@@ -1927,6 +1934,7 @@ tc-heuristic-recover OFF
 temptable-max-mmap 1073741824
 temptable-max-ram 1073741824
 temptable-use-mmap TRUE
+tf-sequence-table-max-upper-bound 1048576
 thread-cache-size 9
 thread-handling one-thread-per-connection
 thread-stack 262144
@@ -1942,6 +1950,7 @@ updatable-views-with-limit YES
 upgrade AUTO
 userstat FALSE
 utility-user (No default value)
+utility-user-dynamic-privileges (No default value)
 utility-user-password (No default value)
 utility-user-privileges 
 utility-user-schema-access (No default value)
