@@ -1232,6 +1232,29 @@ bool PT_table_factor_function::contextualize(Parse_context *pc) {
   return false;
 }
 
+bool PT_table_sequence_function::contextualize(Parse_context *pc) {
+  if (super::contextualize(pc) || m_expr->itemize(pc, &m_expr)) return true;
+
+  auto stf = new (pc->mem_root)
+      Table_function_sequence(pc->thd, m_table_alias.str, m_expr);
+  if (stf == nullptr) return true;  // OOM
+
+  LEX_CSTRING alias;
+  alias.length = strlen(stf->func_name());
+  alias.str = sql_strmake(stf->func_name(), alias.length);
+  if (alias.str == nullptr) return true;  // OOM
+
+  auto ti = new (pc->mem_root) Table_ident(alias, stf);
+  if (ti == nullptr) return true;
+
+  value = pc->select->add_table_to_list(pc->thd, ti, m_table_alias.str, 0,
+                                        TL_READ, MDL_SHARED_READ);
+  if (value == nullptr) return true;
+  if (pc->select->add_joined_table(value)) return true;
+
+  return false;
+}
+
 PT_derived_table::PT_derived_table(bool lateral, PT_subquery *subquery,
                                    const LEX_CSTRING &table_alias,
                                    Create_col_name_list *column_names)
@@ -2148,6 +2171,51 @@ Sql_cmd *PT_show_databases::make_cmd(THD *thd) {
   if (dd::info_schema::build_show_databases_query(m_pos, thd, lex->wild,
                                                   m_where) == nullptr)
     return nullptr;
+
+  return &m_sql_cmd;
+}
+
+Sql_cmd *PT_show_client_stats::make_cmd(THD *thd) {
+  LEX *lex = thd->lex;
+  lex->sql_command = m_sql_command;
+
+  if (prepare_schema_table(thd, lex, 0, SCH_CLIENT_STATS)) return nullptr;
+
+  return &m_sql_cmd;
+}
+
+Sql_cmd *PT_show_index_stats::make_cmd(THD *thd) {
+  LEX *lex = thd->lex;
+  lex->sql_command = m_sql_command;
+
+  if (prepare_schema_table(thd, lex, 0, SCH_INDEX_STATS)) return nullptr;
+
+  return &m_sql_cmd;
+}
+
+Sql_cmd *PT_show_table_stats::make_cmd(THD *thd) {
+  LEX *lex = thd->lex;
+  lex->sql_command = m_sql_command;
+
+  if (prepare_schema_table(thd, lex, 0, SCH_TABLE_STATS)) return nullptr;
+
+  return &m_sql_cmd;
+}
+
+Sql_cmd *PT_show_thread_stats::make_cmd(THD *thd) {
+  LEX *lex = thd->lex;
+  lex->sql_command = m_sql_command;
+
+  if (prepare_schema_table(thd, lex, 0, SCH_THREAD_STATS)) return nullptr;
+
+  return &m_sql_cmd;
+}
+
+Sql_cmd *PT_show_user_stats::make_cmd(THD *thd) {
+  LEX *lex = thd->lex;
+  lex->sql_command = m_sql_command;
+
+  if (prepare_schema_table(thd, lex, 0, SCH_USER_STATS)) return nullptr;
 
   return &m_sql_cmd;
 }
