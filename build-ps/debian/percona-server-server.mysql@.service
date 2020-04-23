@@ -16,9 +16,9 @@ User=mysql
 Group=mysql
 Type=notify
 PermissionsStartOnly=true
-ExecStartPre=/usr/share/mysql/mysql-systemd-start pre
+ExecStartPre=/usr/share/mysql/mysql-systemd-start pre @%I
 EnvironmentFile=-/etc/default/mysql
-ExecStart=/usr/sbin/mysqld $MYSQLD_OPTS
+ExecStart=/usr/sbin/mysqld --defaults-group-suffix=@%I $MYSQLD_OPTS
 TimeoutSec=600
 LimitNOFILE = 10000
 Restart=on-failure
