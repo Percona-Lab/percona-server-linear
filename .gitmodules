@@ -1,0 +1,6 @@
+[submodule "storage/rocksdb/rocksdb"]
+	path = storage/rocksdb/rocksdb
+	url = https://github.com/facebook/rocksdb.git
+[submodule "extra/coredumper"]
+	path = extra/coredumper
+	url = https://github.com/Percona-Lab/coredumper.git
