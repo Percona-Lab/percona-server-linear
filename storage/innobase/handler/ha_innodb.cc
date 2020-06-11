@@ -4687,11 +4687,13 @@ error_exit:
   return (ret);
 }
 
-void innobase_fix_default_table_encryption(ulong encryption_option) {
+bool innobase_fix_default_table_encryption(ulong encryption_option,
+                                           bool is_server_starting) {
   if (!srv_read_only_mode) {
-    fil_crypt_set_encrypt_tables(
-        static_cast<enum_default_table_encryption>(encryption_option));
+    srv_default_table_encryption =
+        static_cast<enum_default_table_encryption>(encryption_option);
   }
+  return false;
 }
 
 /** Fix the empty UUID of tablespaces like system, temp etc by generating
