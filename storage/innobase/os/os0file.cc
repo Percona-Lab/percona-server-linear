@@ -736,6 +736,13 @@ class AIO {
   /** Initialise the Linux native AIO data structures
   @return DB_SUCCESS or error code */
   [[nodiscard]] dberr_t init_linux_native_aio();
+
+  /** Submit buffered AIO requests on the array to the kernel.
+  (low level function).
+  @param[in] acquire_mutex specifies whether to lock array mutex
+  @param[in] arr for which to submit IO */
+  static void os_aio_dispatch_read_array_submit_low_for_array(
+      bool acquire_mutex, const AIO *arr);
 #endif /* LINUX_NATIVE_AIO */
 
  private:
@@ -2538,7 +2545,7 @@ dberr_t LinuxAIOHandler::poll(std::function<void(dberr_t)> &callback,
 
 #endif
 
-/** Submit buffered AIO requests on the given segment to the kernel.
+/** Submit buffered AIO requests on the read arrays to the kernel.
 (low level function).
 @param[in] acquire_mutex specifies whether to lock array mutex */
 void AIO::os_aio_dispatch_read_array_submit_low(bool acquire_mutex
@@ -2547,7 +2554,20 @@ void AIO::os_aio_dispatch_read_array_submit_low(bool acquire_mutex
     return;
   }
 #if defined(LINUX_NATIVE_AIO)
-  AIO *array = AIO::s_reads;
+  os_aio_dispatch_read_array_submit_low_for_array(acquire_mutex, s_reads);
+  if (s_ibuf != nullptr) {
+    os_aio_dispatch_read_array_submit_low_for_array(acquire_mutex, s_ibuf);
+  }
+#endif
+}
+
+#if defined(LINUX_NATIVE_AIO)
+/** Submit buffered AIO requests on the array to the kernel.
+(low level function).
+@param[in] acquire_mutex specifies whether to lock array mutex
+@param[in] arr for which to submit IO */
+void AIO::os_aio_dispatch_read_array_submit_low_for_array(
+    bool acquire_mutex, const AIO *array) {
   ulint total_submitted = 0;
   if (acquire_mutex) array->acquire();
   /* Submit aio requests buffered on all segments. */
@@ -2596,8 +2616,8 @@ void AIO::os_aio_dispatch_read_array_submit_low(bool acquire_mutex
   if (acquire_mutex) array->release();
 
   srv_stats.n_aio_submitted.add(total_submitted);
-#endif
 }
+#endif
 
 /** Submit buffered AIO requests on the given segment to the kernel. */
 void os_aio_dispatch_read_array_submit() {
@@ -2624,7 +2644,7 @@ bool AIO::linux_dispatch(Slot *slot, bool should_buffer) {
   ut_a(io_ctx_index < m_n_segments);
 
   if (should_buffer) {
-    ut_ad(this == s_reads);
+    ut_ad(this == s_reads || this == s_ibuf);
 
     acquire();
     /* There are m_slots.size() elements in m_pending,
@@ -2641,7 +2661,7 @@ bool AIO::linux_dispatch(Slot *slot, bool should_buffer) {
     m_pending[n] = iocb;
     ++count;
     if (count == slots_per_segment) {
-      AIO::os_aio_dispatch_read_array_submit_low(false);
+      AIO::os_aio_dispatch_read_array_submit_low_for_array(false, this);
     }
     release();
     return (true);
@@ -2956,7 +2976,8 @@ static int os_file_fsync_posix(os_file_t file) {
           ib::fatal(UT_LOCATION_HERE, ER_IB_MSG_1358)
               << "fsync(\"" << fd_path << "\") returned EIO, aborting.";
         else
-          ib::fatal(UT_LOCATION_HERE, ER_IB_MSG_1358) << "fsync() returned EIO, aborting.";
+          ib::fatal(UT_LOCATION_HERE, ER_IB_MSG_1358)
+              << "fsync() returned EIO, aborting.";
         break;
       }
 
