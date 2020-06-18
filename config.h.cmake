@@ -345,5 +345,7 @@
 #define DEFAULT_PARTIAL_REVOKES @DEFAULT_PARTIAL_REVOKES@
 
 #define SO_EXT "@CMAKE_SHARED_MODULE_SUFFIX@"
+/* coredumper library */
+#cmakedefine01 HAVE_LIBCOREDUMPER
 
 #endif
