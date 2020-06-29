@@ -7974,117 +7974,6 @@ static void fil_report_invalid_page_access_low(page_no_t block_offset,
                                                const char *space_name,
                                                ulint byte_offset, ulint len,
                                                bool is_read, int line) {
-  ib::error(ER_IB_MSG_328)
-      << "Trying to access page number " << block_offset
-      << " in"
-         " space "
-      << space_id << ", space name " << space_name
-      << ","
-         " which is outside the tablespace bounds. Byte offset "
-      << byte_offset << ", len " << len << ", i/o type "
-      << (is_read ? "read" : "write")
-      << ". If you get this error at mysqld startup, please check"
-         " that your my.cnf matches the ibdata files that you have in"
-         " the MySQL server.";
-
-  ib::error(ER_IB_MSG_329) << "Server exits"
-#ifdef UNIV_DEBUG
-                           << " at "
-                           << "fil0fil.cc"
-                           << "[" << line << "]"
-#endif /* UNIV_DEBUG */
-                           << ".";
-
-  ut_error;
-}
-
-#define fil_report_invalid_page_access(b, s, n, o, l, t) \
-  fil_report_invalid_page_access_low((b), (s), (n), (o), (l), (t), __LINE__)
-
-static bool set_min_key_version;
-static byte key_min[32];
-
-inline void fil_io_set_keyring_encryption(IORequest &req_type,
-                                          fil_space_t *space,
-                                          const page_id_t &page_id) {
-  ut_ad(space->crypt_data != NULL);
-
-  byte *key = NULL;
-  ulint key_len = 32;  // 32*8=256
-  byte *iv = NULL;
-  byte *tablespace_key = NULL;
-  uint key_version = 0;
-  uint key_id = FIL_DEFAULT_ENCRYPTION_KEY;
-
-  if (space->crypt_data->mutex_lock_needed)
-    mutex_enter(&space->crypt_data->mutex);
-
-  iv = space->crypt_data->iv;
-  key_id = space->crypt_data->key_id;
-
-  if (req_type.is_write()) {
-    if (space->crypt_data->should_encrypt() &&
-        space->crypt_data->max_key_version != 0) {
-      if (space->crypt_data->local_keys_cache.size() == 0)
-        space->crypt_data->load_keys_to_local_cache();
-
-      ut_ad(space->crypt_data
-                ->local_keys_cache[space->crypt_data->max_key_version] !=
-            nullptr);
-
-      key = space->crypt_data
-                ->local_keys_cache[space->crypt_data->max_key_version];
-      key_version = space->crypt_data->max_key_version;
-      key_len = 32;
-    } else {
-      key = NULL;
-      key_len = 0;
-      iv = NULL;
-      key_version = ENCRYPTION_KEY_VERSION_NOT_ENCRYPTED;
-    }
-  }
-
-  if (req_type.is_read()) {
-    if (space->crypt_data->local_keys_cache.size() == 0)
-      space->crypt_data->load_keys_to_local_cache();
-
-    tablespace_key = space->crypt_data->tablespace_key;
-    ut_ad(space->crypt_data->encryption_rotation !=
-              Encryption_rotation::MASTER_KEY_TO_KEYRING ||
-          space->crypt_data->tablespace_key != nullptr);
-    // retrieve key with min_key_version from local cache. In normal situation
-    // this is the key needed for decryption. In rare cases when re-encryption
-    // was aborted - due to server crash or shutdown there can be one more key
-    // version needed to decrypt tablespace - we will find this version in
-    // decrypt and retrieve needed version.
-    if (space->crypt_data->min_key_version !=
-            ENCRYPTION_KEY_VERSION_NOT_ENCRYPTED &&
-        space->crypt_data->encryption != FIL_ENCRYPTION_OFF) {
-      ut_ad(space->crypt_data
-                ->local_keys_cache[space->crypt_data->min_key_version] !=
-            nullptr);
-      key = space->crypt_data
-                ->local_keys_cache[space->crypt_data->min_key_version];
-      memcpy(key_min, key, 32);
-      set_min_key_version = true;
-      char testblock[32];
-      memset(testblock, 0, 32);
-      ut_ad(memcmp(key, testblock, 32) != 0);
-      ut_ad(key != NULL);
-      key_version = key == NULL ? ENCRYPTION_KEY_VERSION_INVALID
-                                : space->crypt_data->min_key_version;
-    } else {
-      key = NULL;
-      key_version = ENCRYPTION_KEY_VERSION_INVALID;
-    }
-  }
-
-  req_type.encryption_key(key, key_len, iv, key_version, key_id, tablespace_key,
-                          space->crypt_data->uuid,
-                          &space->crypt_data->local_keys_cache);
-
-  req_type.encryption_rotation(space->crypt_data->encryption_rotation);
-
   req_type.encryption_algorithm(Encryption::KEYRING);
 
   if (space->crypt_data->mutex_lock_needed)
@@ -8142,26 +8031,26 @@ void fil_io_set_encryption(IORequest &req_type, const page_id_t &page_id,
 
   /* For writing temporary tablespace, if encryption for temporary
   tablespace is disabled, skip setting encryption.
+  Encryption of session temporary tablespaces is independent of
+  innodb_temp_tablespace_encrypt */
+  if (fsp_is_global_temporary(space->id) && !srv_tmp_tablespace_encrypt &&
+      req_type.is_write()) {
+    req_type.clear_encrypted();
+    return;
+  }
+
+  /* For writing undo log, if encryption for undo log is disabled,
+  skip set encryption. */
+  if (fsp_is_undo_tablespace(space->id) && !srv_undo_log_encrypt &&
+      req_type.is_write()) {
+    req_type.clear_encrypted();
+    return;
+  }
+
   if (req_type.get_encrypted_block() != nullptr) {
     /* Already encrypted. */
     req_type.clear_encrypted();
     return;
-        } else {
-          ut_ad(space->crypt_data != nullptr);
-          fil_io_set_keyring_encryption(req_type, space, page_id);
-          req_type.encryption_algorithm(space->m_encryption_metadata.m_type);
-          return;
-        }
-
-      case Encryption::AES:
-        fil_io_set_mk_encryption(req_type, space);
-        req_type.encryption_algorithm(space->m_encryption_metadata.m_type);
-        return;
-      case Encryption::NONE:
-        // Already handled above
-      default:
-        ut_a(0);
-    }
   }
 
   req_type.encryption_key(space->m_encryption_metadata.m_key,
@@ -10613,6 +10502,23 @@ dberr_t Fil_system::open_for_recovery(space_id_t space_id) {
              Encryption::Progress::ENCRYPTION) &&
         recv_sys->keys != nullptr) {
       fil_tablespace_encryption_init(space);
+    }
+
+    if (recv_sys->crypt_datas != nullptr &&
+        recv_sys->crypt_datas->count(space_id) > 0) {
+      if (space->crypt_data != nullptr) {
+        fil_space_destroy_crypt_data(&space->crypt_data);
+      }
+      space->crypt_data = (*recv_sys->crypt_datas)[space_id];
+      recv_sys->crypt_datas->erase(space_id);
+
+      dberr_t err = fil_set_encryption(space->id, Encryption::KEYRING, nullptr,
+                                       space->crypt_data->iv);
+
+      if (err != DB_SUCCESS) {
+        ib::error(ER_IB_MSG_343) << "Can't set encryption information"
+                                 << " for tablespace" << space->name << "!";
+      }
     }
 
     if (!recv_sys->dblwr->empty()) {

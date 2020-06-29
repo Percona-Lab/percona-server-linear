@@ -33,7 +33,6 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 #include <mysql/components/my_service.h>
 
 #include "keyring_encryption_key_info.h"
-#include "page0types.h"
 #include "template_utils.h"
 
 #include "univ.i"
@@ -61,7 +60,15 @@ struct Encryption_key;
 
 enum class Encryption_rotation : std::uint8_t {
   NO_ROTATION,
-  MASTER_KEY_TO_KEYRING
+  /** For Master Key encrypted pages use the tablespace key to read.
+   * Use the crypt_data's key when writing (encrypting). */
+  MASTER_KEY_TO_KEYRING,
+  /** Encrypt all the pages that go through I/O level */
+  ENCRYPTING,
+  /** Do not encrypt pages that go through I/O level.
+   * When encryption threads decrypt pages, they just pass I/O level
+   * unencrypted (the encryption is disabled). */
+  DECRYPTING
 };
 
 // Forward declaration.
@@ -211,7 +218,6 @@ class Encryption {
       : m_type(NONE),
         m_key(nullptr),
         m_klen(0),
-        m_key_allocated(false),
         m_iv(nullptr),
         m_tablespace_key(nullptr),
         m_key_version(0),
@@ -631,6 +637,7 @@ class Encryption {
   /** Encrypt the page data contents. Page type can't be
   FIL_PAGE_ENCRYPTED, FIL_PAGE_COMPRESSED_AND_ENCRYPTED,
   FIL_PAGE_ENCRYPTED_RTREE.
+  @param[in]  type      IORequest
   @param[in]  src       page data which need to encrypt
   @param[in]  src_len   size of the source in bytes
   @param[in,out]  dst       destination area
@@ -648,9 +655,6 @@ class Encryption {
 
   /** Encrypt key length*/
   ulint m_klen;
-
-  /** Encrypt key allocated */
-  bool m_key_allocated;
 
   /** Encrypt initial vector */
   const byte *m_iv;

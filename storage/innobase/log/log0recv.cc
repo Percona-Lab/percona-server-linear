@@ -147,6 +147,7 @@ void meb_print_page_header(const page_t *page) {
 //#ifndef UNIV_HOTBACKUP
 PSI_memory_key mem_log_recv_page_hash_key;
 PSI_memory_key mem_log_recv_space_hash_key;
+PSI_memory_key mem_log_recv_crypt_data_hash_key;
 //#endif /* !UNIV_HOTBACKUP */
 
 /** true when recv_init_crash_recovery() has been called. */
@@ -647,6 +648,10 @@ void recv_sys_init() {
   recv_sys->metadata_recover =
       ut::new_withkey<MetadataRecover>(UT_NEW_THIS_FILE_PSI_KEY);
 
+  using CryptDatas = recv_sys_t::CryptDatas;
+  recv_sys->crypt_datas = ut::new_withkey<CryptDatas>(
+      ut::make_psi_memory_key(mem_log_recv_space_hash_key));
+
   mutex_exit(&recv_sys->mutex);
 }
 
@@ -873,6 +878,13 @@ void recv_sys_free() {
     ut::delete_(recv_sys->keys);
     recv_sys->keys = nullptr;
   }
+
+  for (auto &crypt_data : *recv_sys->crypt_datas) {
+    ut::delete_(crypt_data.second);
+  }
+
+  ut::delete_(recv_sys->crypt_datas);
+  recv_sys->crypt_datas = nullptr;
 
   mutex_exit(&recv_sys->mutex);
 }
@@ -1630,12 +1642,20 @@ static inline bool check_encryption(page_no_t page_no, space_id_t space_id,
   information as of today. Ideally we should have a separate redo type. */
   if (offset == encryption_offset) {
     auto len = mach_read_from_2(start + 2);
-    ut_ad(len == Encryption::INFO_SIZE);
+    ut_ad(len == Encryption::INFO_SIZE ||
+          len == KERYING_ENCRYPTION_INFO_MAX_SIZE_V1 ||
+          len == KERYING_ENCRYPTION_INFO_MAX_SIZE_V2 ||
+          len == KERYING_ENCRYPTION_INFO_MAX_SIZE);
 
-    if (len != Encryption::INFO_SIZE) {
+    if (len != Encryption::INFO_SIZE &&
+        len != KERYING_ENCRYPTION_INFO_MAX_SIZE_V1 &&
+        len != KERYING_ENCRYPTION_INFO_MAX_SIZE_V2 && 
+        len != KERYING_ENCRYPTION_INFO_MAX_SIZE) {
       /* purecov: begin inspected */
       ib::warn(ER_IB_WRN_ENCRYPTION_INFO_SIZE_MISMATCH, size_t{len},
-               Encryption::INFO_SIZE);
+               Encryption::INFO_SIZE, KERYING_ENCRYPTION_INFO_MAX_SIZE_V1,
+               KERYING_ENCRYPTION_INFO_MAX_SIZE_V2,
+               KERYING_ENCRYPTION_INFO_MAX_SIZE);
       return false;
       /* purecov: end */
     }
@@ -1652,7 +1672,6 @@ specified.
 @param[in]      end_ptr         End of buffer
 @param[in]      space_id        Tablespace identifier
 @param[in]      page_no         Page number
-@param[in]	apply		Whether to apply the record
 @param[in,out]  block           Buffer block, or nullptr if
                                 a page log record should not be applied
                                 or if it is a MLOG_FILE_ operation
@@ -1770,7 +1789,8 @@ static byte *recv_parse_or_apply_log_rec_body(
           } else if (memcmp(ptr_copy, Encryption::KEY_MAGIC_PS_V3,
                             Encryption::MAGIC_SIZE) == 0 &&
                      !recv_sys->apply_log_recs) {
-            return (fil_parse_write_crypt_data_v3(space_id, ptr, end_ptr, len));
+            return (fil_parse_write_crypt_data_v3(space_id, ptr, end_ptr, len,
+                                                  recv_needed_recovery));
           }
 
           if (fsp_is_system_or_temp_tablespace(space_id)) {
@@ -2926,7 +2946,7 @@ void recv_recover_page_func(
 @param[in]      end_ptr         end of the buffer
 @param[out]     space_id        tablespace identifier
 @param[out]     page_no         page number
-@param[in]      apply           whether to apply the record
+@param[in]      online_log      do we process DDL online log
 @param[out]     body            start of log record body
 @return length of the record, or 0 if the record was not complete */
 ulint recv_parse_log_rec(mlog_id_t *type, byte *ptr, byte *end_ptr,
@@ -3268,10 +3288,15 @@ static bool recv_multi_rec(byte *ptr, byte *end_ptr) {
     page_no_t page_no = 0;
 
     mlog_id_t type = MLOG_BIGGEST_TYPE;
-    byte *body;
 
-    ulint len = recv_parse_log_rec(&type, ptr, end_ptr, &space_id, &page_no,
-                                   true, &body);
+    byte *body = nullptr;
+    size_t len = 0;
+
+    /* Avoid parsing if we have the record saved already. */
+    if (!recv_sys->get_saved_rec(i, space_id, page_no, type, body, len)) {
+      len = recv_parse_log_rec(
+          &type, ptr, end_ptr, &space_id, &page_no, false, &body);
+    }
 
     if (recv_sys->found_corrupt_log &&
         !recv_report_corrupt_log(ptr, type, space_id, page_no)) {
@@ -4014,7 +4039,6 @@ dberr_t recv_recovery_from_checkpoint_start(log_t &log, lsn_t flush_lsn) {
   lsn_t recovered_lsn;
 
   recovered_lsn = recv_sys->recovered_lsn;
-
 
   ut_a(recv_needed_recovery || checkpoint_lsn == recovered_lsn);
 
