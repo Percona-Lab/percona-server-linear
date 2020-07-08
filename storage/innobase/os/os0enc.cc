@@ -185,14 +185,14 @@ void remove_key(const char *key_id) {
 }
 
 /**
-  Store key in a keyring
+  Store a key into a keyring
 
   @param [in] key_id     Key identifier
   @param [in] key        Key value
   @param [in] key_length Length of the key
   @param [in] key_type   Type of the key
 
-  @returns status of key storage
+  @returns status of key storing
     @retval true  Success
     @retval fales Error
 */
@@ -1536,6 +1536,10 @@ byte *Encryption::encrypt(const IORequest &type, byte *src, ulint src_len,
     ut::free(check_buf);
   }
 #endif /* UNIV_ENCRYPT_DEBUG */
+
+#if !defined(UNIV_INNOCHECKSUM)
+  srv_stats.pages_encrypted.inc();
+#endif
   return dst;
 }
 

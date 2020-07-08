@@ -9774,21 +9774,6 @@ void fil_encryption_reencrypt(std::vector<space_id_t> &sid_vector) {
   fil_system->encryption_reencrypt(sid_vector);
 }
 
-bool fil_encryption_rotate_global(const space_id_vec &space_ids) {
-  for (space_id_t space_id : space_ids) {
-    fil_space_t *space = fil_space_acquire(space_id);
-
-    bool success = encryption_rotate_low(space);
-
-    fil_space_release(space);
-
-    if (!success) {
-      return (false);
-    }
-  }
-  return (true);
-}
-
 #endif /* !UNIV_HOTBACKUP */
 
 /** Constructor
