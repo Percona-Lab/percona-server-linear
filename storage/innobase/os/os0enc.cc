@@ -1114,28 +1114,6 @@ byte *Encryption::encrypt_log(const IORequest &type, byte *src, ulint src_len,
     dst_ptr += OS_FILE_LOG_BLOCK_SIZE;
   }
 
-#ifdef UNIV_ENCRYPT_DEBUG
-  {
-    byte *check_buf = static_cast<byte *>(ut_malloc_nokey(src_len));
-    byte *buf2 = static_cast<byte *>(ut_malloc_nokey(src_len));
-
-    memcpy(check_buf, dst, src_len);
-
-    dberr_t err = decrypt_log(type, check_buf, src_len, buf2, src_len);
-    if (err != DB_SUCCESS || memcmp(src, check_buf, src_len) != 0) {
-      std::ostringstream msg{};
-      ut_print_buf_hex(msg, src, src_len);
-      ib::error() << msg.str();
-
-      msg.seekp(0);
-      ut_print_buf_hex(msg, check_buf, src_len);
-      ib::fatal() << msg.str();
-    }
-    ut_free(buf2);
-    ut_free(check_buf);
-  }
-#endif /* UNIV_ENCRYPT_DEBUG */
-
   return (dst);
 }
 
@@ -1385,6 +1363,10 @@ byte *Encryption::encrypt(const IORequest &type, byte *src, ulint src_len,
     ut_free(check_buf);
   }
 #endif /* UNIV_ENCRYPT_DEBUG */
+
+#if !defined(UNIV_INNOCHECKSUM)
+  srv_stats.pages_encrypted.inc();
+#endif
   return dst;
 }
 
@@ -1904,82 +1886,3 @@ void Encryption::set_encryption_rotation(
 }
 
 uint32_t Encryption::get_master_key_id() { return s_master_key_id; }
-
-bool Encryption::dblwr_encrypt_page(fil_space_t *space, page_t *in_page,
-                                    file::Block_ptr &enc_block,
-                                    ulint &enc_block_len) {
-  if (!FSP_FLAGS_GET_ENCRYPTION(space->flags)) {
-    return (false);
-  }
-
-  IORequest write_request(IORequest::WRITE);
-
-  write_request.encryption_key(space->encryption_key, space->encryption_klen,
-                               space->encryption_iv, 0, 0, nullptr, nullptr,
-                               nullptr);
-  write_request.encryption_algorithm(Encryption::AES);
-
-  page_size_t page_size(space->flags);
-
-  ulint bytes = page_size.physical();
-
-  /* After successful encryption, in_page will point
-  to a new memory block which is encrypted and
-  the bytes will have value of length of encrypted data */
-  void *in_page_before = in_page;
-  file::Block_ptr block{
-      os_file_encrypt_page(write_request, in_page_before, &bytes)};
-
-  ut_ad(block.get() != nullptr);
-
-  if (in_page_before == in_page) {
-    return (false);
-  }
-
-  ut_ad(bytes == page_size.physical());
-  enc_block = std::move(block);
-  enc_block_len = bytes;
-  return (true);
-}
-
-bool Encryption::dblwr_decrypt_page(fil_space_t *space, page_t *page) {
-  if (!FSP_FLAGS_GET_ENCRYPTION(space->flags)) {
-    return (true);
-  }
-
-  IORequest decrypt_request;
-
-  decrypt_request.encryption_key(space->encryption_key, space->encryption_klen,
-                                 space->encryption_iv, 0, 0, nullptr, nullptr,
-                                 nullptr);
-
-  decrypt_request.encryption_algorithm(Encryption::AES);
-
-  Encryption encryption(decrypt_request.encryption_algorithm());
-
-  page_size_t page_size(space->flags);
-
-  dberr_t err = encryption.decrypt(decrypt_request, page, page_size.physical(),
-                                   NULL, page_size.physical());
-
-  ut_ad(err == DB_SUCCESS);
-  return (err == DB_SUCCESS);
-}
-
-bool os_dblwr_encrypt_page(space_id_t space_id, page_t *in_page,
-                           file::Block_ptr &enc_block, ulint &enc_block_len) {
-  fil_space_t *space = fil_space_acquire_silent(space_id);
-
-  if (space == nullptr) {
-    /* Tablespace dropped */
-    return (false);
-  }
-
-  const page_size_t page_size(space->flags);
-  const bool success =
-      Encryption::dblwr_encrypt_page(space, in_page, enc_block, enc_block_len);
-
-  fil_space_release(space);
-
-  return (success);
-}
