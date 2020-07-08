@@ -188,14 +188,14 @@ void remove_key(const char *key_id) {
 }
 
 /**
-  Store key in a keyring
+  Store a key into a keyring
 
   @param [in] key_id     Key identifier
   @param [in] key        Key value
   @param [in] key_length Length of the key
   @param [in] key_type   Type of the key
 
-  @returns status of key storage
+  @returns status of key storing
     @retval true  Success
     @retval fales Error
 */
@@ -1276,28 +1276,6 @@ byte *Encryption::encrypt_log(const IORequest &type, byte *src, ulint src_len,
     dst_ptr += OS_FILE_LOG_BLOCK_SIZE;
   }
 
-#ifdef UNIV_ENCRYPT_DEBUG
-  {
-    byte *check_buf = static_cast<byte *>(ut_malloc_nokey(src_len));
-    byte *buf2 = static_cast<byte *>(ut_malloc_nokey(src_len));
-
-    memcpy(check_buf, dst, src_len);
-
-    dberr_t err = decrypt_log(type, check_buf, src_len, buf2, src_len);
-    if (err != DB_SUCCESS || memcmp(src, check_buf, src_len) != 0) {
-      std::ostringstream msg{};
-      ut_print_buf_hex(msg, src, src_len);
-      ib::error() << msg.str();
-
-      msg.seekp(0);
-      ut_print_buf_hex(msg, check_buf, src_len);
-      ib::fatal() << msg.str();
-    }
-    ut_free(buf2);
-    ut_free(check_buf);
-  }
-#endif /* UNIV_ENCRYPT_DEBUG */
-
   return (dst);
 }
 
@@ -1547,6 +1525,10 @@ byte *Encryption::encrypt(const IORequest &type, byte *src, ulint src_len,
     ut_free(check_buf);
   }
 #endif /* UNIV_ENCRYPT_DEBUG */
+
+#if !defined(UNIV_INNOCHECKSUM)
+  srv_stats.pages_encrypted.inc();
+#endif
   return dst;
 }
 
