@@ -187,6 +187,46 @@ void remove_key(const char *key_id) {
   (void)keyring_writer_service->remove(key_id, nullptr);
 }
 
+/**
+  Store a key into a keyring
+
+  @param [in] key_id     Key identifier
+  @param [in] key        Key value
+  @param [in] key_length Length of the key
+  @param [in] key_type   Type of the key
+
+  @returns status of key storing
+    @retval true  Success
+    @retval fales Error
+*/
+bool store_key(const char *key_id, const unsigned char *key, size_t key_length,
+               const char *key_type) {
+  if (keyring_writer_service->store(key_id, nullptr, key, key_length,
+                                    key_type)) {
+    return false;
+  }
+  return true;
+}
+
+/**
+  Read key from a keyring
+
+  @param [in]  key_id     Key identifier
+  @param [out] key        Key value
+  @param [out] key_length Length of the key
+  @param [out] key_type   Type of the key
+
+  @returns status of key reading
+    @retval -1 Keyring error
+    @retval 0  Key absent
+    @retval 1  Key present. Check output buffers.
+*/
+int read_key(const char *key_id, unsigned char **key, size_t *key_length,
+             char **key_type) {
+  return keyring_operations_helper::read_secret(
+      innobase::encryption::keyring_reader_service, key_id, nullptr, key,
+      key_length, key_type, PSI_INSTRUMENT_ME);
+}
 #else
 
 bool init_keyring_services(SERVICE_TYPE(registry) *) { return false; }
@@ -383,10 +423,10 @@ bool Encryption::get_tablespace_key(uint key_id, const char *uuid,
   fill_key_name(key_name, key_id, uuid, tablespace_key_version);
 
   get_keyring_key(key_name, tablespace_key, key_len);
-                << ", please check the keyring is loaded.";
+
+  if (*tablespace_key == nullptr) {
     ib::error() << "Encryption can't find tablespace key_id = " << key_id
-                << ", please check"
-                << " the keyring plugin is loaded.";
+                << ", please check the keyring is loaded.";
     result = false;
   }
 
@@ -507,12 +547,12 @@ bool Encryption::is_keyring_alive() {
   get_keyring_key(percona_keyring_test_key_name, &keyring_test_key, &key_len);
 
   if (keyring_test_key != nullptr) {
+    my_free(keyring_test_key);
+    return true;
+  }
+
   return innobase::encryption::generate_key(percona_keyring_test_key_name,
                                             "AES", KEY_LEN);
-  int ret =
-      my_key_generate(percona_keyring_test_key_name, "AES", nullptr, KEY_LEN);
-
-  return (ret == 0) ? true : false;
 }
 
 bool Encryption::can_page_be_keyring_encrypted(ulint page_type) {
@@ -1270,28 +1310,6 @@ byte *Encryption::encrypt_log(const IORequest &type, byte *src, ulint src_len,
     dst_ptr += OS_FILE_LOG_BLOCK_SIZE;
   }
 
-#ifdef UNIV_ENCRYPT_DEBUG
-  {
-    byte *check_buf = static_cast<byte *>(ut_malloc_nokey(src_len));
-    byte *buf2 = static_cast<byte *>(ut_malloc_nokey(src_len));
-
-    memcpy(check_buf, dst, src_len);
-
-    dberr_t err = decrypt_log(type, check_buf, src_len, buf2, src_len);
-    if (err != DB_SUCCESS || memcmp(src, check_buf, src_len) != 0) {
-      std::ostringstream msg{};
-      ut_print_buf_hex(msg, src, src_len);
-      ib::error() << msg.str();
-
-      msg.seekp(0);
-      ut_print_buf_hex(msg, check_buf, src_len);
-      ib::fatal() << msg.str();
-    }
-    ut_free(buf2);
-    ut_free(check_buf);
-  }
-#endif /* UNIV_ENCRYPT_DEBUG */
-
   return (dst);
 }
 
@@ -1541,6 +1559,10 @@ byte *Encryption::encrypt(const IORequest &type, byte *src, ulint src_len,
     ut_free(check_buf);
   }
 #endif /* UNIV_ENCRYPT_DEBUG */
+
+#if !defined(UNIV_INNOCHECKSUM)
+  srv_stats.pages_encrypted.inc();
+#endif
   return dst;
 }
 
