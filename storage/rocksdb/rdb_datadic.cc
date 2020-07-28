@@ -3866,11 +3866,10 @@ static void rdb_get_mem_comparable_space(const CHARSET_INFO *const cs,
   *mb_len = rdb_mem_comparable_space[cs->number]->space_mb_len;
 }
 
-mysql_mutex_t rdb_mem_cmp_space_mutex;
-
+Rds_mysql_mutex rdb_mem_cmp_space_mutex;
+Rds_mysql_mutex rdb_collation_data_mutex;
 std::array<const Rdb_collation_codec *, MY_ALL_CHARSETS_SIZE>
     rdb_collation_data;
-mysql_mutex_t rdb_collation_data_mutex;
 
 bool rdb_is_collation_supported(const my_core::CHARSET_INFO *const cs) {
   return (cs->coll == &my_collation_8bit_simple_ci_handler);
@@ -5020,6 +5019,8 @@ bool Rdb_ddl_manager::init(Rdb_dict_manager *const dict_arg,
   delete it;
   LogPluginErrMsg(INFORMATION_LEVEL, 0,
                   "Table_store: loaded DDL data for %d tables", i);
+
+  initialized = true;
   return false;
 }
 
@@ -5362,6 +5363,8 @@ bool Rdb_ddl_manager::rename(const std::string &from, const std::string &to,
 }
 
 void Rdb_ddl_manager::cleanup() {
+  if (!initialized) return;
+
   for (const auto &kv : m_ddl_map) {
     delete kv.second;
   }
@@ -5440,6 +5443,7 @@ bool Rdb_dict_manager::init(rocksdb::TransactionDB *const rdb_dict,
     return HA_EXIT_FAILURE;
   }
 
+  initialized = true;
   return HA_EXIT_SUCCESS;
 }
 
