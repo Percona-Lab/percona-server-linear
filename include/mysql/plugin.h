@@ -856,6 +856,11 @@ void remove_ssl_err_thread_state();
   Interface to get the number of VCPUs.
 */
 unsigned int thd_get_num_vcpus();
+
+typedef bool (*ssl_reload_callback_t)(void *);
+bool register_ssl_reload_callback(ssl_reload_callback_t);
+bool deregister_ssl_reload_callback(ssl_reload_callback_t);
+
 #ifdef __cplusplus
 }
 #endif
