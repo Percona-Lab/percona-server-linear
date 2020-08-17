@@ -16,7 +16,7 @@ authentication_ldap_simple_max_pool_size	1000
 authentication_ldap_simple_server_host	<MTR_LDAP_HOST>
 authentication_ldap_simple_server_port	<MTR_LDAP_PORT>
 authentication_ldap_simple_ssl	OFF
-authentication_ldap_simple_tls	OFF
+authentication_ldap_simple_tls	ON
 authentication_ldap_simple_user_search_attr	uid
 SET GLOBAL authentication_ldap_simple_bind_base_dn = 'ou=people,dc=planetexpress,dc=com';
 SHOW GLOBAL VARIABLES LIKE 'authentication_ldap_simple%';
@@ -34,7 +34,7 @@ authentication_ldap_simple_max_pool_size	1000
 authentication_ldap_simple_server_host	<MTR_LDAP_HOST>
 authentication_ldap_simple_server_port	<MTR_LDAP_PORT>
 authentication_ldap_simple_ssl	OFF
-authentication_ldap_simple_tls	OFF
+authentication_ldap_simple_tls	ON
 authentication_ldap_simple_user_search_attr	uid
 CREATE USER zoidberg IDENTIFIED WITH authentication_ldap_simple BY 'cn=John A. Zoidberg,ou=people,dc=planetexpress,dc=com';
 CREATE USER nonexistent IDENTIFIED WITH authentication_ldap_simple BY 'uid=nonexistent';
@@ -53,7 +53,7 @@ authentication_ldap_simple_max_pool_size	1000
 authentication_ldap_simple_server_host	<MTR_LDAP_HOST>
 authentication_ldap_simple_server_port	<MTR_LDAP_PORT>
 authentication_ldap_simple_ssl	OFF
-authentication_ldap_simple_tls	OFF
+authentication_ldap_simple_tls	ON
 authentication_ldap_simple_user_search_attr	uid
 ERROR 28000: Access denied for user 'nonexistent'@'localhost' (using password: YES)
 DROP USER zoidberg;
