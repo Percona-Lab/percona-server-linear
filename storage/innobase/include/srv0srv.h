@@ -492,9 +492,6 @@ enum srv_sys_tablespace_encrypt_enum {
 /** Enable this option to encrypt system tablespace at bootstrap. */
 extern ulong srv_sys_tablespace_encrypt;
 
-/** Enable or disable encryption of pages in parallel doublewrite buffer file */
-extern bool srv_parallel_dblwr_encrypt;
-
 /** Whether the redo log tracking is currently enabled. Note that it is
 possible for the log tracker thread to be running and the tracking to be
 disabled */
@@ -502,6 +499,7 @@ extern bool srv_track_changed_pages;
 extern ulonglong srv_max_bitmap_file_size;
 
 extern ulonglong srv_max_changed_pages;
+
 
 /** Maximum number of recently truncated undo tablespace IDs for
 the same undo number. */
@@ -1397,6 +1395,7 @@ struct export_var_t {
 #endif                                /* UNIV_DEBUG */
   // Percona-added status variables
   ulint innodb_checkpoint_age;
+  ulint innodb_checkpoint_max_age;
   ulint innodb_ibuf_free_list;
   ulint innodb_ibuf_segment_size;
   lsn_t innodb_lsn_current;
