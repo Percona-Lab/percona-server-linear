@@ -340,6 +340,10 @@ extern uint srv_n_fil_crypt_iops;
 /** Path to the Percona-specific parallel doublewrite buffer (Deprecated) */
 static char *srv_parallel_doublewrite_path_deprecated;
 
+/** Enable or disable encryption of pages in parallel doublewrite buffer
+file */
+static bool srv_parallel_dblwr_encrypt = false;
+
 /** Note we cannot use rec_format_enum because we do not allow
 COMPRESSED row format for innodb_default_row_format option. */
 enum default_row_format_enum {
@@ -1225,6 +1229,8 @@ static SHOW_VAR innodb_status_variables[] = {
      SHOW_SCOPE_GLOBAL},
     {"checkpoint_age", (char *)&export_vars.innodb_checkpoint_age, SHOW_LONG,
      SHOW_SCOPE_GLOBAL},
+    {"checkpoint_max_age", (char *)&export_vars.innodb_checkpoint_max_age,
+     SHOW_LONG, SHOW_SCOPE_GLOBAL},
     {"data_fsyncs", (char *)&export_vars.innodb_data_fsyncs, SHOW_LONG,
      SHOW_SCOPE_GLOBAL},
     {"data_pending_fsyncs", (char *)&export_vars.innodb_data_pending_fsyncs,

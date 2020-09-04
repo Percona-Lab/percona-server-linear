@@ -192,10 +192,6 @@ bool srv_tmp_tablespace_encrypt;
 /** Option to enable encryption of system tablespace. */
 ulong srv_sys_tablespace_encrypt;
 
-/** Enable or disable encryption of pages in parallel doublewrite buffer
-file */
-bool srv_parallel_dblwr_encrypt;
-
 /** Maximum number of recently truncated undo tablespace IDs for
 the same undo number. */
 const size_t CONCURRENT_UNDO_TRUNCATE_LIMIT =
@@ -1742,6 +1738,8 @@ void srv_export_innodb_status(void) {
   }
   export_vars.innodb_checkpoint_age =
       (log_get_lsn(*log_sys) - log_sys->last_checkpoint_lsn);
+
+  export_vars.innodb_checkpoint_max_age = log_get_free_check_capacity(*log_sys);
   ibuf_export_ibuf_status(&export_vars.innodb_ibuf_free_list,
                           &export_vars.innodb_ibuf_segment_size);
   export_vars.innodb_lsn_current = log_get_lsn(*log_sys);
