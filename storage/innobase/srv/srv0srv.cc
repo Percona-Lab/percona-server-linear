@@ -200,9 +200,6 @@ bool srv_tmp_tablespace_encrypt;
 /** Option to enable encryption of system tablespace. */
 bool srv_sys_tablespace_encrypt;
 
-/** Enable or disable encryption of pages in parallel doublewrite buffer
-file */
-
 /** Maximum number of recently truncated undo tablespace IDs for
 the same undo number. */
 const size_t CONCURRENT_UNDO_TRUNCATE_LIMIT =
@@ -1751,17 +1748,27 @@ void srv_export_innodb_status(void) {
     buf_pool_t *buf_pool = buf_pool_from_array(i);
     export_vars.innodb_buffer_pool_pages_old += buf_pool->LRU_old_len;
   }
-  export_vars.innodb_checkpoint_age =
-      (log_get_lsn(*log_sys) - log_sys->last_checkpoint_lsn);
+  if (!srv_read_only_mode) {
+    export_vars.innodb_checkpoint_age =
+        (log_get_lsn(*log_sys) - log_sys->last_checkpoint_lsn);
+
+    log_limits_mutex_enter(*log_sys);
+    export_vars.innodb_checkpoint_max_age = log_free_check_capacity(*log_sys);
+    log_limits_mutex_exit(*log_sys);
+  } else {
+    export_vars.innodb_checkpoint_age = 0;
+    export_vars.innodb_checkpoint_max_age = 0;
+  }
+
   ibuf_export_ibuf_status(&export_vars.innodb_ibuf_free_list,
                           &export_vars.innodb_ibuf_segment_size);
   export_vars.innodb_lsn_current = log_get_lsn(*log_sys);
-
   export_vars.innodb_lsn_flushed = log_sys->flushed_to_disk_lsn;
   export_vars.innodb_lsn_last_checkpoint = log_sys->last_checkpoint_lsn;
   export_vars.innodb_master_thread_active_loops = srv_main_active_loops;
   export_vars.innodb_master_thread_idle_loops = srv_main_idle_loops;
   export_vars.innodb_max_trx_id = trx_sys_get_next_trx_id_or_no();
+
   mutex_enter(&trx_sys->mutex);
   auto *const oldest_view_for_low_limit_trx_id =
       trx_sys->mvcc->get_oldest_view_stats();
