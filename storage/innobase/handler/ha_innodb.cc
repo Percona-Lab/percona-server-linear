@@ -4842,29 +4842,6 @@ bool innobase_fix_default_table_encryption(ulong encryption_option, bool is_serv
   return false;
 }
 
-bool innobase_check_mk_keyring_exclusions(THD *thd) {
-  if (srv_undo_log_encrypt == true) {
-    push_warning_printf(thd, Sql_condition::SL_WARNING, ER_WRONG_ARGUMENTS,
-                        "Online encryption to KEYRING cannot be turned ON"
-                        " as Undo log Master Key encryption is turned ON."
-                        " Please disable the Undo log Master key encryption"
-                        " (innodb_undo_log_encrypt) and try again.");
-    return true;
-  }
-  if (srv_sys_tablespace_encrypt == SYS_TABLESPACE_ENCRYPT_ON) {
-    push_warning_printf(
-        thd, Sql_condition::SL_WARNING, ER_WRONG_ARGUMENTS,
-        "Online encryption to KEYRING cannot be turned ON"
-        " as system tablespace is encrypted with Master Key"
-        " encryption. In case you want system tablespace to"
-        " get re-encrypted with KEYRING encryption set"
-        " --innodb-sys_tablespace_encrypt to RE_ENCRYPTING_TO_KEYRING");
-    return true;
-  }
-
-  return false;
-}
-
 /** Fix the empty UUID of tablespaces like system, temp etc by generating
 a new master key and do key rotation. These tablespaces if encrypted
 during startup, will be encrypted with tablespace key which has empty UUID
@@ -4890,6 +4867,12 @@ bool innobase_fix_tablespaces_empty_uuid() {
 
   if (!default_master_key_used) {
     return (false);
+  }
+
+  byte *master_key = nullptr;
+  uint32_t master_key_id;
+  Encryption::get_master_key(&master_key_id, &master_key);
+
   if (master_key == nullptr) {
     my_error(ER_CANNOT_FIND_KEY_IN_KEYRING, MYF(0));
     return (true);
