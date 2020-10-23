@@ -172,6 +172,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "dict0upgrade.h"
 #include "os0thread-create.h"
 #include "os0thread.h"
+#include "sql/auth/auth_common.h"
 #include "sql/item.h"
 #include "sql/json_dom.h"
 #include "sql_base.h"

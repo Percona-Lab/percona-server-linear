@@ -1700,6 +1700,13 @@ bool fil_system_get_file_by_space_num(space_id_t space_num,
 bool fil_truncate_tablespace(space_id_t space_id, page_no_t size_in_pages)
     MY_ATTRIBUTE((warn_unused_result));
 
+/** Truncate the tablespace to needed size.
+@param[in]	space_id	Id of tablespace to truncate
+@param[in]	size_in_pages	Truncate size.
+@return true if truncate was successful. */
+bool fil_truncate_tablespace(space_id_t space_id, page_no_t size_in_pages)
+    MY_ATTRIBUTE((warn_unused_result));
+
 /** Drop and create an UNDO tablespace.
 @param[in]  old_space_id   Tablespace ID to truncate
 @param[in]  new_space_id   Tablespace ID to for the new file

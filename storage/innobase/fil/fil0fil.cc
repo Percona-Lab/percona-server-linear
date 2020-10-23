@@ -1562,6 +1562,7 @@ class Fil_system {
 
     return shard->is_deleted(space_id);
   }
+
 #endif /* !UNIV_HOTBACKUP */
 
   /** Fetch the fil_space_t instance that maps to the name.
@@ -3315,7 +3316,6 @@ void Fil_shard::space_detach(fil_space_t *space) {
 There must not be any pending I/O's or flushes on the files.
 @param[in,out]	space		tablespace */
 void Fil_shard::space_free_low(fil_space_t *&space) {
-
   /* Wait for fil_space_t::release_for_io(); */
   while (space->n_pending_ios) {
     os_thread_sleep(100);
@@ -5032,6 +5032,17 @@ dberr_t Fil_shard::space_delete(space_id_t space_id, buf_remove_t buf_remove) {
       os_thread_yield();
 
       mutex_acquire();
+
+      /* Wait for any pending writes. */
+      while (space->files.front().n_pending > 0) {
+        mutex_release();
+
+        os_thread_yield();
+
+        mutex_acquire();
+      }
+
+      m_deleted.push_back({space->id, space});
     }
 
     m_deleted_spaces.push_back({space->id, space});
@@ -5982,6 +5993,12 @@ static dberr_t fil_create_tablespace(
       ib::warn(ER_IB_MSG_303, path, sz, ret, strerror(errno));
     }
   }
+#else
+  atomic_write = false;
+
+  success = os_file_set_size(path, file, 0, size * page_size.physical(),
+                             srv_read_only_mode, true);
+
 #endif /* !NO_FALLOCATE && UNIV_LINUX */
 
   if (!success) {
