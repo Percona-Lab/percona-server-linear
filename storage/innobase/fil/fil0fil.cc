@@ -8272,7 +8272,7 @@ dberr_t fil_set_encryption(space_id_t space_id, Encryption::Type algorithm,
 
   if (space == nullptr) {
     shard->mutex_release();
-    return (DB_NOT_FOUND);
+    return DB_NOT_FOUND;
   }
 
   Encryption::set_or_generate(algorithm, key, iv, space->m_encryption_metadata);
