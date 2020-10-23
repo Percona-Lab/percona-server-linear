@@ -2805,20 +2805,6 @@ dberr_t Fil_shard::get_file_size(fil_node_t *file, bool read_only_mode) {
     fsp_flags_unset_encryption(header_fsp_flags);
   }
 
-  /* If a crash occurs while an UNDO space is being truncated,
-     it will be created new at startup. In that case, the fil_space_t
-     object will have the ENCRYPTION flag set, but the header page will
-     not be marked until the srv_master_thread gets around to it.
-     The opposite can occur where the header page contains the encryption
-     flag but the fil_space_t does not.  It could happen that undo
-     encryption was turned off just before the crash or shutdown so that
-     the srv_master_thread did not yet have time to apply it.
-     So don't compare the encryption flag for undo tablespaces. */
-  if (fsp_is_undo_tablespace(space->id)) {
-    fsp_flags_unset_encryption(fil_space_flags);
-    fsp_flags_unset_encryption(header_fsp_flags);
-  }
-
   /* Make sure the space_flags are the same as the header page flags. */
   if (UNIV_UNLIKELY(fil_space_flags != header_fsp_flags)) {
     ib::error(ER_IB_MSG_272, ulong{space->flags}, file->name, ulonglong{flags});
@@ -3307,7 +3293,6 @@ void Fil_shard::space_detach(fil_space_t *space) {
 There must not be any pending I/O's or flushes on the files.
 @param[in,out]	space		tablespace */
 void Fil_shard::space_free_low(fil_space_t *&space) {
-
   /* Wait for fil_space_t::release_for_io(); */
   while (space->n_pending_ios) {
     std::this_thread::sleep_for(std::chrono::microseconds(100));
@@ -3389,7 +3374,10 @@ static bool fil_space_free(space_id_t space_id, bool x_latched) {
     rw_lock_x_unlock(&space->latch);
   }
 
+  shard->mutex_acquire();
   Fil_shard::space_free_low(space);
+  shard->mutex_release();
+
   ut_a(space == nullptr);
 
   return true;
@@ -5011,6 +4999,9 @@ dberr_t Fil_shard::space_delete(space_id_t space_id, buf_remove_t buf_remove) {
 
     mtr.commit();
 
+    DBUG_EXECUTE_IF("delete_crash", log_buffer_flush_to_disk();
+                    DBUG_SUICIDE(););
+
     /* Even if we got killed shortly after deleting the
     tablespace file, the record must have already been
     written to the redo log. */
@@ -6195,32 +6186,6 @@ dberr_t fil_ibt_create(space_id_t space_id, const char *name, const char *path,
   return fil_create_tablespace(space_id, name, path, flags, size,
                                FIL_TYPE_TEMPORARY, FIL_ENCRYPTION_DEFAULT,
                                KeyringEncryptionKeyIdInfo());
-}
-
-bool fil_replace_tablespace(space_id_t old_space_id, space_id_t new_space_id,
-                            page_no_t size_in_pages) {
-  auto space = fil_space_get(old_space_id);
-  std::string space_name(space->name);
-  std::string file_name(space->files.front().name);
-
-  /* Mark the old tablespace to be deleted. We defer the actual deletion
-  to avoid concurrency bottleneck.  Leave the pages in the buffer pool
-  and increment the space version number. */
-  auto err = fil_delete_tablespace(old_space_id, BUF_REMOVE_NONE);
-
-  if (err != DB_SUCCESS) {
-    return false;
-  }
-
-  ulint flags = fsp_flags_init(univ_page_size, false, false, false, false);
-
-  /* Create the new UNDO tablespace. */
-  err = fil_create_tablespace(new_space_id, space_name.c_str(),
-                              file_name.c_str(), flags, size_in_pages,
-                              FIL_TYPE_TABLESPACE, FIL_ENCRYPTION_DEFAULT,
-                              KeyringEncryptionKeyIdInfo());
-
-  return (err == DB_SUCCESS);
 }
 
 #ifndef UNIV_HOTBACKUP
@@ -8247,6 +8212,12 @@ void fil_io_set_encryption(IORequest &req_type, const page_id_t &page_id,
     return;
   }
 
+  if (req_type.get_encrypted_block() != nullptr) {
+    /* Already encrypted. */
+    req_type.clear_encrypted();
+    return;
+  }
+
   if (req_type.is_log()) {
 #ifdef UNIV_DEBUG
     const space_id_t redo_space_id = dict_sys_t::s_log_space_first_id;
@@ -10066,7 +10037,7 @@ dberr_t fil_set_encryption(space_id_t space_id, Encryption::Type algorithm,
     if (acquire_mutex) {
       shard->mutex_release();
     }
-    return (DB_NOT_FOUND);
+    return DB_NOT_FOUND;
   }
 
   if (key == nullptr) {

@@ -171,6 +171,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "dict0upgrade.h"
 #include "os0thread-create.h"
 #include "os0thread.h"
+#include "sql/auth/auth_common.h"
 #include "sql/item.h"
 #include "sql/json_dom.h"
 #include "sql_base.h"
@@ -5741,6 +5742,37 @@ static int innodb_init(void *p) {
     return innodb_init_abort();
   }
 
+  if (srv_default_table_encryption == DEFAULT_TABLE_ENC_ONLINE_TO_KEYRING &&
+      !Encryption::tablespace_key_exists_or_create_new_one_if_does_not_exist(
+          FIL_DEFAULT_ENCRYPTION_KEY, server_uuid)) {
+    sql_print_error(
+        "InnoDB: cannot enable encryption, innodb_encrypt_tables is set to "
+        "value different than OFF, but "
+        "keyring plugin is not available");
+    return innodb_init_abort();
+  }
+
+  // We are starting encryption threads, we must lock the keyring plugins
+  if (srv_n_fil_crypt_threads_requested > 0) {
+    uint number_of_keyring_locked = lock_keyrings(nullptr);
+
+    if (number_of_keyring_locked == 0) {
+      sql_print_error(
+          "InnoDB: cannot enable encryption threads, "
+          "keyring plugin is not available");
+
+      return innodb_init_abort();
+    }
+    if (Encryption::is_keyring_alive() == false) {
+      sql_print_error(
+          "InnoDB: keyring plugin is installed but it seems it was not "
+          "properly initialized. Cannot enable encryption threads.");
+      unlock_keyrings(nullptr);
+
+      return innodb_init_abort();
+    }
+  }
+
   if (!srv_sys_space.parse_params(innobase_data_file_path, true)) {
     ib::error(ER_IB_MSG_545)
         << "Unable to parse innodb_data_file_path=" << innobase_data_file_path;
@@ -7831,6 +7863,12 @@ int ha_innobase::open(const char *name, int, uint open_flags,
     if (m_share == nullptr) {
       dict_table_close(ib_table, FALSE, FALSE);
       return HA_ERR_SE_OUT_OF_MEMORY;
+    }
+
+    if (UNIV_UNLIKELY(m_share->ib_table && m_share->ib_table->is_corrupt &&
+                      srv_pass_corrupt_table <= 1)) {
+      free_share(m_share);
+      return HA_ERR_CRASHED_ON_USAGE;
     }
   }
 
