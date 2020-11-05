@@ -3,13 +3,14 @@
 
 --source include/no_valgrind_without_big.inc
 --source include/have_innodb_max_16k.inc
+--source include/have_component_keyring_file.inc
 
 --disable_query_log
-call mtr.add_suppression("\\[ERROR\\] .*MY-\\d+.* Encryption can't find master key, please check the keyring plugin is loaded.");
-call mtr.add_suppression("Can't generate new master key for tablespace encryption, please check the keyring plugin is loaded.");
+call mtr.add_suppression("\\[ERROR\\] .*MY-\\d+.* Encryption can't find master key, please check the keyring is loaded.");
+call mtr.add_suppression("Can't generate new master key for tablespace encryption, please check the keyring is loaded.");
 call mtr.add_suppression("The error means that another program is using InnoDB's files");
 call mtr.add_suppression("Operating system error number .* in a file operation");
-call mtr.add_suppression("\\[ERROR\\] \\[[^]]*\\] Check keyring plugin fail, please check the keyring plugin is loaded.");
+call mtr.add_suppression("\\[ERROR\\] \\[[^]]*\\] Check keyring fail, please check the keyring is loaded.");
 call mtr.add_suppression("\\[Warning\\] .*MY-\\d+.* Cannot add field.*");
 --enable_query_log
 let $innodb_file_per_table = `SELECT @@innodb_file_per_table`;
@@ -37,9 +38,7 @@ ALTER INSTANCE ROTATE INNODB MASTER KEY;
 
 --echo # Starting server with keyring plugin
 # restart with keying
---let $restart_parameters = $KEYRING_RESTART_PARAM
---let $restart_hide_args = 1
---source include/restart_mysqld.inc
+--source suite/component_keyring_file/inc/setup_component.inc
 
 
 #------------------------------------------------------------------------------
@@ -94,8 +93,8 @@ connection default;
 SELECT c4,c5,c6,ST_AsText(c7) FROM tde_db.t_encrypt LIMIT 10;
 
 # Restart to confirm the encryption info can be retrieved properly.
---let $restart_parameters = $KEYRING_RESTART_PARAM
---let $restart_hide_args = 1
+--let $restart_parameters = $keyring_restart_param
+--let $do_not_echo_parameters = 1
 --source include/restart_mysqld.inc
 
 SELECT c4,c5,c6,ST_AsText(c7) FROM tde_db.t_encrypt LIMIT 10;
@@ -149,8 +148,8 @@ SELECT COUNT(*) FROM tde_db.t_encrypt_1;
 
 # Restart to confirm the encryption info can be retrieved properly.
 --echo # Starting server with keyring plugin  restart with keying
---let $restart_parameters = $KEYRING_RESTART_PARAM
---let $restart_hide_args = 1
+--let $restart_parameters = $keyring_restart_param
+--let $do_not_echo_parameters = 1
 --source include/restart_mysqld.inc
 SELECT  c1,c2,right(c3, 20) FROM tde_db.t_encrypt LIMIT 10;
 SELECT COUNT(*) FROM tde_db.t_encrypt;
@@ -256,8 +255,8 @@ DELIMITER ;|
 call tde_db.row_format_t_encrypt(" ROW_FORMAT=DYNAMIC ");
 
 --echo # restart with keying
---let $restart_parameters = $KEYRING_RESTART_PARAM
---let $restart_hide_args = 1
+--let $restart_parameters = $keyring_restart_param
+--let $do_not_echo_parameters = 1
 --source include/restart_mysqld.inc
 SELECT c2,c4,c5,c6,ST_AsText(c7) FROM tde_db.t_encrypt LIMIT 10;
 SELECT COUNT(*) FROM tde_db.t_encrypt;
@@ -266,8 +265,8 @@ SELECT COUNT(*) FROM tde_db.t_encrypt;
 
 call tde_db.row_format_t_encrypt(" ROW_FORMAT=COMPACT ");
 --echo # restart with keying
---let $restart_parameters = $KEYRING_RESTART_PARAM
---let $restart_hide_args = 1
+--let $restart_parameters = $keyring_restart_param
+--let $do_not_echo_parameters = 1
 --source include/restart_mysqld.inc
 --disable_warnings
 SELECT c2,c4,c5,c6,ST_AsText(c7) FROM tde_db.t_encrypt LIMIT 10;
@@ -278,8 +277,8 @@ SELECT COUNT(*) FROM tde_db.t_encrypt;
 
 call tde_db.row_format_t_encrypt(" ROW_FORMAT=REDUNDANT ");
 --echo # restart with keying
---let $restart_parameters = $KEYRING_RESTART_PARAM
---let $restart_hide_args = 1
+--let $restart_parameters = $keyring_restart_param
+--let $do_not_echo_parameters = 1
 --source include/restart_mysqld.inc
 --disable_warnings
 SELECT c2,c4,c5,c6,ST_AsText(c7) FROM tde_db.t_encrypt LIMIT 10;
@@ -290,8 +289,8 @@ SELECT COUNT(*) FROM tde_db.t_encrypt;
 
 call tde_db.row_format_t_encrypt(" ROW_FORMAT=COMPRESSED " );
 --echo # restart with keying
---let $restart_parameters = $KEYRING_RESTART_PARAM
---let $restart_hide_args = 1
+--let $restart_parameters = $keyring_restart_param
+--let $do_not_echo_parameters = 1
 --source include/restart_mysqld.inc
 SELECT c2,c4,c5,c6,ST_AsText(c7) FROM tde_db.t_encrypt LIMIT 10;
 SELECT COUNT(*) FROM tde_db.t_encrypt;
@@ -300,8 +299,8 @@ SELECT COUNT(*) FROM tde_db.t_encrypt;
 
 call tde_db.row_format_t_encrypt(" ROW_FORMAT=COMPRESSED  KEY_BLOCK_SIZE=4 ");
 --echo # restart with keying
---let $restart_parameters = $KEYRING_RESTART_PARAM
---let $restart_hide_args = 1
+--let $restart_parameters = $keyring_restart_param
+--let $do_not_echo_parameters = 1
 --source include/restart_mysqld.inc
 SELECT c2,c4,c5,c6,ST_AsText(c7) FROM tde_db.t_encrypt LIMIT 10;
 SELECT COUNT(*) FROM tde_db.t_encrypt;
@@ -334,8 +333,8 @@ SELECT c2,c4,c5,c6 FROM tde_db.t_encrypt ORDER BY c2 LIMIT 10;
 SHOW CREATE TABLE tde_db.t_encrypt;
 
 --echo # restart with keying
---let $restart_parameters = $KEYRING_RESTART_PARAM
---let $restart_hide_args = 1
+--let $restart_parameters = $keyring_restart_param
+--let $do_not_echo_parameters = 1
 --source include/restart_mysqld.inc
 SELECT c2,c4,c5,c6 FROM tde_db.t_encrypt ORDER BY c2 LIMIT 10;
 
@@ -502,8 +501,8 @@ SELECT c2,right(c3,20),c4,c5,ST_AsText(c7) FROM tde_db.t_encrypt WHERE c2%200 = 
 SELECT c2,right(c3,20),c4,c5,c6,ST_AsText(c7) FROM tde_db.t_encrypt WHERE c2%200 = 0;
 
 --echo # restart with keying
---let $restart_parameters = $KEYRING_RESTART_PARAM
---let $restart_hide_args = 1
+--let $restart_parameters = $keyring_restart_param
+--let $do_not_echo_parameters = 1
 --source include/restart_mysqld.inc
 SELECT c2,right(c3,20),c4,c5,ST_AsText(c7) FROM tde_db.t_encrypt LIMIT 10;
 SELECT c2,right(c3,20),c4,c5,c6,ST_AsText(c7) FROM tde_db.t_encrypt LIMIT 10;
@@ -578,8 +577,8 @@ connection default;
 # Restart to confirm the encryption info can be retrieved properly.
 --echo # Starting server with keyring plugin
 # restart with keying
---let $restart_parameters = $KEYRING_RESTART_PARAM
---let $restart_hide_args = 1
+--let $restart_parameters = $keyring_restart_param
+--let $do_not_echo_parameters = 1
 --source include/restart_mysqld.inc
 SELECT  c1,c2,right(c3, 20) FROM tde_db.t_encrypt LIMIT 10;
 
@@ -734,8 +733,8 @@ SELECT c2,RIGHT(c3,20),c4 FROM tde_db.t_encrypt ORDER BY c2 DESC LIMIT 10;
 
 
 --echo # Starting server with keyring plugin
---let $restart_parameters = $KEYRING_RESTART_PARAM
---let $restart_hide_args = 1
+--let $restart_parameters = $keyring_restart_param
+--let $do_not_echo_parameters = 1
 --source include/restart_mysqld.inc
 SELECT COUNT(*) FROM tde_db.t_encrypt;
 SELECT c2,RIGHT(c3,20),c4 FROM tde_db.t_encrypt LIMIT 10;
@@ -761,10 +760,11 @@ connection default;
 disconnect con10;
 DROP USER encryption_admin@localhost;
 DROP TABLE t1;
+--source suite/component_keyring_file/inc/teardown_component.inc
 
 # Normal restart
 --let $restart_parameters = restart:
---let $restart_hide_args = 1
+--let $do_not_echo_parameters = 1
 --source include/restart_mysqld.inc
 ## Cleanup
 eval SET GLOBAL innodb_file_per_table=$innodb_file_per_table;
