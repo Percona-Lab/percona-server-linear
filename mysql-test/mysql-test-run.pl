@@ -295,7 +295,6 @@ our @DEFAULT_SUITES = qw(
   binlog_57_decryption
   percona-pam-for-mysql
   data_masking
-  keyring_vault
   rocksdb
   rocksdb_rpl
   rocksdb_sys_vars
