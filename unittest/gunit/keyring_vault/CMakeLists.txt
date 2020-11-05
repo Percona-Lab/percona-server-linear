@@ -12,11 +12,6 @@ CHECK_IF_LIB_FOUND(CURL "keyring_vault unit tests" FATAL_ERROR)
 
 message(STATUS "Building keyring_vault unittests")
 
-# MERGE_UNITTESTS is not set anywhere in the 8.0 build system, so without this
-# every ${test}-t would define its own main() and also link gunit_large, which
-# carries gunit_test_main_server.cc.
-SET(MERGE_UNITTESTS 1)
-
 ADD_DEFINITIONS(-DLOG_COMPONENT_TAG="keyring_vault")
 
 INCLUDE_DIRECTORIES(SYSTEM
@@ -58,7 +53,6 @@ LIST(APPEND SRC_FILES
   ${CMAKE_SOURCE_DIR}/plugin/keyring_vault/vault_keys_container.cc
   ${CMAKE_SOURCE_DIR}/unittest/gunit/keyring_vault/generate_credential_file.cc
   ${CMAKE_SOURCE_DIR}/unittest/gunit/keyring_vault/vault_environment.cc
-  ${CMAKE_SOURCE_DIR}/plugin/keyring/file_io.cc
   ${CMAKE_SOURCE_DIR}/unittest/gunit/keyring_vault/vault_mount.cc
   ${CMAKE_SOURCE_DIR}/unittest/gunit/keyring_vault/vault_test_base.cc
   ${CMAKE_SOURCE_DIR}/unittest/gunit/keyring_vault/uuid.cc
@@ -85,33 +79,38 @@ IF (MERGE_UNITTESTS)
 
   MYSQL_ADD_EXECUTABLE(merge_keyring_vault_tests-t
     ${ALL_KEYRING_VAULT_TESTS} ADD_TEST merge_keyring_vault_tests)
-  TARGET_LINK_LIBRARIES(merge_keyring_vault_tests-t keyring_vault_test)
 
-  TARGET_LINK_LIBRARIES(merge_keyring_vault_tests-t
-    gunit_large strings mysys sql_main sql_gis sql_dd minchassis)
-  TARGET_LINK_LIBRARIES(merge_keyring_vault_tests-t
-    sql_main binlog rpl rpl_source rpl_replica sql_gis sql_dd sql_main)
-  TARGET_LINK_LIBRARIES(merge_keyring_vault_tests-t ${CURL_LIBRARY} ${SSL_LIBRARIES})
-  TARGET_LINK_LIBRARIES(merge_keyring_vault_tests-t ${ICU_LIBRARIES})
+    TARGET_LINK_LIBRARIES(merge_keyring_vault_tests-t keyring_vault_test)
+    TARGET_LINK_LIBRARIES(merge_keyring_vault_tests-t
+            gunit_large strings mysys sql_main sql_gis sql_dd minchassis)
+    TARGET_LINK_LIBRARIES(merge_keyring_vault_tests-t binlog rpl rpl_source rpl_replica)
 
+    TARGET_LINK_LIBRARIES(merge_keyring_vault_tests-t
+            ${CURL_LIBRARY} ${SSL_LIBRARIES})
+    TARGET_LINK_LIBRARIES(merge_keyring_vault_tests-t ${ICU_LIBRARIES})
+  
   IF(WITH_PERFSCHEMA_STORAGE_ENGINE)
     TARGET_LINK_LIBRARIES(merge_keyring_vault_tests-t perfschema)
   ENDIF()
   ADD_DEPENDENCIES(merge_keyring_vault_tests-t GenError)
 
 ELSE(MERGE_UNITTESTS)
+  set(EXTENDED_LOGGING_TESTS "vault_keyring-api" "vault_keys_container")
 
   FOREACH(test ${TESTS})
     MYSQL_ADD_EXECUTABLE(${test}-t ${test}-t.cc SKIP_INSTALL)
 
-  TARGET_LINK_LIBRARIES(${test}-t keyring_vault_test)
-  TARGET_LINK_LIBRARIES(${test}-t
-    gunit_large strings mysys sql_main sql_gis sql_dd)
-  TARGET_LINK_LIBRARIES(${test}-t
-    sql_main binlog rpl master slave sql_main sql_gis sql_dd minchassis)
-  TARGET_LINK_LIBRARIES(${test}-t ${CURL_LIBRARY} ${SSL_LIBRARIES})
-  TARGET_LINK_LIBRARIES(${test}-t ${ICU_LIBRARIES})
+    IF(${test} IN_LIST EXTENDED_LOGGING_TESTS)
+        TARGET_LINK_LIBRARIES(${test}-t
+                gunit_large strings mysys sql_main sql_gis sql_dd)
+        TARGET_LINK_LIBRARIES(${test}-t binlog rpl rpl_source rpl_replica minchassis)
+    ELSE()
+        TARGET_LINK_LIBRARIES(${test}-t gunit_small)
+    ENDIF()
 
+    TARGET_LINK_LIBRARIES(${test}-t keyring_vault_test)
+    TARGET_LINK_LIBRARIES(${test}-t
+            ${ICU_LIBRARIES} ${CURL_LIBRARY} ${SSL_LIBRARIES})
 
     IF(WITH_PERFSCHEMA_STORAGE_ENGINE)
         TARGET_LINK_LIBRARIES(${test}-t perfschema)
