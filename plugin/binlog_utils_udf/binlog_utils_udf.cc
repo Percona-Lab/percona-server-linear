@@ -64,6 +64,10 @@ int binlog_utils_udf_init(void *) {
   sys_var_srv.reset(
       reinterpret_cast<SERVICE_TYPE(component_sys_variable_register) *>(
           acquired_service));
+  // Here we initialize UDF wrapper error reporter with
+  // the default one from mysys
+  mysqlpp::udf_error_reporter::instance() = &my_error;
+
   binlog_utils_udf_initialized = true;
   return 0;
 }
@@ -107,16 +111,16 @@ namespace {
 //
 // Binlog utils shared functions
 //
-const ext::string_view default_component_name{"mysql_server"};
-const ext::string_view gtid_executed_variable_name{"gtid_executed"};
+const std::string_view default_component_name{"mysql_server"};
+const std::string_view gtid_executed_variable_name{"gtid_executed"};
 
 constexpr std::size_t default_static_buffer_size{1024};
 using static_buffer_t = std::array<char, default_static_buffer_size + 1>;
 using dynamic_buffer_t = std::vector<char>;
 using uni_buffer_t = std::pair<static_buffer_t, dynamic_buffer_t>;
 
-ext::string_view extract_sys_var_value(ext::string_view component_name,
-                                       ext::string_view variable_name,
+std::string_view extract_sys_var_value(std::string_view component_name,
+                                       std::string_view variable_name,
                                        uni_buffer_t &ub) {
   DBUG_TRACE;
   void *ptr = ub.first.data();
@@ -138,14 +142,38 @@ ext::string_view extract_sys_var_value(ext::string_view component_name,
 }
 
 using log_event_ptr = std::shared_ptr<Log_event>;
+using fn_reflen_buffer = char[FN_REFLEN + 1];
 
-log_event_ptr find_first_event(ext::string_view binlog_name) {
+const char *check_and_normalize_binlog_name(std::string_view binlog_name,
+                                            fn_reflen_buffer &buffer) {
+  if (binlog_name.empty())
+    throw std::runtime_error("expecting non-empty binlog name");
+
+  if (std::find_if(binlog_name.begin(), binlog_name.end(),
+                   &is_directory_separator) != binlog_name.end())
+    throw std::runtime_error("binlog name must not contain path separators");
+
+  std::size_t log_dir_length = dirname_length(mysql_bin_log.get_log_fname());
+  if (log_dir_length + binlog_name.size() + 1 > sizeof buffer)
+    throw std::runtime_error("binlog name is too long");
+
+  auto it = std::copy_n(mysql_bin_log.get_log_fname(), log_dir_length, buffer);
+  it = std::copy_n(binlog_name.data(), binlog_name.size(), it);
+  *it = '\0';
+
+  return buffer;
+}
+
+const char *get_short_binlog_name(const std::string &binlog_name) noexcept {
+  return binlog_name.c_str() + dirname_length(binlog_name.c_str());
+}
+
+log_event_ptr find_first_event(std::string_view binlog_name) {
   DBUG_TRACE;
 
-  std::string casted_binlog_name = static_cast<std::string>(binlog_name);
-
-  char search_file_name[FN_REFLEN + 1];
-  mysql_bin_log.make_log_name(search_file_name, casted_binlog_name.c_str());
+  fn_reflen_buffer binlog_name_buffer;
+  auto search_file_name =
+      check_and_normalize_binlog_name(binlog_name, binlog_name_buffer);
 
   Binlog_file_reader reader(false /* do not verify checksum */);
   if (reader.open(search_file_name, 0))
@@ -162,13 +190,47 @@ log_event_ptr find_first_event(ext::string_view binlog_name) {
   return ev;
 }
 
-log_event_ptr find_previous_gtids_event(ext::string_view binlog_name) {
+log_event_ptr find_last_event(std::string_view binlog_name) {
   DBUG_TRACE;
 
-  std::string casted_binlog_name = static_cast<std::string>(binlog_name);
+  fn_reflen_buffer binlog_name_buffer;
+  auto search_file_name =
+      check_and_normalize_binlog_name(binlog_name, binlog_name_buffer);
 
-  char search_file_name[FN_REFLEN + 1];
-  mysql_bin_log.make_log_name(search_file_name, casted_binlog_name.c_str());
+  Binlog_file_reader reader(false /* do not verify checksum */);
+  if (reader.open(search_file_name, 0))
+    throw std::runtime_error(reader.get_error_str());
+
+  // Here 'is_active()' is called after 'get_binlog_end_pos()' deliberately
+  // to properly handle the situation when rotation happens between these
+  // two calls
+  my_off_t end_pos = mysql_bin_log.get_binlog_end_pos();
+  if (!mysql_bin_log.is_active(search_file_name))
+    end_pos = std::numeric_limits<my_off_t>::max();
+
+  binlog::Decompressing_event_object_istream istream{reader};
+  log_event_ptr ev;
+  istream >> ev;
+  if (istream.has_error()) throw std::runtime_error(istream.get_error_str());
+
+  while (true) {
+    if (reader.has_fatal_error())
+      throw std::runtime_error(reader.get_error_str());
+    if (ev->common_header->log_pos >= end_pos) break;
+    log_event_ptr next_ev;
+    if (!(istream >> next_ev)) break;
+    ev.swap(next_ev);
+  }
+  if (istream.has_error()) throw std::runtime_error(istream.get_error_str());
+  return ev;
+}
+
+log_event_ptr find_previous_gtids_event(std::string_view binlog_name) {
+  DBUG_TRACE;
+
+  fn_reflen_buffer binlog_name_buffer;
+  auto search_file_name =
+      check_and_normalize_binlog_name(binlog_name, binlog_name_buffer);
 
   Binlog_file_reader reader(false /* do not verify checksum */);
   if (reader.open(search_file_name, 0))
@@ -193,7 +255,8 @@ log_event_ptr find_previous_gtids_event(ext::string_view binlog_name) {
   if (istream.has_error()) throw std::runtime_error(istream.get_error_str());
   return {};
 }
-bool extract_previous_gtids(ext::string_view binlog_name, bool is_first,
+
+bool extract_previous_gtids(std::string_view binlog_name, bool is_first,
                             Gtid_set &extracted_gtids) {
   DBUG_TRACE;
 
@@ -216,13 +279,12 @@ bool extract_previous_gtids(ext::string_view binlog_name, bool is_first,
   return res;
 }
 
-log_event_ptr find_last_gtid_event(ext::string_view binlog_name) {
+log_event_ptr find_last_gtid_event(std::string_view binlog_name) {
   DBUG_TRACE;
 
-  std::string casted_binlog_name = static_cast<std::string>(binlog_name);
-
-  char search_file_name[FN_REFLEN + 1];
-  mysql_bin_log.make_log_name(search_file_name, casted_binlog_name.c_str());
+  fn_reflen_buffer binlog_name_buffer;
+  auto search_file_name =
+      check_and_normalize_binlog_name(binlog_name, binlog_name_buffer);
 
   Binlog_file_reader reader(false /* do not verify checksum */);
   if (reader.open(search_file_name, 0))
@@ -250,7 +312,7 @@ log_event_ptr find_last_gtid_event(ext::string_view binlog_name) {
   return last_gtid_ev;
 }
 
-bool extract_last_gtid(ext::string_view binlog_name, Sid_map &sid_map,
+bool extract_last_gtid(std::string_view binlog_name, Sid_map &sid_map,
                        Gtid &extracted_gtid) {
   DBUG_TRACE;
 
@@ -281,8 +343,7 @@ class get_binlog_by_gtid_impl {
           "installed.");
 
     if (ctx.get_number_of_args() != 1)
-      throw std::invalid_argument(
-          "GET_BINLOG_BY_GTID() requires exactly one argument");
+      throw std::invalid_argument("Function requires exactly one argument");
     ctx.mark_result_const(false);
     ctx.mark_result_nullable(true);
     ctx.mark_arg_nullable(0, false);
@@ -328,7 +389,8 @@ mysqlpp::udf_result_t<STRING_RESULT> get_binlog_by_gtid_impl::calculate(
   bool found{false};
   do {
     Gtid_set extracted_gtids{&sid_map};
-    extract_previous_gtids(*rit, rit.base() == bg, extracted_gtids);
+    extract_previous_gtids(get_short_binlog_name(*rit), rit.base() == bg,
+                           extracted_gtids);
     found = covering_gtids.contains_gtid(gtid) &&
             !extracted_gtids.contains_gtid(gtid);
     if (!found) {
@@ -338,7 +400,7 @@ mysqlpp::udf_result_t<STRING_RESULT> get_binlog_by_gtid_impl::calculate(
     }
   } while (!found && rit != ren);
   if (!found) return {};
-  return {*rit};
+  return {std::string{get_short_binlog_name(*rit)}};
 }
 
 //
@@ -357,8 +419,7 @@ class get_last_gtid_from_binlog_impl {
           "installed.");
 
     if (ctx.get_number_of_args() != 1)
-      throw std::invalid_argument(
-          "GET_LAST_GTID_FROM_BINLOG() requires exactly one argument");
+      throw std::invalid_argument("Function requires exactly one argument");
     ctx.mark_result_const(false);
     ctx.mark_result_nullable(true);
     ctx.mark_arg_nullable(0, false);
@@ -384,8 +445,7 @@ mysqlpp::udf_result_t<STRING_RESULT> get_last_gtid_from_binlog_impl::calculate(
   auto length =
       static_cast<std::size_t>(extracted_gtid.to_string(&sid_map, buf));
 
-  return mysqlpp::udf_result_t<STRING_RESULT>{boost::in_place_init, buf,
-                                              length};
+  return mysqlpp::udf_result_t<STRING_RESULT>{std::in_place, buf, length};
 }
 
 //
@@ -404,8 +464,7 @@ class get_gtid_set_by_binlog_impl {
           "installed.");
 
     if (ctx.get_number_of_args() != 1)
-      throw std::invalid_argument(
-          "get_gtid_set_by_binlog() requires exactly one argument");
+      throw std::invalid_argument("Function requires exactly one argument");
     ctx.mark_result_const(false);
     ctx.mark_result_nullable(true);
     ctx.mark_arg_nullable(0, false);
@@ -431,13 +490,17 @@ mysqlpp::udf_result_t<STRING_RESULT> get_gtid_set_by_binlog_impl::calculate(
   auto binlog_name_sv = ctx.get_arg<STRING_RESULT>(0);
   auto bg = std::cbegin(log_index.second);
   auto en = std::cend(log_index.second);
-  auto fnd = boost::algorithm::find_backward(bg, en, binlog_name_sv);
+  fn_reflen_buffer binlog_name_buffer;
+  auto normalized_binlog_name =
+      check_and_normalize_binlog_name(binlog_name_sv, binlog_name_buffer);
+  auto fnd = boost::algorithm::find_backward(bg, en, normalized_binlog_name);
   if (fnd == en) throw std::runtime_error("Binary log does not exist");
 
   // if found, reading previous GTIDs from it
   Sid_map sid_map{nullptr};
   Gtid_set extracted_gtids{&sid_map};
-  extract_previous_gtids(*fnd, fnd == bg, extracted_gtids);
+  extract_previous_gtids(get_short_binlog_name(*fnd), fnd == bg,
+                         extracted_gtids);
 
   Gtid_set covering_gtids{&sid_map};
   --en;
@@ -458,13 +521,14 @@ mysqlpp::udf_result_t<STRING_RESULT> get_gtid_set_by_binlog_impl::calculate(
     // extract covering GTIDs from the next binlog
 
     ++fnd;
-    extract_previous_gtids(*fnd, fnd == bg, covering_gtids);
+    extract_previous_gtids(get_short_binlog_name(*fnd), fnd == bg,
+                           covering_gtids);
   }
   covering_gtids.remove_gtid_set(&extracted_gtids);
   dynamic_buffer_t result_buffer(covering_gtids.get_string_length() + 1);
   auto length = covering_gtids.to_string(result_buffer.data());
 
-  return mysqlpp::udf_result_t<STRING_RESULT>{boost::in_place_init,
+  return mysqlpp::udf_result_t<STRING_RESULT>{std::in_place,
                                               result_buffer.data(), length};
 }
 
@@ -484,8 +548,7 @@ class get_binlog_by_gtid_set_impl {
           "installed.");
 
     if (ctx.get_number_of_args() != 1)
-      throw std::invalid_argument(
-          "GET_BINLOG_BY_GTID_SET() requires exactly one argument");
+      throw std::invalid_argument("Function requires exactly one argument");
     ctx.mark_result_const(false);
     ctx.mark_result_nullable(true);
     ctx.mark_arg_nullable(0, false);
@@ -534,7 +597,8 @@ mysqlpp::udf_result_t<STRING_RESULT> get_binlog_by_gtid_set_impl::calculate(
   bool found{false};
   do {
     Gtid_set extracted_gtids{&sid_map};
-    extract_previous_gtids(*rit, rit.base() == bg, extracted_gtids);
+    extract_previous_gtids(get_short_binlog_name(*rit), rit.base() == bg,
+                           extracted_gtids);
     covering_gtids.remove_gtid_set(&extracted_gtids);
     bool current_nonempty_intersection =
         covering_gtids.is_intersection_nonempty(&gtid_set);
@@ -551,7 +615,7 @@ mysqlpp::udf_result_t<STRING_RESULT> get_binlog_by_gtid_set_impl::calculate(
   if (!encountered_nonempty_intersection) return {};
 
   --rit;
-  return {*rit};
+  return {std::string{get_short_binlog_name(*rit)}};
 }
 
 //
@@ -570,9 +634,7 @@ class get_first_record_timestamp_by_binlog_impl {
           "installed.");
 
     if (ctx.get_number_of_args() != 1)
-      throw std::invalid_argument(
-          "get_first_record_timestamp_by_binlog() requires exactly one "
-          "argument");
+      throw std::invalid_argument("Function requires exactly one argument");
     ctx.mark_result_const(false);
     ctx.mark_result_nullable(true);
     ctx.mark_arg_nullable(0, false);
@@ -592,20 +654,57 @@ get_first_record_timestamp_by_binlog_impl::calculate(
   auto binlog_name_sv = ctx.get_arg<STRING_RESULT>(0);
 
   auto ev = find_first_event(binlog_name_sv);
-  if (!ev) return {};
+  if (!ev) return {std::nullopt};
+  return ev->common_header->when.tv_sec * 1000000LL +
+         ev->common_header->when.tv_usec;
+}
+
+//
+// get_last_record_timestamp_by_binlog()
+// This MySQL function accepts a binlog file name and returns timestamp
+// of the last record (number of microseconds since 1-Jan-1970)
+//
+class get_last_record_timestamp_by_binlog_impl {
+ public:
+  get_last_record_timestamp_by_binlog_impl(mysqlpp::udf_context &ctx) {
+    DBUG_TRACE;
+
+    if (!binlog_utils_udf_initialized)
+      throw std::invalid_argument(
+          "This function requires binlog_utils_udf plugin which is not "
+          "installed.");
+
+    if (ctx.get_number_of_args() != 1)
+      throw std::invalid_argument("Function requires exactly one argument");
+    ctx.mark_result_const(false);
+    ctx.mark_result_nullable(true);
+    ctx.mark_arg_nullable(0, false);
+    ctx.set_arg_type(0, STRING_RESULT);
+  }
+  ~get_last_record_timestamp_by_binlog_impl() { DBUG_TRACE; }
+
+  mysqlpp::udf_result_t<INT_RESULT> calculate(const mysqlpp::udf_context &args);
+};
+
+mysqlpp::udf_result_t<INT_RESULT>
+get_last_record_timestamp_by_binlog_impl::calculate(
+    const mysqlpp::udf_context &ctx) {
+  DBUG_TRACE;
+
+  // trying to find the specified binlog name in the index
+  auto binlog_name_sv = ctx.get_arg<STRING_RESULT>(0);
+
+  auto ev = find_last_event(binlog_name_sv);
+  if (!ev) return {std::nullopt};
   return ev->common_header->when.tv_sec * 1000000LL +
          ev->common_header->when.tv_usec;
 }
 
 }  // end of anonymous namespace
 
-DECLARE_STRING_UDF(get_binlog_by_gtid_impl, get_binlog_by_gtid)
-
-DECLARE_STRING_UDF(get_last_gtid_from_binlog_impl, get_last_gtid_from_binlog)
-
-DECLARE_STRING_UDF(get_gtid_set_by_binlog_impl, get_gtid_set_by_binlog)
-
-DECLARE_STRING_UDF(get_binlog_by_gtid_set_impl, get_binlog_by_gtid_set)
-
-DECLARE_INT_UDF(get_first_record_timestamp_by_binlog_impl,
-                get_first_record_timestamp_by_binlog)
+DECLARE_STRING_UDF_AUTO(get_binlog_by_gtid)
+DECLARE_STRING_UDF_AUTO(get_last_gtid_from_binlog)
+DECLARE_STRING_UDF_AUTO(get_gtid_set_by_binlog)
+DECLARE_STRING_UDF_AUTO(get_binlog_by_gtid_set)
+DECLARE_INT_UDF_AUTO(get_first_record_timestamp_by_binlog)
+DECLARE_INT_UDF_AUTO(get_last_record_timestamp_by_binlog)
