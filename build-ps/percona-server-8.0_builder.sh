@@ -25,6 +25,7 @@ Usage: $0 [OPTIONS]
         --tokubackup_branch Btanch for TokuBackup
         --rpm_release       RPM version( default = 1)
         --deb_release       DEB version( default = 1)
+        --debug             Build debug tarball
         --help) usage ;;
 Example $0 --builddir=/tmp/PS57 --get_sources=1 --build_src_rpm=1 --build_rpm=1
 EOF
@@ -64,6 +65,7 @@ parse_arguments() {
             --tokubackup_repo=*) TOKUBACKUP_REPO="$val" ;;
             --rpm_release=*) RPM_RELEASE="$val" ;;
             --deb_release=*) DEB_RELEASE="$val" ;;
+            --debug=*) DEBUG="$val" ;;
             --help) usage ;;
             *)
               if test -n "$pick_args"
@@ -788,19 +790,6 @@ build_tarball(){
     TMPREL=$(echo ${TARFILE}| awk -F '-' '{print $4}')
     RELEASE=${TMPREL%.tar.gz}
     #
-    export CFLAGS=$(rpm --eval %{optflags} | sed -e "s|march=i386|march=i686|g")
-    export CXXFLAGS="${CFLAGS}"
-    if [ -f /etc/redhat-release ]; then
-        SSL_VER_TMP=$(yum list installed|grep -i openssl|head -n1|awk '{print $2}'|awk -F "-" '{print $1}'|sed 's/\.//g'|sed 's/[a-z]$//' | awk -F':' '{print $2}')
-        if [ -z "${SSL_VER_TMP}" ]; then
-            SSL_VER_TMP=$(yum list installed|grep -i openssl|head -n1|awk '{print $2}'|awk -F "-" '{print $1}'|sed 's/\.//g'|sed 's/[a-z]$//')
-        fi
-        export SSL_VER=".ssl${SSL_VER_TMP}"
-    else
-        SSL_VER_TMP=$(dpkg -l|grep -i libssl|grep -v "libssl\-"|head -n1|awk '{print $2}'|awk -F ":" '{print $1}'|sed 's/libssl/ssl/g'|sed 's/\.//g')
-        export SSL_VER=".${SSL_VER_TMP}"
-    fi
-
     build_mecab_lib
     build_mecab_dict
     MECAB_INSTALL_DIR="${WORKDIR}/mecab-install"
@@ -831,8 +820,13 @@ build_tarball(){
         CMAKE_OPTS="-DWITH_ROCKSDB=1 -DINSTALL_LAYOUT=STANDALONE -DWITH_SSL=/usr/ " bash -xe ./build-ps/build-binary.sh --with-mecab="${MECAB_INSTALL_DIR}/usr" --with-jemalloc=../jemalloc/ ../TARGET
         DIRNAME="yassl"
     else
-        CMAKE_OPTS="-DWITH_ROCKSDB=1" bash -xe ./build-ps/build-binary.sh --with-mecab="${MECAB_INSTALL_DIR}/usr" --with-jemalloc=../jemalloc/ ../TARGET
-        DIRNAME="tarball"
+        if [[ "${DEBUG}" == 1 ]]; then
+            CMAKE_OPTS="-DWITH_ROCKSDB=1" bash -xe ./build-ps/build-binary.sh --debug --with-mecab="${MECAB_INSTALL_DIR}/usr" --with-jemalloc=../jemalloc/ ../TARGET
+            DIRNAME="tarball"
+        else
+            CMAKE_OPTS="-DWITH_ROCKSDB=1" bash -xe ./build-ps/build-binary.sh --with-mecab="${MECAB_INSTALL_DIR}/usr" --with-jemalloc=../jemalloc/ ../TARGET
+            DIRNAME="tarball"
+        fi
     fi
     mkdir -p ${WORKDIR}/${DIRNAME}
     mkdir -p ${CURDIR}/${DIRNAME}
@@ -861,6 +855,7 @@ PERCONAFT_REPO=
 INSTALL=0
 RPM_RELEASE=1
 DEB_RELEASE=1
+DEBUG=0
 REVISION=0
 BRANCH="8.0"
 RPM_RELEASE=1
