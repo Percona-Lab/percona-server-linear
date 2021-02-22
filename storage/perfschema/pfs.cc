@@ -3383,6 +3383,42 @@ void pfs_set_thread_start_time_vc(time_t start_time) {
 
 /**
   Implementation of the thread instrumentation interface.
+  @sa PSI_v4::set_thread_start_time_usec.
+*/
+void pfs_set_thread_start_time_usec_vc(ulonglong start_time_usec) {
+  PFS_thread *pfs = my_thread_get_THR_PFS();
+
+  if (likely(pfs != nullptr)) {
+    pfs->m_start_time_usec = start_time_usec;
+  }
+}
+
+/**
+  Implementation of the thread instrumentation interface.
+  @sa PSI_v4::set_thread_rows_sent.
+*/
+void pfs_set_thread_rows_sent_vc(ulonglong rows_sent) {
+  PFS_thread *pfs = my_thread_get_THR_PFS();
+
+  if (likely(pfs != nullptr)) {
+    pfs->m_rows_sent = rows_sent;
+  }
+}
+
+/**
+  Implementation of the thread instrumentation interface.
+  @sa PSI_v4::set_thread_rows_examined.
+*/
+void pfs_set_thread_rows_examined_vc(ulonglong rows_examined) {
+  PFS_thread *pfs = my_thread_get_THR_PFS();
+
+  if (likely(pfs != nullptr)) {
+    pfs->m_rows_examined = rows_examined;
+  }
+}
+
+/**
+  Implementation of the thread instrumentation interface.
   @sa PSI_v1::set_thread_state.
 */
 void pfs_set_thread_state_v1(const char *) { /* DEPRECATED. */
@@ -9063,6 +9099,9 @@ PSI_thread_service_v4 pfs_thread_service_v4 = {
     pfs_set_thread_command_vc,
     pfs_set_connection_type_vc,
     pfs_set_thread_start_time_vc,
+    pfs_set_thread_start_time_usec_vc,
+    pfs_set_thread_rows_sent_vc,
+    pfs_set_thread_rows_examined_vc,
     pfs_set_thread_info_vc,
     pfs_set_thread_resource_group_vc,
     pfs_set_thread_resource_group_by_id_vc,
@@ -9101,6 +9140,9 @@ SERVICE_IMPLEMENTATION(performance_schema, psi_thread_v4) = {
     pfs_set_thread_command_vc,
     pfs_set_connection_type_vc,
     pfs_set_thread_start_time_vc,
+    pfs_set_thread_start_time_usec_vc,
+    pfs_set_thread_rows_sent_vc,
+    pfs_set_thread_rows_examined_vc,
     pfs_set_thread_info_vc,
     pfs_set_thread_vc,
     pfs_set_thread_peer_port_vc,
@@ -9140,6 +9182,9 @@ PSI_thread_service_v5 pfs_thread_service_v5 = {
     pfs_set_thread_command_vc,
     pfs_set_connection_type_vc,
     pfs_set_thread_start_time_vc,
+    pfs_set_thread_start_time_usec_vc,
+    pfs_set_thread_rows_sent_vc,
+    pfs_set_thread_rows_examined_vc,
     pfs_set_thread_info_vc,
     pfs_set_thread_resource_group_vc,
     pfs_set_thread_resource_group_by_id_vc,
@@ -9179,6 +9224,9 @@ SERVICE_IMPLEMENTATION(performance_schema, psi_thread_v5) = {
     pfs_set_thread_command_vc,
     pfs_set_connection_type_vc,
     pfs_set_thread_start_time_vc,
+    pfs_set_thread_start_time_usec_vc,
+    pfs_set_thread_rows_sent_vc,
+    pfs_set_thread_rows_examined_vc,
     pfs_set_thread_info_vc,
     pfs_set_thread_vc,
     pfs_set_thread_peer_port_vc,
@@ -9218,6 +9266,9 @@ PSI_thread_service_v6 pfs_thread_service_v6 = {
     pfs_set_thread_command_vc,
     pfs_set_connection_type_vc,
     pfs_set_thread_start_time_vc,
+    pfs_set_thread_start_time_usec_vc,
+    pfs_set_thread_rows_sent_vc,
+    pfs_set_thread_rows_examined_vc,
     pfs_set_thread_info_vc,
     pfs_set_thread_secondary_engine_vc,
     pfs_set_thread_resource_group_vc,
@@ -9258,6 +9309,9 @@ SERVICE_IMPLEMENTATION(performance_schema, psi_thread_v6) = {
     pfs_set_thread_command_vc,
     pfs_set_connection_type_vc,
     pfs_set_thread_start_time_vc,
+    pfs_set_thread_start_time_usec_vc,
+    pfs_set_thread_rows_sent_vc,
+    pfs_set_thread_rows_examined_vc,
     pfs_set_thread_info_vc,
     pfs_set_thread_secondary_engine_vc,
     pfs_set_thread_vc,
@@ -9298,6 +9352,9 @@ PSI_thread_service_v7 pfs_thread_service_v7 = {
     pfs_set_thread_command_vc,
     pfs_set_connection_type_vc,
     pfs_set_thread_start_time_vc,
+    pfs_set_thread_start_time_usec_vc,
+    pfs_set_thread_rows_sent_vc,
+    pfs_set_thread_rows_examined_vc,
     pfs_set_thread_info_vc,
     pfs_set_thread_secondary_engine_vc,
     pfs_set_thread_resource_group_vc,
@@ -9340,6 +9397,9 @@ SERVICE_IMPLEMENTATION(performance_schema, psi_thread_v7) = {
     pfs_set_thread_command_vc,
     pfs_set_connection_type_vc,
     pfs_set_thread_start_time_vc,
+    pfs_set_thread_start_time_usec_vc,
+    pfs_set_thread_rows_sent_vc,
+    pfs_set_thread_rows_examined_vc,
     pfs_set_thread_info_vc,
     pfs_set_thread_secondary_engine_vc,
     pfs_set_thread_vc,
