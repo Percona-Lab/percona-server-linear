@@ -26,6 +26,7 @@
 #include <algorithm>
 #include <array>
 #include <bit>
+#include <cstdint>
 #include <limits>
 #include <map>
 #include <set>
@@ -4813,6 +4814,7 @@ bool Rdb_ddl_manager::init(Rdb_dict_manager *const dict_arg,
       return true;
     }
     tdef->m_key_count = real_val_size / (Rdb_key_def::PACKED_SIZE * 2);
+    tdef->m_pk_index = MAX_INDEXES;
     tdef->m_key_descr_arr = new std::shared_ptr<Rdb_key_def>[tdef->m_key_count];
 
     ptr = reinterpret_cast<const uchar *>(val.data());
@@ -4886,6 +4888,9 @@ bool Rdb_ddl_manager::init(Rdb_dict_manager *const dict_arg,
           flags & Rdb_key_def::PER_PARTITION_CF_FLAG, "",
           m_dict->get_stats(gl_index_id), index_info.m_index_flags,
           ttl_rec_offset, index_info.m_ttl_duration);
+      if (index_info.m_index_type == Rdb_key_def::INDEX_TYPE_PRIMARY) {
+        tdef->m_pk_index = keyno;
+      }
     }
 
     assert(tdef->m_key_count > 0);
@@ -5249,20 +5254,7 @@ bool Rdb_ddl_manager::rename(const std::string &from, const std::string &to,
     return true;
   }
 
-  new_rec = new Rdb_tbl_def(to);
-
-  new_rec->m_key_count = rec->m_key_count;
-  new_rec->m_auto_incr_val =
-      rec->m_auto_incr_val.load(std::memory_order_relaxed);
-  new_rec->m_key_descr_arr = rec->m_key_descr_arr;
-
-  new_rec->m_hidden_pk_val =
-      rec->m_hidden_pk_val.load(std::memory_order_relaxed);
-
-  new_rec->m_tbl_stats = rec->m_tbl_stats;
-
-  // so that it's not free'd when deleting the old rec
-  rec->m_key_descr_arr = nullptr;
+  new_rec = new Rdb_tbl_def(to, std::move(*rec));
 
   // Create a new key
   new_buf_writer.write_index(Rdb_key_def::DDL_ENTRY_INDEX_START_NUMBER);
@@ -5589,13 +5581,14 @@ bool Rdb_dict_manager::get_index_info(
 
   if (error) {
     LogPluginErrMsg(ERROR_LEVEL, 0,
-                    "Found invalid key version number (%u, %u, %u, %llu) from "
-                    "data dictionary. This should never happen and it may be a "
-                    "bug.",
-                    index_info->m_index_dict_version, index_info->m_index_type,
-                    index_info->m_kv_version,
-                    (ulonglong)(index_info->m_ttl_duration));
-    abort();
+        "Found invalid key version number (%hu"
+        ", %hhu, %hu"
+        ", %" PRIu64
+        ") from data dictionary. This should never happen "
+        "and it may be a bug.",
+        index_info->m_index_dict_version, index_info->m_index_type,
+        index_info->m_kv_version, index_info->m_ttl_duration);
+     abort();
   }
 
   return found;
