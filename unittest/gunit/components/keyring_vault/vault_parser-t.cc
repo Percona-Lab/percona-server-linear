@@ -18,6 +18,8 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 #include <memory>
+#include <optional>
+
 #include "components/keyrings/common/data/data.h"
 #include "components/keyrings/common/data/meta.h"
 #include "components/keyrings/common/data/pfs_string.h"
@@ -206,7 +208,7 @@ TEST_F(Vault_parser_test, ParseKeyDataMissingValueTag) {
 TEST_F(Vault_parser_test, GetMountConfig) {
   std::size_t max_versions = 0;
   bool cas_required = false;
-  pfs_string delete_version_after;
+  pfs_optional_string delete_version_after;
 
   pfs_string payload(
       "{"
@@ -228,7 +230,28 @@ TEST_F(Vault_parser_test, GetMountConfig) {
       payload, max_versions, cas_required, delete_version_after));
   EXPECT_EQ(max_versions, 42U);
   EXPECT_TRUE(cas_required);
-  EXPECT_STREQ(delete_version_after.c_str(), "0s");
+  EXPECT_TRUE(delete_version_after != std::nullopt);
+  EXPECT_STREQ(delete_version_after.value().c_str(), "0s");
+
+  payload =
+      "{"
+      "  \"request_id\": \"a2c9306a-7f82-6a59-ebfa-bc6142d66c39\","
+      "  \"lease_id\": \"\","
+      "  \"renewable\": false,"
+      "  \"lease_duration\": 0,"
+      "  \"data\": {"
+      "    \"max_versions\": 43,"
+      "    \"cas_required\": false"
+      "  },"
+      "  \"wrap_info\": null,"
+      "  \"warnings\": null,"
+      "  \"auth\": null"
+      "}";
+  EXPECT_FALSE(Keyring_vault_parser_composer::parse_mount_point_config(
+      payload, max_versions, cas_required, delete_version_after));
+  EXPECT_EQ(max_versions, 43U);
+  EXPECT_FALSE(cas_required);
+  EXPECT_TRUE(delete_version_after == std::nullopt);
 }
 
 TEST_F(Vault_parser_test, GetMountConfigNull) {
@@ -246,7 +269,7 @@ TEST_F(Vault_parser_test, GetMountConfigNull) {
 
   std::size_t max_versions = 0;
   bool cas_required = false;
-  pfs_string delete_version_after;
+  pfs_optional_string delete_version_after;
   EXPECT_TRUE(Keyring_vault_parser_composer::parse_mount_point_config(
       payload, max_versions, cas_required, delete_version_after));
 }
@@ -268,7 +291,7 @@ TEST_F(Vault_parser_test, GetMountConfigIncomplete) {
 
   std::size_t max_versions = 0;
   bool cas_required = false;
-  pfs_string delete_version_after;
+  pfs_optional_string delete_version_after;
   EXPECT_TRUE(Keyring_vault_parser_composer::parse_mount_point_config(
       payload, max_versions, cas_required, delete_version_after));
 }
