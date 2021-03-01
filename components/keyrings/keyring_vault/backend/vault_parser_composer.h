@@ -53,10 +53,9 @@ class Keyring_vault_parser_composer final {
                                   std::unique_ptr<Metadata> &key);
   static bool parse_errors(const pfs_string &payload, pfs_string *errors);
 
-  static bool parse_mount_point_config(const pfs_string &config_payload,
-                                       std::size_t &max_versions,
-                                       bool &cas_required,
-                                       pfs_string &delete_version_after);
+  static bool parse_mount_point_config(
+      const pfs_string &config_payload, std::size_t &max_versions,
+      bool &cas_required, pfs_optional_string &delete_version_after);
   static bool compose_write_key_postdata(const Data &data,
                                          const pfs_string &encoded_key_data,
                                          Vault_version_type vault_version,
