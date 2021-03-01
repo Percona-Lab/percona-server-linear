@@ -18,6 +18,7 @@
 #include "vault_curl.h"
 
 #include <algorithm>
+#include <optional>
 
 #include <boost/core/noncopyable.hpp>
 
@@ -129,7 +130,7 @@ bool Vault_curl::init(const Vault_credentials &vault_credentials) {
 
   std::size_t max_versions;
   bool cas_required;
-  Secure_string delete_version_after;
+  Optional_secure_string delete_version_after;
 
   Secure_string::const_iterator bg =
       vault_credentials_.get_secret_mount_point().begin();
