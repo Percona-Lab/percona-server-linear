@@ -1673,16 +1673,18 @@ static byte *recv_parse_or_apply_log_rec_body(
           if (memcmp(ptr_copy, Encryption::KEY_MAGIC_PS_V1,
                      Encryption::MAGIC_SIZE) == 0 &&
               !recv_sys->apply_log_recs) {
-            return (fil_parse_write_crypt_data_v1(space_id, ptr, end_ptr, len));
+            return (fil_parse_write_crypt_data_v1(space_id, ptr, end_ptr, len,
+                                                  start_lsn));
           } else if (memcmp(ptr_copy, Encryption::KEY_MAGIC_PS_V2,
                             Encryption::MAGIC_SIZE) == 0 &&
                      !recv_sys->apply_log_recs) {
-            return (fil_parse_write_crypt_data_v2(space_id, ptr, end_ptr, len));
+            return (fil_parse_write_crypt_data_v2(space_id, ptr, end_ptr, len,
+                                                  start_lsn));
           } else if (memcmp(ptr_copy, Encryption::KEY_MAGIC_PS_V3,
                             Encryption::MAGIC_SIZE) == 0 &&
                      !recv_sys->apply_log_recs) {
-            return (fil_parse_write_crypt_data_v3(space_id, ptr, end_ptr, len,
-                                                  recv_needed_recovery));
+            return (fil_parse_write_crypt_data_v3(
+                space_id, ptr, end_ptr, len, recv_needed_recovery, start_lsn));
           }
 
           if (fsp_is_system_or_temp_tablespace(space_id)) {
@@ -3054,7 +3056,7 @@ static bool recv_multi_rec(byte *ptr, byte *end_ptr) {
     page_no_t page_no = 0;
 
     mlog_id_t type = MLOG_BIGGEST_TYPE;
-    byte *body;
+
     byte *body = nullptr;
     size_t len = 0;
 
@@ -3063,7 +3065,6 @@ static bool recv_multi_rec(byte *ptr, byte *end_ptr) {
       len = recv_parse_log_rec(
           &type, ptr, end_ptr, &space_id, &page_no, false, &body);
     }
-                                   false, &body);
 
     if (recv_sys->found_corrupt_log &&
         !recv_report_corrupt_log(ptr, type, space_id, page_no)) {
