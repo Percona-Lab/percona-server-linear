@@ -502,21 +502,21 @@ void fil_space_destroy_crypt_data(fil_space_crypt_t **crypt_data);
 @param[in]  len  Log entry length
 @return position on log buffer */
 byte *fil_parse_write_crypt_data_v1(space_id_t space_id, byte *ptr,
-                                    const byte *end_ptr, ulint len)
+                                    const byte *end_ptr, ulint len, lsn_t lsn)
     MY_ATTRIBUTE((warn_unused_result));
-
-/** Parse a MLOG_FILE_WRITE_CRYPT_DATA log entry
-@param[in]  space_id  id of space that this log entry refers to
+MY_NODISCARD byte *fil_parse_write_crypt_data_v1(space_id_t space_id, byte *ptr,
+                                                 const byte *end_ptr, ulint len,
+                                                 lsn_t lsn);
 @param[in]  ptr  Log entry start
 @param[in]  end_ptr  Log entry end
 @param[in]  len  Log entry length
 @return position on log buffer */
 byte *fil_parse_write_crypt_data_v2(space_id_t space_id, byte *ptr,
-                                    const byte *end_ptr, ulint len)
+                                    const byte *end_ptr, ulint len, lsn_t lsn)
     MY_ATTRIBUTE((warn_unused_result));
-
-/** Parse a MLOG_FILE_WRITE_CRYPT_DATA log entry
-@param[in]  space_id  id of space that this log entry refers to
+MY_NODISCARD byte *fil_parse_write_crypt_data_v2(space_id_t space_id, byte *ptr,
+                                                 const byte *end_ptr, ulint len,
+                                                 lsn_t lsn);
 @param[in]  ptr  Log entry start
 @param[in]  end_ptr  Log entry end
 @param[in]  len  Log entry length
@@ -524,11 +524,11 @@ byte *fil_parse_write_crypt_data_v2(space_id_t space_id, byte *ptr,
 @return position on log buffer */
 byte *fil_parse_write_crypt_data_v3(space_id_t space_id, byte *ptr,
                                     const byte *end_ptr, ulint len,
-                                    bool recv_needed_recovery)
-    MY_ATTRIBUTE((warn_unused_result));
-
-/**
-Decrypt a page.
+                                    bool recv_needed_recovery, lsn_t lsn)
+MY_NODISCARD byte *fil_parse_write_crypt_data_v3(space_id_t space_id, byte *ptr,
+                                                 const byte *end_ptr, ulint len,
+                                                 bool recv_needed_recovery,
+                                                 lsn_t lsn);
 @param[in,out]	crypt_data		crypt_data
 @param[in]	tmp_frame		Temporary buffer
 @param[in]	page_size		Page size
