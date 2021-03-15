@@ -29,24 +29,26 @@ if (!$vault_conf_mount_point_directory)
 }
 
 --disable_query_log
-call mtr.add_suppression("Encryption can't find master key, please check the keyring plugin is loaded.");
+call mtr.add_suppression("Encryption can't find master key, please check the keyring is loaded.");
 call mtr.add_suppression("Plugin keyring_vault reported: 'keyring_vault initialization failure.");
 call mtr.add_suppression("Function 'keyring_vault' already exists");
 call mtr.add_suppression("Couldn't load plugin named 'keyring_vault' with soname 'keyring_vault.so'.");
 call mtr.add_suppression("Couldn't load plugin named 'keyring_vault' with soname 'keyring_vault.dll'.");
-call mtr.add_suppression("InnoDB: Can't generate new master key, please check the keyring plugin is loaded.");
+call mtr.add_suppression("InnoDB: Can't generate new master key, please check the keyring is loaded.");
 call mtr.add_suppression("Encryption information in datafile");
 call mtr.add_suppression("Operating system error number 2 in a file operation.");
 call mtr.add_suppression("The error means the system cannot find the path specified.");
 call mtr.add_suppression("Could not find a valid tablespace file for");
 call mtr.add_suppression("If you are installing InnoDB, remember that you must create directories yourself, InnoDB does not create them.");
-call mtr.add_suppression("Can't generate new master key for tablespace encryption, please check the keyring plugin is loaded.");
+call mtr.add_suppression("Can't generate new master key for tablespace encryption, please check the keyring is loaded.");
 call mtr.add_suppression("Ignoring tablespace `test/.*` because it could not be opened.");
 call mtr.add_suppression("Failed to find tablespace for table");
 call mtr.add_suppression("Can't read encryption key from file");
 call mtr.add_suppression("Cannot open table .* from the internal data dictionary of InnoDB though the .frm file for the table exists.*");
 call mtr.add_suppression("Failed to decrypt encryption information, please check whether key file has been changed!");
 call mtr.add_suppression("Plugin keyring_vault reported: 'vault_ca is not specified but vault_url is https://");
+call mtr.add_suppression("for being a mount point unsuccessful - skipped.");
+call mtr.add_suppression("for being a mount point successful - identified kv-v2 secret engine.");
 --enable_query_log
 
 # Invalid syntax
