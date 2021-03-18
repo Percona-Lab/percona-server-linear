@@ -65,7 +65,6 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "mysql/components/services/system_variable_source.h"
 
 #ifndef UNIV_HOTBACKUP
-#include <binlog.h>
 #include <current_thd.h>
 #include <debug_sync.h>
 #include <derror.h>
@@ -343,11 +342,11 @@ static char *innodb_version_str = (char *)INNODB_VERSION_STR;
 static Innodb_data_lock_inspector innodb_data_lock_inspector;
 
 /** Path to the Percona-specific parallel doublewrite buffer (Deprecated) */
-static char *srv_parallel_doublewrite_path_deprecated;
+static char *srv_parallel_doublewrite_path_deprecated = nullptr;
 
 /** Enable or disable encryption of pages in parallel doublewrite buffer
-file */
-static bool srv_parallel_dblwr_encrypt = false;
+file (Deprecated) */
+static bool srv_parallel_dblwr_encrypt_deprecated = false;
 
 /** Note we cannot use rec_format_enum because we do not allow
 COMPRESSED row format for innodb_default_row_format option. */
@@ -4857,6 +4856,22 @@ static void innodb_parallel_doublewrite_path_deprecate() {
   }
 }
 
+/** Validate innodb_parallel_dblwr_encrypt. Log a warning if it was set
+explicitly. */
+static void innodb_parallel_dblwr_encrypt_deprecate() {
+  if (sysvar_source_svc != nullptr) {
+    static const char *variable_name = "innodb_parallel_dblwr_encrypt";
+    enum enum_variable_source source;
+    if (!sysvar_source_svc->get(
+            variable_name, static_cast<unsigned int>(strlen(variable_name)),
+            &source)) {
+      if (source != COMPILED) {
+        ib::warn(ER_IB_MSG_DEPRECATED_INNODB_PARALLEL_DBLWR_ENCRYPT);
+      }
+    }
+  }
+}
+
 /** Initialize and normalize innodb_buffer_pool_size. */
 static void innodb_buffer_pool_size_init() {
 #ifdef UNIV_DEBUG
@@ -5410,6 +5425,7 @@ static int innodb_init_params() {
 
   innodb_undo_tablespaces_deprecate();
   innodb_parallel_doublewrite_path_deprecate();
+  innodb_parallel_dblwr_encrypt_deprecate();
 
   innodb_redo_log_capacity_init();
 
@@ -6067,14 +6083,8 @@ static bool innobase_flush_logs(handlerton *hton, bool binlog_group_flush) {
     return false;
   }
 
-  /* Wait for all GTIDs to persist on disk and create an explicit request for
-  the compression of mysql.gtid_executed table if both binary logging and
-  log_slave_updates are enabled. This is required to avoid the
-  clone_gtid_thread getting stuck while scanning the gtid_executed table when
-  there is a mixed (transactional and non-transactional) workload on the
-  server. */
+  /* Signal and wait for all GTIDs to persist on disk. */
   if (!binlog_group_flush) {
-    bool compress_gtid = mysql_bin_log.is_open() && opt_log_replica_updates;
     auto &gtid_persistor = clone_sys->get_gtid_persistor();
     gtid_persistor.wait_flush(true, true, nullptr);
   }
@@ -22081,6 +22091,20 @@ static void innodb_parallel_doublewrite_path_update(
   innodb_parallel_doublewrite_path_deprecate();
 }
 
+/** Validate the value of innodb_parallel_dblwr_encrypt global variable.
+This function is registered as a callback with MySQL.
+@param[in]	thd       thread handle
+@param[in]	var       pointer to system variable
+@param[in]	var_ptr   where the formal string goes
+@param[in]	save      immediate result from check function */
+static void innodb_parallel_dblwr_encrypt_update(THD *thd [[maybe_unused]],
+                                                 SYS_VAR *var [[maybe_unused]],
+                                                 void *var_ptr [[maybe_unused]],
+                                                 const void *save
+                                                 [[maybe_unused]]) {
+  innodb_parallel_dblwr_encrypt_deprecate();
+}
+
 /* Declare default check function for boolean system variable. Cannot include
 sql_plugin_var.h header in this file due to conflicting macro definitions. */
 int check_func_bool(THD *, SYS_VAR *, void *save, st_mysql_value *value);
@@ -22090,7 +22114,7 @@ is registered as a callback with MySQL.
 @param[in]      thd       thread handle
 @param[in]      var       pointer to system variable
 @param[in]      save      possibly updated variable value
-  bool ret = srv_enable_undo_encryption(nullptr);
+@param[in]      value     current variable value
 @return error code */
 static int validate_innodb_undo_log_encrypt(THD *thd, SYS_VAR *var, void *save,
                                             struct st_mysql_value *value) {
@@ -22145,8 +22169,6 @@ static int validate_innodb_undo_log_encrypt(THD *thd, SYS_VAR *var, void *save,
   mutex_exit(&undo::ddl_mutex);
   return (0);
 }
-
-static bool update_innodb_redo_log_encrypt(THD *thd, uint target);
 
 /** Validate the value of innodb_redo_log_encrypt global variable. This function
 is registered as a callback with MySQL.
@@ -23818,11 +23840,6 @@ static MYSQL_SYSVAR_BOOL(
     "Enable this option at bootstrap to encrypt system tablespace.", nullptr,
     nullptr, false);
 
-static MYSQL_SYSVAR_BOOL(
-    parallel_dblwr_encrypt, srv_parallel_dblwr_encrypt, PLUGIN_VAR_OPCMDARG,
-    "Enable or disable encryption of parallel doublewrite buffer file.",
-    nullptr, nullptr, false);
-
 static MYSQL_SYSVAR_STR(
     undo_directory, srv_undo_dir,
     PLUGIN_VAR_RQCMDARG | PLUGIN_VAR_READONLY | PLUGIN_VAR_NOPERSIST,
@@ -24208,6 +24225,14 @@ static MYSQL_SYSVAR_STR(
     "Use --innodb-doublewrite-dir instead.",
     nullptr, innodb_parallel_doublewrite_path_update, "xb_doublewrite");
 
+static MYSQL_SYSVAR_BOOL(
+    parallel_dblwr_encrypt, srv_parallel_dblwr_encrypt_deprecated,
+    PLUGIN_VAR_OPCMDARG | PLUGIN_VAR_NOPERSIST,
+    "Deprecated Percona-specific variable that was used to enable or "
+    "disable encryption of parallel doublewrite buffer file and has no "
+    "effect now.",
+    nullptr, innodb_parallel_dblwr_encrypt_update, false);
+
 static MYSQL_SYSVAR_UINT(
     compressed_columns_zip_level, srv_compressed_columns_zip_level,
     PLUGIN_VAR_RQCMDARG,
@@ -24258,7 +24283,6 @@ static SYS_VAR *innobase_system_variables[] = {
     MYSQL_SYSVAR(temp_data_file_path),
     MYSQL_SYSVAR(temp_tablespace_encrypt),
     MYSQL_SYSVAR(sys_tablespace_encrypt),
-    MYSQL_SYSVAR(parallel_dblwr_encrypt),
     MYSQL_SYSVAR(data_home_dir),
     MYSQL_SYSVAR(extend_and_initialize),
     MYSQL_SYSVAR(doublewrite),
@@ -24406,6 +24430,7 @@ static SYS_VAR *innobase_system_variables[] = {
     MYSQL_SYSVAR(checkpoint_disabled),
     MYSQL_SYSVAR(buf_flush_list_now),
     MYSQL_SYSVAR(merge_threshold_set_all_debug),
+    MYSQL_SYSVAR(semaphore_wait_timeout_debug),
 #endif /* UNIV_DEBUG */
 #if defined UNIV_DEBUG || defined UNIV_PERF_DEBUG
     MYSQL_SYSVAR(page_hash_locks),
@@ -24463,6 +24488,7 @@ static SYS_VAR *innobase_system_variables[] = {
     MYSQL_SYSVAR(segment_reserve_factor),
     MYSQL_SYSVAR(corrupt_table_action),
     MYSQL_SYSVAR(parallel_doublewrite_path),
+    MYSQL_SYSVAR(parallel_dblwr_encrypt),
     MYSQL_SYSVAR(compressed_columns_zip_level),
     MYSQL_SYSVAR(compressed_columns_threshold),
     MYSQL_SYSVAR(ft_ignore_stopwords),
