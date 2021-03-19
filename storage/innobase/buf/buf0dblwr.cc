@@ -2435,6 +2435,10 @@ file::Block *dblwr::get_encrypted_frame(buf_page_t *bpage) noexcept {
     return nullptr;
   }
 
+  if (space_id == TRX_SYS_SPACE && page_no == TRX_SYS_PAGE_NO) {
+    return nullptr;
+  }
+
   if (fsp_is_undo_tablespace(space_id) && !srv_undo_log_encrypt) {
     /* It is an undo tablespace and undo encryption is not enabled. */
     return nullptr;
@@ -2445,6 +2449,13 @@ file::Block *dblwr::get_encrypted_frame(buf_page_t *bpage) noexcept {
       (!space->is_encrypted() && (space->crypt_data == nullptr ||
                                   space->crypt_data->max_key_version ==
                                       ENCRYPTION_KEY_VERSION_NOT_ENCRYPTED))) {
+    return nullptr;
+  }
+
+  /* Don't encrypt pages of system tablespace upto TRX_SYS_PAGE(including). The
+  doublewrite buffer header is on TRX_SYS_PAGE */
+  if (fsp_is_system_tablespace(space_id) && space->crypt_data == nullptr &&
+      page_no <= FSP_TRX_SYS_PAGE_NO) {
     return nullptr;
   }
 
@@ -2483,6 +2494,15 @@ file::Block *dblwr::get_encrypted_frame(buf_page_t *bpage) noexcept {
   }
 
   space->get_encryption_info(type.get_encryption_info());
+  type.encryption_algorithm(Encryption::AES);
+  page_size_t page_size(space->flags);
+
+  if (page_size.is_compressed()) {
+    type.mark_page_zip_compressed();
+    type.set_zip_page_physical_size(page_size.physical());
+    ut_ad(page_size.physical() > 0);
+  }
+
   auto e_block = os_file_encrypt_page(type, frame, n);
 
   if (compressed_block != nullptr) {
@@ -3079,9 +3099,6 @@ bool dblwr::recv::Pages::dblwr_recover_page(page_no_t dblwr_page_no,
   BlockReporter data_file_page(true, buffer.begin(), page_size,
                                fsp_is_checksum_disabled(space->id));
 
-  BlockReporter dblwr_page(true, page, page_size,
-                           fsp_is_checksum_disabled(space->id));
-
   if (data_file_page.is_corrupted()) {
     ib::info(ER_IB_MSG_DBLWR_1315) << "Database page corruption or"
                                    << " a failed file read of page " << page_id
@@ -3114,10 +3131,9 @@ bool dblwr::recv::Pages::dblwr_recover_page(page_no_t dblwr_page_no,
     bool data_page_zeroes = buf_page_is_zeroes(buffer.begin(), page_size);
     bool dblwr_zeroes = buf_page_is_zeroes(page, page_size);
     dberr_t dblwr_err;
-    const bool dblwr_corrupted =
-        is_dblwr_page_corrupted(page, space, page_no, &dblwr_err);
 
-    if (data_page_zeroes && !dblwr_zeroes && !dblwr_corrupted) {
+    if (data_page_zeroes && !dblwr_zeroes &&
+        !is_dblwr_page_corrupted(page, space, page_no, &dblwr_err)) {
       /* Database page contained only zeroes, while a valid copy is
       available in dblwr buffer. */
     } else {
