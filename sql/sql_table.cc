@@ -16588,6 +16588,8 @@ bool mysql_alter_table(THD *thd, const char *new_db, const char *new_name,
                                        thd->variables.lock_wait_timeout))
       return true;
 
+    DEBUG_SYNC(thd, "after_mdl_locks_acquired");
+
     /*
       If we are executing ALTER TABLE RENAME under LOCK TABLES we also need
       to check that all previously orphan tables which reference new table
@@ -17619,7 +17621,7 @@ bool mysql_alter_table(THD *thd, const char *new_db, const char *new_name,
     if (optimize_keys &&
         restore_secondary_keys(thd, create_info, new_table, alter_info,
                                table_def, &dd_disabled_sec_keys)) {
-      error = true;
+      error2 = true;
     }
 
     new_table->file->ha_extra(HA_EXTRA_END_ALTER_COPY);
