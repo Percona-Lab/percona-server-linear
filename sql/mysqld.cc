@@ -789,6 +789,7 @@ MySQL clients support the protocol:
 #include "sql/persisted_variable.h"              // Persisted_variables_cache
 #include "sql/plugin_table.h"
 #include "sql/protocol.h"
+#include "sql/sql_profile.h"
 #include "sql/psi_memory_key.h"  // key_memory_MYSQL_RELAY_LOG_index
 #include "sql/query_options.h"
 #include "sql/replication.h"                        // thd_enter_cond
@@ -5216,8 +5217,9 @@ int init_common_variables() {
     get corrupted if accesses with names of different case.
   */
   DBUG_PRINT("info", ("lower_case_table_names: %d", lower_case_table_names));
-  lower_case_file_system = test_if_case_insensitive(mysql_real_data_home);
-  if (!lower_case_table_names && lower_case_file_system == 1) {
+  lower_case_file_system =
+      (test_if_case_insensitive(mysql_real_data_home) == 1);
+  if (!lower_case_table_names && lower_case_file_system) {
     if (lower_case_table_names_used) {
       LogErr(ERROR_LEVEL, ER_LOWER_CASE_TABLE_NAMES_CS_DD_ON_CI_FS_UNSUPPORTED);
       return 1;
@@ -5226,15 +5228,10 @@ int init_common_variables() {
              mysql_real_data_home);
       lower_case_table_names = 2;
     }
-  } else if (lower_case_table_names == 2 &&
-             !(lower_case_file_system =
-                   (test_if_case_insensitive(mysql_real_data_home) == 1))) {
+  } else if (lower_case_table_names == 2 && !lower_case_file_system) {
     LogErr(WARNING_LEVEL, ER_LOWER_CASE_TABLE_NAMES_USING_0,
            mysql_real_data_home);
     lower_case_table_names = 0;
-  } else {
-    lower_case_file_system =
-        (test_if_case_insensitive(mysql_real_data_home) == 1);
   }
 
   /* Reset table_alias_charset, now that lower_case_table_names is set. */
@@ -7035,6 +7032,9 @@ int mysqld_main(int argc, char **argv)
   //  Init error log subsystem. This does not actually open the log yet.
   if (init_error_log()) unireg_abort(MYSQLD_ABORT_EXIT);
   heo_error = handle_early_options();
+
+  opt_jemalloc_detected = jemalloc_detected();
+  jemalloc_profiling_enable(opt_jemalloc_profiling_enabled);
 
   init_sql_statement_names();
   sys_var_init();
@@ -11671,8 +11671,8 @@ static PSI_rwlock_info all_server_rwlocks[]=
   { &key_rwlock_resource_group_mgr_map_lock, "Resource_group_mgr::m_map_rwlock", 0, 0, PSI_DOCUMENT_ME},
 #ifdef _WIN32
   { &key_rwlock_LOCK_named_pipe_full_access_group, "LOCK_named_pipe_full_access_group", PSI_FLAG_SINGLETON, 0,
-     "This lock protects named pipe security attributes, preventing their "
-     "simultaneous application and modification."},
+    "This lock protects named pipe security attributes, preventing their "
+    "simultaneous application and modification."},
 #endif // _WIN32
   { &key_rwlock_LOCK_consistent_snapshot, "LOCK_consistent_snapshot", PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME}
 };

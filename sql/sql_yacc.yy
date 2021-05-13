@@ -13852,29 +13852,6 @@ show_profile_stmt:
           }
         ;
 
-show_stats_stmt:
-          SHOW CLIENT_STATS_SYM opt_wild_or_where
-          {
-            $$ = NEW_PTN PT_show_client_stats(@$, $3.wild, $3.where);
-          }
-        | SHOW USER_STATS_SYM opt_wild_or_where
-          {
-            $$ = NEW_PTN PT_show_user_stats(@$, $3.wild, $3.where);
-          }
-        | SHOW THREAD_STATS_SYM opt_wild_or_where
-          {
-            $$ = NEW_PTN PT_show_thread_stats(@$, $3.wild, $3.where);
-          }
-        | SHOW TABLE_STATS_SYM opt_wild_or_where
-          {
-            $$ = NEW_PTN PT_show_table_stats(@$, $3.wild, $3.where);
-          }
-        | SHOW INDEX_STATS_SYM opt_wild_or_where
-          {
-            $$ = NEW_PTN PT_show_index_stats(@$, $3.wild, $3.where);
-          }
-        ;
-
 show_status_stmt:
           SHOW opt_var_type STATUS_SYM opt_wild_or_where
           {
@@ -13978,6 +13955,28 @@ show_replica_status_stmt:
             if (Lex->is_replication_deprecated_syntax_used())
               push_deprecated_warn(YYTHD, "SHOW SLAVE STATUS", "SHOW REPLICA STATUS");
             $$ = NEW_PTN PT_show_replica_status(@$, $4);
+          }
+        ;
+show_stats_stmt:
+          SHOW CLIENT_STATS_SYM opt_wild_or_where
+          {
+            $$ = NEW_PTN PT_show_client_stats(@$, $3.wild, $3.where);
+          }
+        | SHOW USER_STATS_SYM opt_wild_or_where
+          {
+            $$ = NEW_PTN PT_show_user_stats(@$, $3.wild, $3.where);
+          }
+        | SHOW THREAD_STATS_SYM opt_wild_or_where
+          {
+            $$ = NEW_PTN PT_show_thread_stats(@$, $3.wild, $3.where);
+          }
+        | SHOW TABLE_STATS_SYM opt_wild_or_where
+          {
+            $$ = NEW_PTN PT_show_table_stats(@$, $3.wild, $3.where);
+          }
+        | SHOW INDEX_STATS_SYM opt_wild_or_where
+          {
+            $$ = NEW_PTN PT_show_index_stats(@$, $3.wild, $3.where);
           }
         ;
 
@@ -14308,6 +14307,8 @@ flush_option:
           { Lex->type|= REFRESH_OPTIMIZER_COSTS; }
         | CHANGED_PAGE_BITMAPS_SYM
           { Lex->type|= REFRESH_FLUSH_PAGE_BITMAPS; }
+        | MEMORY_SYM PROFILE_SYM
+          { Lex->type|= DUMP_MEMORY_PROFILE; }
         ;
 
 opt_table_list:
