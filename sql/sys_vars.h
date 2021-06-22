@@ -3077,6 +3077,8 @@ class Sys_var_errors_set : public sys_var {
   }
 };
 
+extern std::size_t buffered_error_log_size;
+
 class Sys_var_enum_default_table_encryption : public Sys_var_enum {
  public:
   Sys_var_enum_default_table_encryption(
