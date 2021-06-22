@@ -53,6 +53,7 @@
 #include <limits>
 
 #include "include/compression.h"
+#include "mysys/buffered_error_log.h"
 
 #include "mysql/components/services/log_builtins.h"
 #include "mysql/components/services/log_shared.h"
@@ -4265,15 +4266,36 @@ static Sys_var_deprecated_alias Sys_slave_preserve_commit_order(
 bool Sys_var_charptr::global_update(THD *, set_var *var) {
   char *new_val, *ptr = var->save_result.string_value.str;
   const size_t len = var->save_result.string_value.length;
+  char *old_val = nullptr;
+
+  // Save old value before allocating new one to avoid leak on allocation
+  // failure
+  if ((flags & ALLOCATED) || option.var_type == GET_STR_ALLOC) {
+    old_val = global_var(char *);
+  }
+
   if (ptr) {
     new_val = (char *)my_memdup(key_memory_Sys_var_charptr_value, ptr, len + 1,
                                 MYF(MY_WME));
-    if (!new_val) return true;
+    if (!new_val) {
+      // Allocation failed, but old_val is still held by global_var
+      // which will be cleaned up at shutdown via cleanup()
+      return true;
+    }
     new_val[len] = 0;
-  } else
+  } else {
     new_val = nullptr;
-  if (flags & ALLOCATED) my_free(global_var(char *));
-  flags |= ALLOCATED;
+  }
+
+  // Free old value after new allocation succeeds
+  if (old_val) my_free(old_val);
+
+  // Only set ALLOCATED flag if new_val is not nullptr
+  if (new_val) {
+    flags |= ALLOCATED;
+  } else {
+    flags &= ~ALLOCATED;
+  }
   global_var(char *) = new_val;
   return false;
 }
@@ -6013,7 +6035,19 @@ static bool check_log_path(sys_var *self, THD *, set_var *var) {
   return false;
 }
 
-static bool fix_general_log_file(sys_var *, THD *, enum_var_type) {
+static bool check_log_path_allow_empty(sys_var *self, THD *thd, set_var *var) {
+  if (!var->value) return false;
+
+  if (!var->save_result.string_value.str) return false;
+
+  if (strlen(var->save_result.string_value.str) == 0) return false;
+
+  if (!check_log_path(self, thd, var)) return false;
+
+  return true;
+}
+
+static bool fix_general_log_file(sys_var *self, THD *, enum_var_type) {
   bool res;
 
   if (!opt_general_logname)  // SET ... = DEFAULT
@@ -6023,6 +6057,8 @@ static bool fix_general_log_file(sys_var *, THD *, enum_var_type) {
         key_memory_LOG_name, make_query_log_name(buff, QUERY_LOG_GENERAL),
         MYF(MY_FAE + MY_WME));
     if (!opt_general_logname) return true;
+
+    static_cast<Sys_var_charptr *>(self)->mark_global_value_allocated();
   }
 
   res = query_logger.set_log_file(QUERY_LOG_GENERAL);
@@ -6049,7 +6085,7 @@ static Sys_var_charptr Sys_general_log_path(
     DEFAULT(nullptr), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(check_log_path),
     ON_UPDATE(fix_general_log_file));
 
-static bool fix_slow_log_file(sys_var *, THD *thd [[maybe_unused]],
+static bool fix_slow_log_file(sys_var *self, THD *thd [[maybe_unused]],
                               enum_var_type) {
   bool res;
 
@@ -6062,6 +6098,8 @@ static bool fix_slow_log_file(sys_var *, THD *thd [[maybe_unused]],
                                  make_query_log_name(buff, QUERY_LOG_SLOW),
                                  MYF(MY_FAE + MY_WME));
     if (!opt_slow_logname) return true;
+
+    static_cast<Sys_var_charptr *>(self)->mark_global_value_allocated();
   }
 
   res = query_logger.set_log_file(QUERY_LOG_SLOW);
@@ -7984,6 +8022,30 @@ static Sys_var_enum Sys_terminology_use_previous(
     NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(nullptr), ON_UPDATE(nullptr),
     DEPRECATED_VAR(""));
 
+std::size_t buffered_error_log_size;
+
+static bool buffered_error_log_size_update(sys_var *, THD *, enum_var_type) {
+  buffered_error_log.resize(buffered_error_log_size * 1024);
+  return false;
+}
+
+static Sys_var_charptr Sys_var_buffered_error_log_filename(
+    "buffered_error_log_filename", "Filename of the buffered error log",
+    GLOBAL_VAR(buffered_error_log_filename), CMD_LINE(REQUIRED_ARG),
+    IN_FS_CHARSET, DEFAULT(""), NO_MUTEX_GUARD, NOT_IN_BINLOG,
+    ON_CHECK(check_log_path_allow_empty));
+
+static Sys_var_ulonglong Sys_var_buffered_error_log_size(
+    "buffered_error_log_size", "Size of the buffered error log (kB)",
+    GLOBAL_VAR(buffered_error_log_size), CMD_LINE(REQUIRED_ARG),
+    VALID_RANGE(0, ULLONG_MAX), DEFAULT(0), BLOCK_SIZE(1), NO_MUTEX_GUARD,
+    NOT_IN_BINLOG, ON_CHECK(nullptr),
+    ON_UPDATE(buffered_error_log_size_update));
+
+#ifndef NDEBUG
+Debug_shutdown_actions Debug_shutdown_actions::instance;
+#endif
+
 static Sys_var_bool Sys_xa_detatch_on_prepare(
     "xa_detach_on_prepare",
     "When set, XA transactions will be detached (AKA dissociated or "
@@ -8016,10 +8078,6 @@ static Sys_var_bool Sys_persist_sensitive_variables_in_plaintext(
         GLOBAL_VAR(opt_persist_sensitive_variables_in_plaintext),
     CMD_LINE(OPT_ARG), DEFAULT(true), NO_MUTEX_GUARD, NOT_IN_BINLOG,
     ON_CHECK(nullptr), ON_UPDATE(nullptr), nullptr, sys_var::PARSE_EARLY);
-
-#ifndef NDEBUG
-Debug_shutdown_actions Debug_shutdown_actions::instance;
-#endif
 
 static const char *explain_format_names[] = {
     "TRADITIONAL", "TRADITIONAL_STRICT", "TREE", "JSON", NullS};

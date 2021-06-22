@@ -1067,7 +1067,8 @@ class Sys_var_charptr : public sys_var {
   }
 
   void cleanup() override {
-    if (flags & ALLOCATED) my_free(global_var(char *));
+    if ((flags & ALLOCATED) || option.var_type == GET_STR_ALLOC)
+      my_free(global_var(char *));
     flags &= ~ALLOCATED;
   }
 
@@ -1105,6 +1106,10 @@ class Sys_var_charptr : public sys_var {
   }
 
   bool global_update(THD *thd, set_var *var) override;
+
+  // Mark the current global pointer as my_malloc-managed when an ON_UPDATE
+  // hook assigns it directly instead of going through global_update().
+  void mark_global_value_allocated() { flags |= ALLOCATED; }
 
   void session_save_default(THD *, set_var *var) override {
     char *ptr = (char *)(intptr)option.def_value;
@@ -3079,6 +3084,8 @@ class Sys_var_errors_set : public sys_var {
 
 void update_parser_max_mem_size();
 void update_optimizer_switch();
+
+extern std::size_t buffered_error_log_size;
 
 class Sys_var_enum_default_table_encryption : public Sys_var_enum {
  public:
