@@ -3078,6 +3078,11 @@ class Sys_var_errors_set : public sys_var {
   }
 };
 
+void update_parser_max_mem_size();
+void update_optimizer_switch();
+
+extern std::size_t buffered_error_log_size;
+
 class Sys_var_enum_default_table_encryption : public Sys_var_enum {
  public:
   Sys_var_enum_default_table_encryption(
@@ -3090,8 +3095,5 @@ class Sys_var_enum_default_table_encryption : public Sys_var_enum {
   }
   bool global_update(THD *thd, set_var *var) override;
 };
-
-void update_parser_max_mem_size();
-void update_optimizer_switch();
 
 #endif /* SYS_VARS_H_INCLUDED */
