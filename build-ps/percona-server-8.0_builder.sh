@@ -261,6 +261,7 @@ get_sources(){
         cd Percona-TokuBackup
         git checkout ${TOKUBACKUP_BRANCH}
         cd ${WORKDIR}/percona-server
+
     fi
     #
     git submodule update
@@ -294,6 +295,7 @@ get_sources(){
     sed -i "s:@@REVISION@@:${REVISION}:g" build-ps/percona-server.spec
     sed -i "s:@@RPM_RELEASE@@:${RPM_RELEASE}:g" build-ps/percona-server.spec
     sed -i "s:@@BOOST_PACKAGE_NAME@@:${BOOST_PACKAGE_NAME}:g" build-ps/percona-server.spec
+
     cd ${WORKDIR}/percona-server
     tar --owner=0 --group=0 --exclude=.bzr --exclude=.git -czf ${PSDIR}.tar.gz ${PSDIR}
 
@@ -824,7 +826,7 @@ build_tarball(){
             CMAKE_OPTS="-DWITH_ROCKSDB=1" bash -xe ./build-ps/build-binary.sh --debug --with-mecab="${MECAB_INSTALL_DIR}/usr" --with-jemalloc=../jemalloc/ ../TARGET
             DIRNAME="tarball"
         else
-            CMAKE_OPTS="-DWITH_ROCKSDB=1" bash -xe ./build-ps/build-binary.sh --with-mecab="${MECAB_INSTALL_DIR}/usr" --with-jemalloc=../jemalloc/ ../TARGET
+            CMAKE_OPTS="-DMINIMAL_RELWITHDEBINFO=OFF -DWITH_ROCKSDB=1" bash -xe ./build-ps/build-binary.sh --with-mecab="${MECAB_INSTALL_DIR}/usr" --with-jemalloc=../jemalloc/ ../TARGET
             DIRNAME="tarball"
         fi
     fi
