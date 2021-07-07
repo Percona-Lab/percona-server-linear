@@ -1754,12 +1754,52 @@ bool log_slow_applicable(THD *thd, int sp_sql_command) {
   if (unlikely(thd->is_error()) &&
       (unlikely(thd->get_stmt_da()->mysql_errno() == ER_PARSE_ERROR)))
     return false;
+
+  /* Collect query exec time as the first step. */
+  ulonglong query_exec_time = get_query_exec_time(thd);
+
+  /* Log queries failing with predefined error */
+  bool warn_failed_query = false;
+  const bool warn_no_index =
+      ((thd->server_status &
+        (SERVER_QUERY_NO_INDEX_USED | SERVER_QUERY_NO_GOOD_INDEX_USED)) &&
+       opt_log_queries_not_using_indexes &&
+       !(sql_command_flags[thd->lex->sql_command] & CF_STATUS_COMMAND));
+  const bool log_this_query =
+      ((thd->server_status & SERVER_QUERY_WAS_SLOW) || warn_no_index || warn_failed_query) &&
+      (thd->get_examined_row_count() >= thd->variables.min_examined_row_limit);
+
+  // The docs say slow queries must be counted even when the log is off.
+  if (log_this_query) thd->status_var.long_query_count++;
+
+  /*
+    Do not log administrative statements unless the appropriate option is
+    set.
+  */
+  if (!thd->enable_slow_log || !opt_slow_log) return false;
+
+  /*
+    Copy all needed global variables into a session one before doing all checks.
+
+    Low long_query_time value most likely means user is debugging stuff and even
+    though some thread's queries are not supposed to be logged b/c of the rate
+    limit, if one of them takes long enough (>= 1 second) it will be sensible
+    to make an exception and write to slow log anyway.
+  */
+  System_variables const &g = global_system_variables;
+  copy_global_to_session(thd, SLOG_UG_LOG_SLOW_FILTER, &g.log_slow_filter);
+  copy_global_to_session(thd, SLOG_UG_LOG_SLOW_RATE_LIMIT,
+                         &g.log_slow_rate_limit);
+  copy_global_to_session(thd, SLOG_UG_LOG_SLOW_VERBOSITY,
+                         &g.log_slow_verbosity);
+  copy_global_to_session(thd, SLOG_UG_LONG_QUERY_TIME, &g.long_query_time);
+  copy_global_to_session(thd, SLOG_UG_MIN_EXAMINED_ROW_LIMIT,
+                         &g.min_examined_row_limit);
+
   /* Follow the slow log filter configuration. */
   if (thd->variables.log_slow_filter != 0 &&
       !(thd->variables.log_slow_filter & thd->query_plan_flags))
 	 return false;
-
-  ulonglong query_exec_time = get_query_exec_time(thd);
 
   /*
     Don't log the CALL statement if slow statements logging
@@ -1781,23 +1821,6 @@ bool log_slow_applicable(THD *thd, int sp_sql_command) {
     }
   }
 
-  /*
-    Low long_query_time value most likely means user is debugging stuff and even
-    though some thread's queries are not supposed to be logged b/c of the rate
-    limit, if one of them takes long enough (>= 1 second) it will be sensible
-    to make an exception and write to slow log anyway.
-  */
-
-  System_variables const &g = global_system_variables;
-  copy_global_to_session(thd, SLOG_UG_LOG_SLOW_FILTER, &g.log_slow_filter);
-  copy_global_to_session(thd, SLOG_UG_LOG_SLOW_RATE_LIMIT,
-                         &g.log_slow_rate_limit);
-  copy_global_to_session(thd, SLOG_UG_LOG_SLOW_VERBOSITY,
-                         &g.log_slow_verbosity);
-  copy_global_to_session(thd, SLOG_UG_LONG_QUERY_TIME, &g.long_query_time);
-  copy_global_to_session(thd, SLOG_UG_MIN_EXAMINED_ROW_LIMIT,
-                         &g.min_examined_row_limit);
-
   if (opt_slow_query_log_rate_type == SLOG_RT_QUERY &&
       thd->variables.log_slow_rate_limit &&
       my_rnd(&thd->slog_rand) * ((double)thd->variables.log_slow_rate_limit) >
@@ -1816,28 +1839,11 @@ bool log_slow_applicable(THD *thd, int sp_sql_command) {
 	  return false;
   }
 
+  const bool suppress_logging =
+      log_throttle_qni.log(thd, warn_no_index && warn_failed_query);
 
-  const bool warn_no_index =
-      ((thd->server_status &
-        (SERVER_QUERY_NO_INDEX_USED | SERVER_QUERY_NO_GOOD_INDEX_USED)) &&
-       opt_log_queries_not_using_indexes &&
-       !(sql_command_flags[thd->lex->sql_command] & CF_STATUS_COMMAND));
-  const bool log_this_query =
-      ((thd->server_status & SERVER_QUERY_WAS_SLOW) || warn_no_index) &&
-      (thd->get_examined_row_count() >= thd->variables.min_examined_row_limit);
+  if (!suppress_logging && log_this_query) return true;
 
-  // The docs say slow queries must be counted even when the log is off.
-  if (log_this_query) thd->status_var.long_query_count++;
-
-  /*
-    Do not log administrative statements unless the appropriate option is
-    set.
-  */
-  if (thd->enable_slow_log && opt_slow_log) {
-    const bool suppress_logging = log_throttle_qni.log(thd, warn_no_index);
-
-    if (!suppress_logging && log_this_query) return true;
-  }
   return false;
 }
 
