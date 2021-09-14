@@ -2398,6 +2398,16 @@ static int binlog_prepare(handlerton *, THD *thd, bool all) {
 
 static int binlog_set_prepared_in_tc(handlerton *, THD *) { return 0; }
 
+/**
+   Logging XA commit/rollback of a prepared transaction in the case
+   it was disconnected and resumed (recovered), or executed by a slave applier.
+
+   @param thd         THD handle
+   @param xid         a pointer to XID object
+   @param commit      when @c true XA-COMMIT is logged, otherwise XA-ROLLBACK
+
+   @return error code, 0 success
+*/
 int MYSQL_BIN_LOG::write_xa_to_cache(THD *thd) {
   assert(thd->lex->sql_command == SQLCOM_XA_COMMIT ||
          thd->lex->sql_command == SQLCOM_XA_ROLLBACK);
@@ -8847,6 +8857,7 @@ void MYSQL_BIN_LOG::process_commit_stage_queue(THD *thd, THD *first) {
                          head->commit_error, YESNO(head->tx_commit_pending)));
   }
 
+  DEBUG_SYNC(thd, "process_commit_stage_queue_before_handle_gtid");
   /*
     Handle the GTID of the threads.
     gtid_executed table is kept updated even though transactions fail to be
