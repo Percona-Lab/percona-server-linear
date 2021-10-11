@@ -5317,30 +5317,6 @@ static int rocksdb_init_internal(void *const p) {
     DBUG_RETURN(HA_EXIT_FAILURE);
   }
 
-  if (rdb_check_rocksdb_corruption()) {
-    LogPluginErrMsg(ERROR_LEVEL, 0,
-                    "There was corruption detected in the RockDB data files. "
-                    "Check error log emitted earlier for more details.");
-    if (rocksdb_allow_to_start_after_corruption) {
-      LogPluginErrMsg(INFORMATION_LEVEL, 0,
-                      "Set rocksdb_allow_to_start_after_corruption=0 to "
-                      "prevent server from starting when RocksDB data "
-                      "corruption is detected.");
-    } else {
-      LogPluginErrMsg(ERROR_LEVEL, 0,
-                      "The server will exit normally and stop restart "
-                      "attempts. Remove %s file from data directory and start "
-                      "mysqld manually.",
-                      rdb_corruption_marker_file_name().c_str());
-      exit(0);
-    }
-  }
-
-  DBUG_EXECUTE_IF("rocksdb_init_failure_files_corruption", {
-    // Simulate rdb_check_rocksdb_corruption failure
-    DBUG_RETURN(HA_EXIT_FAILURE);
-  });
-
 #ifdef FB_HAVE_WSENV
   // Initialize WSEnv with rocksdb_ws_env_path
   if (rdb_has_wsenv()) {
@@ -5366,6 +5342,40 @@ static int rocksdb_init_internal(void *const p) {
     DBUG_RETURN(HA_EXIT_FAILURE);
   }
 #endif
+
+  if (rdb_has_rocksdb_corruption()) {
+    LogPluginErrMsg(ERROR_LEVEL, 0,
+                    "There was corruption detected in the RockDB data files. "
+                    "Check error log emitted earlier for more details.");
+    if (rocksdb_allow_to_start_after_corruption) {
+      LogPluginErrMsg(INFORMATION_LEVEL, 0,
+                      "Set rocksdb_allow_to_start_after_corruption=0 to "
+                      "prevent server from starting when RocksDB data "
+                      "corruption is detected.");
+    } else {
+      LogPluginErrMsg(ERROR_LEVEL, 0,
+                      "The server will exit normally and stop restart "
+                      "attempts. Remove %s file from data directory and start "
+                      "mysqld manually.",
+                      rdb_corruption_marker_file_name().c_str());
+      exit(0);
+    }
+  }
+
+  rocksdb::Status s;
+  if (rocksdb_fs_uri) {
+    std::shared_ptr<rocksdb::FileSystem> fs;
+    s = rocksdb::FileSystem::Load(rocksdb_fs_uri, &fs);
+    if (fs == nullptr) {
+      LogPluginErrMsg(ERROR_LEVEL, 0, "Loading custom file system failed: %s\n",
+                      s.ToString().c_str());
+      DBUG_RETURN(HA_EXIT_FAILURE);
+    }
+    rocksdb_db_options->env = GetCompositeEnv(fs);
+  }
+
+  DBUG_EXECUTE_IF("rocksdb_init_failure_files_corruption",
+                  { DBUG_RETURN(HA_EXIT_FAILURE); });
 
   if (opt_rocksdb_fault_injection_options != nullptr &&
       *opt_rocksdb_fault_injection_options != '\0') {
@@ -5439,7 +5449,6 @@ static int rocksdb_init_internal(void *const p) {
   Rdb_transaction::init_mutex();
 
   DBUG_EXECUTE_IF("rocksdb_init_failure_mutexes_initialized", {
-    // Simulate rdb_check_rocksdb_corruption failure
     DBUG_RETURN(HA_EXIT_FAILURE);
   });
 
@@ -5501,8 +5510,8 @@ static int rocksdb_init_internal(void *const p) {
   rocksdb_db_options->delayed_write_rate = rocksdb_delayed_write_rate;
 
   std::shared_ptr<Rdb_logger> myrocks_logger = std::make_shared<Rdb_logger>();
-  rocksdb::Status s = rocksdb::CreateLoggerFromOptions(
-      rocksdb_datadir, *rocksdb_db_options, &rocksdb_db_options->info_log);
+  s = rocksdb::CreateLoggerFromOptions(rocksdb_datadir, *rocksdb_db_options,
+                                       &rocksdb_db_options->info_log);
   if (s.ok()) {
     myrocks_logger->SetRocksDBLogger(rocksdb_db_options->info_log);
   }
@@ -5531,17 +5540,6 @@ static int rocksdb_init_internal(void *const p) {
         "Can't enable both use_direct_reads and allow_mmap_reads\n");
     deinit_logging_service_for_plugin(&reg_srv, &log_bi, &log_bs);
     DBUG_RETURN(HA_EXIT_FAILURE);
-  }
-
-  if (rocksdb_fs_uri) {
-    std::shared_ptr<rocksdb::FileSystem> fs;
-    s = rocksdb::FileSystem::Load(rocksdb_fs_uri, &fs);
-    if (fs == nullptr) {
-      LogPluginErrMsg(ERROR_LEVEL, 0, "Loading custom file system failed: %s\n",
-                      s.ToString().c_str());
-      DBUG_RETURN(HA_EXIT_FAILURE);
-    }
-    rocksdb_db_options->env = GetCompositeEnv(fs);
   }
 
   // Check whether the filesystem backing rocksdb_datadir allows O_DIRECT
@@ -5574,7 +5572,6 @@ static int rocksdb_init_internal(void *const p) {
   }
 
   DBUG_EXECUTE_IF("rocksdb_init_failure_reads", {
-    // Simulate rdb_check_rocksdb_corruption failure
     DBUG_RETURN(HA_EXIT_FAILURE);
   });
 
@@ -5716,7 +5713,6 @@ static int rocksdb_init_internal(void *const p) {
   }
 
   DBUG_EXECUTE_IF("rocksdb_init_failure_cache", {
-    // Simulate rdb_check_rocksdb_corruption failure
     DBUG_RETURN(HA_EXIT_FAILURE);
   });
 
@@ -5730,7 +5726,6 @@ static int rocksdb_init_internal(void *const p) {
   }
 
   DBUG_EXECUTE_IF("rocksdb_init_failure_cf_options", {
-    // Simulate rdb_check_rocksdb_corruption failure
     DBUG_RETURN(HA_EXIT_FAILURE);
   });
 
@@ -15378,6 +15373,10 @@ std::string rdb_corruption_marker_file_name() {
   std::string ret(rocksdb_datadir);
   ret.append("/ROCKSDB_CORRUPTED");
   return ret;
+}
+
+rocksdb::DBOptions *get_rocksdb_db_options() {
+  return rocksdb_db_options.get();
 }
 
 static void rocksdb_max_compaction_history_update(
