@@ -158,7 +158,7 @@ static int mecab_parser_plugin_init(void *) {
 }
 
 /** MeCab parser plugin deinit
-@retval	0 */
+@retval	0 Operation status */
 static int mecab_parser_plugin_deinit(void *) {
   delete mecab_tagger;
   mecab_tagger = NULL;
@@ -187,6 +187,8 @@ static int mecab_parse(MeCab::Lattice *mecab_lattice,
   int token_num = 0;
   int ret = 0;
   bool term_converted = false;
+  const CHARSET_INFO *cs = param->cs;
+  char *end = const_cast<char *>(doc) + len;
 
   try {
     mecab_lattice->set_sentence(doc, len);
@@ -223,12 +225,19 @@ static int mecab_parse(MeCab::Lattice *mecab_lattice,
 
   for (const MeCab::Node *node = mecab_lattice->bos_node(); node != NULL;
        node = node->next) {
-    bool_info->position = position;
-    position += node->rlength;
+    int ctype = 0;
+    cs->cset->ctype(cs, &ctype, reinterpret_cast<const uchar *>(node->surface),
+                    reinterpret_cast<const uchar *>(end));
 
-    param->mysql_add_word(param, const_cast<char *>(node->surface),
-                          node->length,
-                          term_converted ? &token_info : bool_info);
+    /* Skip control characters */
+    if (!(ctype & MY_CHAR_CTR)) {
+      bool_info->position = position;
+      position += node->rlength;
+
+      param->mysql_add_word(param, const_cast<char *>(node->surface),
+                            node->length,
+                            term_converted ? &token_info : bool_info);
+    }
   }
 
   if (term_converted) {
