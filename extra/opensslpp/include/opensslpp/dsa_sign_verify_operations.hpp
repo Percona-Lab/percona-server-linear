@@ -14,27 +14,23 @@
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA */
 
-#ifndef OPENSSLPP_ACCESSOR_HPP
-#define OPENSSLPP_ACCESSOR_HPP
+#ifndef OPENSSLPP_DSA_SIGN_VERIFY_OPERATIONS_HPP
+#define OPENSSLPP_DSA_SIGN_VERIFY_OPERATIONS_HPP
 
-#include "opensslpp/accessor_fwd.hpp"
+#include <string>
+
+#include "opensslpp/dsa_key_fwd.hpp"
 
 namespace opensslpp {
 
-template <typename WrapperType>
-class accessor {
- protected:
-  static void *get_impl(WrapperType &obj) noexcept { return obj.impl_.get(); }
-  static const void *get_impl(const WrapperType &obj) noexcept {
-    return obj.impl_.get();
-  }
-  static void set_impl(WrapperType &obj, void *impl_raw) noexcept {
-    obj.impl_.reset(impl_raw);
-  }
-  static void *release(WrapperType &obj) noexcept {
-    return obj.impl_.release();
-  }
-};
+std::string sign_with_dsa_private_key(const std::string &digest_type,
+                                      const std::string &digest_data,
+                                      const dsa_key &key);
+
+bool verify_with_dsa_public_key(const std::string &digest_type,
+                                const std::string &digest_data,
+                                const std::string &signature_data,
+                                const dsa_key &key);
 
 }  // namespace opensslpp
 
