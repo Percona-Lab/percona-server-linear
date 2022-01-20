@@ -17,25 +17,24 @@
 #include <cassert>
 #include <vector>
 
-#include <openssl/err.h>
+#include <openssl/dsa.h>
 #include <openssl/evp.h>
-#include <openssl/rsa.h>
 
-#include "opensslpp/rsa_sign_verify_operations.hpp"
+#include "opensslpp/dsa_sign_verify_operations.hpp"
 
 #include "opensslpp/core_error.hpp"
-#include "opensslpp/rsa_key.hpp"
-#include "opensslpp/rsa_key_accessor.hpp"
+#include "opensslpp/dsa_key.hpp"
+#include "opensslpp/dsa_key_accessor.hpp"
 
 namespace opensslpp {
 
-std::string sign_with_rsa_private_key(const std::string &digest_type,
+std::string sign_with_dsa_private_key(const std::string &digest_type,
                                       const std::string &digest_data,
-                                      const rsa_key &key) {
+                                      const dsa_key &key) {
   assert(!key.is_empty());
 
-  if (!key.is_private())
-    throw core_error{"RSA key does not have private components"};
+  if (!key.has_private_component())
+    throw core_error{"DSA key does not have private component"};
 
   auto md = EVP_get_digestbyname(digest_type.c_str());
   if (md == nullptr) throw core_error{"unknown digest name"};
@@ -47,23 +46,23 @@ std::string sign_with_rsa_private_key(const std::string &digest_type,
   buffer_type res(key.get_size_in_bytes());
 
   unsigned int signature_length = 0;
-  auto sign_status = RSA_sign(
+  auto sign_status = DSA_sign(
       md_nid, reinterpret_cast<const unsigned char *>(digest_data.c_str()),
       digest_data.size(), res.data(), &signature_length,
-      rsa_key_accessor::get_impl_const_casted(key));
+      dsa_key_accessor::get_impl_const_casted(key));
 
   if (sign_status != 1)
     core_error::raise_with_error_string(
-        "cannot sign message digest with the specified private RSA key");
+        "cannot sign message digest with the specified private DSA key");
 
   return {reinterpret_cast<char *>(res.data()),
           static_cast<std::size_t>(signature_length)};
 }
 
-bool verify_with_rsa_public_key(const std::string &digest_type,
+bool verify_with_dsa_public_key(const std::string &digest_type,
                                 const std::string &digest_data,
                                 const std::string &signature_data,
-                                const rsa_key &key) {
+                                const dsa_key &key) {
   assert(!key.is_empty());
 
   auto md = EVP_get_digestbyname(digest_type.c_str());
@@ -71,18 +70,16 @@ bool verify_with_rsa_public_key(const std::string &digest_type,
 
   auto md_nid = EVP_MD_type(md);
 
-  auto verify_status = RSA_verify(
+  auto verify_status = DSA_verify(
       md_nid, reinterpret_cast<const unsigned char *>(digest_data.c_str()),
       digest_data.size(),
       reinterpret_cast<const unsigned char *>(signature_data.c_str()),
-      signature_data.size(), rsa_key_accessor::get_impl_const_casted(key));
+      signature_data.size(), dsa_key_accessor::get_impl_const_casted(key));
 
-  // RSA_verify() does not destinguish between "an error occurred" and
-  // "invalid signature" - in both cases 0 is returned.
-  // Therefore, we need to make sure that the OpenSSL error code queue
-  // will be empty after this call, so that it would not affect invoking
-  // code that may rely on ERR_get_error() / ERR_peek_error()
-  if (verify_status == 0) ERR_clear_error();
+  assert(verify_status == -1 || verify_status == 0 || verify_status == 1);
+  if (verify_status == -1)
+    core_error::raise_with_error_string(
+        "cannot verify message signature with the specified public DSA key");
 
   return verify_status == 1;
 }
