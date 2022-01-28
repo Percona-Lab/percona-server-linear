@@ -1276,7 +1276,8 @@ class Rdb_tbl_def {
         m_mtcache_lock(0),
         m_mtcache_count(0),
         m_mtcache_size(0),
-        m_mtcache_last_update(0) {
+        m_mtcache_last_update(0),
+        m_create_time(CREATE_TIME_UNKNOWN) {
     set_name(name);
     m_auto_incr_val = other.m_auto_incr_val.load(std::memory_order_relaxed);
     m_hidden_pk_val = other.m_hidden_pk_val.load(std::memory_order_relaxed);
@@ -1514,7 +1515,7 @@ class Rdb_ddl_manager : public Ensure_initialized {
 
   /* Helper functions to be passed to my_core::HASH object */
   static const uchar *get_hash_key(Rdb_tbl_def *const rec, size_t *const length,
-                                   bool not_used MY_ATTRIBUTE((unused)));
+                                   bool not_used [[maybe_unused]]);
   static void free_hash_elem(void *const data);
 
 #if defined(ROCKSDB_INCLUDE_VALIDATE_TABLES) && ROCKSDB_INCLUDE_VALIDATE_TABLES
