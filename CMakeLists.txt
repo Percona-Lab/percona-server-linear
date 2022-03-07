@@ -2172,6 +2172,11 @@ OPTION(WITH_SHOW_PARSE_TREE
   ${WITH_SHOW_PARSE_TREE_DEFAULT}
   )
 
+OPTION(WITH_ENCRYPTION_UDF "Build Encryption UDF plugin" ON)
+IF(WITH_ENCRYPTION_UDF)
+  ADD_SUBDIRECTORY(extra/opensslpp)
+ENDIF()
+
 # Utility target to build every executable tagged with ADD_TEST.
 ADD_CUSTOM_TARGET(unittest_all)
 
@@ -2274,11 +2279,6 @@ ADD_SUBDIRECTORY(libservices)
 IF(NOT WITHOUT_SERVER)
   ADD_SUBDIRECTORY(testclients)
   ADD_SUBDIRECTORY(sql)
-ENDIF()
-
-OPTION(WITH_ENCRYPTION_UDF "Build Encryption UDF plugin" ON)
-IF(WITH_ENCRYPTION_UDF)
-  ADD_SUBDIRECTORY(extra/opensslpp)
 ENDIF()
 
 # Some unit tests need to link with the entire server, use this library:
