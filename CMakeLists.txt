@@ -2287,6 +2287,11 @@ OPTION(WITH_SHOW_PARSE_TREE
   ${WITH_SHOW_PARSE_TREE_DEFAULT}
   )
 
+OPTION(WITH_ENCRYPTION_UDF "Build Encryption UDF plugin" ON)
+IF(WITH_ENCRYPTION_UDF)
+  ADD_SUBDIRECTORY(extra/opensslpp)
+ENDIF()
+
 # We may run clang-tidy on individual .h files. Tell clang to treat them as C++.
 # To generate entries for header files in compile_commands.json:
 # make clang_tidy_prerequisites, see below.
@@ -2380,11 +2385,6 @@ ADD_SUBDIRECTORY(libservices)
 IF(NOT WITHOUT_SERVER)
   ADD_SUBDIRECTORY(testclients)
   ADD_SUBDIRECTORY(sql)
-ENDIF()
-
-OPTION(WITH_ENCRYPTION_UDF "Build Encryption UDF plugin" ON)
-IF(WITH_ENCRYPTION_UDF)
-  ADD_SUBDIRECTORY(extra/opensslpp)
 ENDIF()
 
 # Some unit tests need to link with the entire server, use this library:
