@@ -4073,6 +4073,8 @@ void dict_persist_init(void) {
 
 /** Clear the structure */
 void dict_persist_close(void) {
+  if (!dict_persist) return;
+
   ut::delete_(dict_persist->persisters);
 
 #ifndef UNIV_HOTBACKUP
