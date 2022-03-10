@@ -763,6 +763,8 @@ static void recv_writer_thread() {
 
 /** Frees the recovery system. */
 void recv_sys_free() {
+  if (!recv_sys) return;
+
   mutex_enter(&recv_sys->mutex);
 
   recv_sys_finish();
@@ -771,7 +773,6 @@ void recv_sys_free() {
   /* wake page cleaner up to progress */
   if (!srv_read_only_mode) {
     ut_ad(!recv_recovery_on);
-    ut_ad(!recv_writer_is_active());
     if (buf_flush_event != nullptr) {
       os_event_reset(buf_flush_event);
     }
@@ -1555,7 +1556,6 @@ specified.
 @param[in]      end_ptr         End of buffer
 @param[in]      space_id        Tablespace identifier
 @param[in]      page_no         Page number
-@param[in]	apply		Whether to apply the record
 @param[in,out]  block           Buffer block, or nullptr if
                                 a page log record should not be applied
                                 or if it is a MLOG_FILE_ operation
@@ -2802,7 +2802,7 @@ void recv_recover_page_func(
 @param[in]      end_ptr         end of the buffer
 @param[out]     space_id        tablespace identifier
 @param[out]     page_no         page number
-@param[in]      apply           whether to apply the record
+@param[in]      online_log      do we process DDL online log
 @param[out]     body            start of log record body
 @return length of the record, or 0 if the record was not complete */
 ulint recv_parse_log_rec(mlog_id_t *type, byte *ptr, byte *end_ptr,
@@ -3143,10 +3143,15 @@ static bool recv_multi_rec(byte *ptr, byte *end_ptr) {
     page_no_t page_no = 0;
 
     mlog_id_t type = MLOG_BIGGEST_TYPE;
-    byte *body;
 
-    ulint len = recv_parse_log_rec(&type, ptr, end_ptr, &space_id, &page_no,
-                                   true, &body);
+    byte *body = nullptr;
+    size_t len = 0;
+
+    /* Avoid parsing if we have the record saved already. */
+    if (!recv_sys->get_saved_rec(i, space_id, page_no, type, body, len)) {
+      len = recv_parse_log_rec(&type, ptr, end_ptr, &space_id, &page_no, false,
+                               &body);
+    }
 
     if (recv_sys->found_corrupt_log &&
         !recv_report_corrupt_log(ptr, type, space_id, page_no)) {
@@ -3976,9 +3981,7 @@ MetadataRecover *recv_recovery_from_checkpoint_finish(bool aborting) {
   /* Free the resources of the recovery system */
   recv_recovery_on = false;
 
-  /* By acquiring the mutex we ensure that the recv_writer thread
-  won't trigger any more LRU batches. Now wait for currently
-  in progress batches to finish. */
+  /* Now wait for currently in progress batches to finish. */
   buf_flush_wait_LRU_batch_end();
 
   mutex_exit(&recv_sys->writer_mutex);
