@@ -843,6 +843,9 @@ static void recv_writer_thread() {
 
 /** Frees the recovery system. */
 void recv_sys_free() {
+  if (!recv_sys) return;
+  if (!recv_sys->crypt_datas) return;
+
   mutex_enter(&recv_sys->mutex);
 
   recv_sys_finish();
@@ -851,7 +854,6 @@ void recv_sys_free() {
   /* wake page cleaner up to progress */
   if (!srv_read_only_mode) {
     ut_ad(!recv_recovery_on);
-    ut_ad(!recv_writer_is_active());
     if (buf_flush_event != nullptr) {
       os_event_reset(buf_flush_event);
     }
@@ -4176,9 +4178,7 @@ MetadataRecover *recv_recovery_from_checkpoint_finish(bool aborting) {
   /* Free the resources of the recovery system */
   recv_recovery_on = false;
 
-  /* By acquiring the mutex we ensure that the recv_writer thread
-  won't trigger any more LRU batches. Now wait for currently
-  in progress batches to finish. */
+  /* Now wait for currently in progress batches to finish. */
   buf_flush_wait_LRU_batch_end();
 
   mutex_exit(&recv_sys->writer_mutex);

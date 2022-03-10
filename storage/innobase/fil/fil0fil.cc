@@ -4041,7 +4041,11 @@ void Fil_system::close_all_files() {
 
 /** Closes all open files. There must not be any pending i/o's or not flushed
 modifications in the files. */
-void fil_close_all_files() { fil_system->close_all_files(); }
+void fil_close_all_files() {
+  if (!fil_system) return;
+
+  fil_system->close_all_files();
+}
 
 /** Iterate through all persistent tablespace files (FIL_TYPE_TABLESPACE)
 returning the nodes via callback function cbk.
@@ -4172,6 +4176,7 @@ for concurrency control.
 @param[in]      space_id        Tablespace ID
 @return the tablespace, or nullptr if missing or being deleted */
 fil_space_t *fil_space_acquire(space_id_t space_id) {
+  if (!fil_system) return nullptr;
   return fil_system->space_acquire(space_id, false);
 }
 
@@ -6050,17 +6055,17 @@ static dberr_t fil_create_tablespace(
     os_file_close(file);
     os_file_delete(innodb_data_file_key, path);
 
+    return err;
   }
 
-  // Create crypt data if the tablespace is either encrypted or user has
-  // requested it to remain unencrypted. */
-  if (mode == FIL_ENCRYPTION_ON || mode == FIL_ENCRYPTION_OFF ||
-      (srv_default_table_encryption == DEFAULT_TABLE_ENC_ONLINE_TO_KEYRING ||
-       keyring_encryption_key_id.was_encryption_key_id_set)) {
-    crypt_data = fil_space_create_crypt_data(mode, keyring_encryption_key_id.id,
-                                             server_uuid);
+  success = os_file_flush(file);
 
-    if (crypt_data->should_encrypt()) crypt_data->load_keys_to_local_cache();
+  if (!success) {
+    ib::error(ER_IB_MSG_305, path);
+
+    os_file_close(file);
+    os_file_delete(innodb_data_file_key, path);
+    return DB_ERROR;
   }
 
 #ifndef UNIV_HOTBACKUP
@@ -7941,32 +7946,32 @@ static void fil_report_invalid_page_access_low(page_no_t block_offset,
                                                const char *space_name,
                                                ulint byte_offset, ulint len,
                                                bool is_read, int line) {
-  req_type.encryption_algorithm(Encryption::KEYRING);
+  ib::error(ER_IB_MSG_328)
+      << "Trying to access page number " << block_offset
+      << " in"
+         " space "
+      << space_id << ", space name " << space_name
+      << ","
+         " which is outside the tablespace bounds. Byte offset "
+      << byte_offset << ", len " << len << ", i/o type "
+      << (is_read ? "read" : "write")
+      << ". If you get this error at mysqld startup, please check"
+         " that your my.cnf matches the ibdata files that you have in"
+         " the MySQL server.";
 
-  if (space->crypt_data->mutex_lock_needed)
-    mutex_exit(&space->crypt_data->mutex);
+  ib::error(ER_IB_MSG_329) << "Server exits"
+#ifdef UNIV_DEBUG
+                           << " at "
+                           << "fil0fil.cc"
+                           << "[" << line << "]"
+#endif /* UNIV_DEBUG */
+                           << ".";
+
+  ut_error;
 }
 
-static void fil_io_set_mk_encryption(IORequest &req_type, fil_space_t *space) {
-  unsigned char *key =
-      space->encryption_redo_key != nullptr
-          ? reinterpret_cast<unsigned char *>(space->encryption_redo_key->key)
-          : space->m_encryption_metadata.m_key;
-  uint version = space->encryption_redo_key != nullptr
-                     ? space->encryption_redo_key->version
-                     : REDO_LOG_ENCRYPT_NO_VERSION;
-  req_type.encryption_key(key, 32, space->m_encryption_metadata.m_iv, version, 0, nullptr,
-                          space->encryption_redo_key_uuid.get(), nullptr);
-
-  req_type.encryption_rotation(Encryption_rotation::NO_ROTATION);
-}
-
-static bool fil_keyring_skip_encryption(const page_id_t &page_id) {
-  /* Don't encrypt TRX_SYS_SPACE.TRX_SYS_PAGE_NO as it contains the address
-  to dblwr buffer */
-  return page_id.space() == TRX_SYS_SPACE &&
-         page_id.page_no() == TRX_SYS_PAGE_NO;
-}
+#define fil_report_invalid_page_access(b, s, n, o, l, t) \
+  fil_report_invalid_page_access_low((b), (s), (n), (o), (l), (t), __LINE__)
 
 /** Set encryption information for IORequest.
 @param[in,out]  req_type        IO request
