@@ -18,11 +18,11 @@
 
 #include <openssl/bn.h>
 
-#include "opensslpp/big_number.hpp"
+#include <opensslpp/big_number.hpp>
+
+#include <opensslpp/core_error.hpp>
 
 #include "opensslpp/big_number_accessor.hpp"
-#include "opensslpp/core_allocated_buffer.hpp"
-#include "opensslpp/core_error.hpp"
 
 namespace opensslpp {
 
@@ -79,24 +79,29 @@ void big_number::set_primitive_value(std::uintmax_t value) {
 big_number &big_number::operator++() {
   assert(!is_empty());
   if (BN_add_word(big_number_accessor::get_impl(*this), 1) == 0)
-    throw core_error{"cannot increment big value"};
+    throw core_error{"cannot increment big number value"};
   return *this;
 }
 
 big_number &big_number::operator--() {
   assert(!is_empty());
   if (BN_sub_word(big_number_accessor::get_impl(*this), 1) == 0)
-    throw core_error{"cannot increment big value"};
+    throw core_error{"cannot decrement big number value"};
   return *this;
 }
 
+struct openssl_core_deleter {
+  void operator()(char *ptr) const noexcept {
+    if (ptr != nullptr) OPENSSL_free(ptr);
+  }
+};
+using openssl_core_buffer_ptr = std::unique_ptr<char, openssl_core_deleter>;
+
 std::ostream &operator<<(std::ostream &os, const big_number &obj) {
   assert(!obj.is_empty());
-  const auto buffer =
-      core_allocated_buffer{BN_bn2dec(big_number_accessor::get_impl(obj))};
-  if (buffer.is_empty())
-    throw core_error{"cannot convert big number to decimal string"};
-  os << buffer.get_typed_ptr<char>();
+  openssl_core_buffer_ptr buffer{BN_bn2dec(big_number_accessor::get_impl(obj))};
+  if (!buffer) throw core_error{"cannot convert big number to decimal string"};
+  os << buffer.get();
   return os;
 }
 
