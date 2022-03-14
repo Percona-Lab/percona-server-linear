@@ -1,4 +1,4 @@
---source include/have_udf.inc
+--source include/have_encryption_udf_component.inc
 
 #
 # Creating functions from encryption_udf
@@ -8,6 +8,9 @@ INSTALL COMPONENT 'file://component_encryption_udf';
 SET @algorithm = 'RSA';
 SET @message = 'message';
 SET @digest_type = 'SHA224';
+
+# to support different versions of openssl library (1.0.2, 1.1.x and 3.0.x),
+# we need to unify recorded error messages via --replace_regex
 
 --echo
 --echo ** checking 'create_asymmetric_priv_key()' function basics
@@ -45,10 +48,13 @@ SELECT create_asymmetric_pub_key();
 --error ER_CANT_INITIALIZE_UDF
 SELECT create_asymmetric_pub_key(@algorithm);
 
+--replace_regex /(cannot import RSA key from PEM PRIVATE KEY).*/\1/
 --error ER_UDF_ERROR
 SELECT create_asymmetric_pub_key(@algorithm, NULL);
+--replace_regex /(cannot import RSA key from PEM PRIVATE KEY).*/\1/
 --error ER_UDF_ERROR
 SELECT create_asymmetric_pub_key(@algorithm, 42);
+--replace_regex /(cannot import RSA key from PEM PRIVATE KEY).*/\1/
 --error ER_UDF_ERROR
 SELECT create_asymmetric_pub_key(@algorithm, 'blah-blah');
 
@@ -69,8 +75,10 @@ SELECT asymmetric_encrypt(@algorithm, @message);
 
 --error ER_UDF_ERROR
 SELECT asymmetric_encrypt(@algorithm, @message, NULL);
+--replace_regex /(cannot import RSA key from PEM PUBLIC KEY).*/\1/
 --error ER_UDF_ERROR
 SELECT asymmetric_encrypt(@algorithm, @message, 42);
+--replace_regex /(cannot import RSA key from PEM PUBLIC KEY).*/\1/
 --error ER_UDF_ERROR
 SELECT asymmetric_encrypt(@algorithm, @message, 'blah-blah');
 
@@ -91,8 +99,10 @@ SELECT asymmetric_decrypt(@algorithm, @message);
 
 --error ER_UDF_ERROR
 SELECT asymmetric_decrypt(@algorithm, @message, NULL);
+--replace_regex /(cannot import RSA key from PEM PUBLIC KEY).*/\1/
 --error ER_UDF_ERROR
 SELECT asymmetric_decrypt(@algorithm, @message, 42);
+--replace_regex /(cannot import RSA key from PEM PUBLIC KEY).*/\1/
 --error ER_UDF_ERROR
 SELECT asymmetric_decrypt(@algorithm, @message, 'blah-blah');
 
@@ -129,8 +139,10 @@ SELECT asymmetric_sign(@algorithm, NULL, @priv, @digest_type);
 
 --error ER_UDF_ERROR
 SELECT asymmetric_sign(@algorithm, @message_digest, NULL, @digest_type);
+--replace_regex /(cannot import RSA key from PEM PRIVATE KEY).*/\1/
 --error ER_UDF_ERROR
 SELECT asymmetric_sign(@algorithm, @message_digest, 42, @digest_type);
+--replace_regex /(cannot import RSA key from PEM PRIVATE KEY).*/\1/
 --error ER_UDF_ERROR
 SELECT asymmetric_sign(@algorithm, @message_digest, 'blah-blah', @digest_type);
 
@@ -177,8 +189,10 @@ SELECT asymmetric_verify(@algorithm, @message_digest, NULL, @pub, @digest_type);
 
 --error ER_UDF_ERROR
 SELECT asymmetric_verify(@algorithm, @message_digest, @signature, NULL, @digest_type);
+--replace_regex /(cannot import RSA key from PEM PUBLIC KEY).*/\1/
 --error ER_UDF_ERROR
 SELECT asymmetric_verify(@algorithm, @message_digest, @signature, 42, @digest_type);
+--replace_regex /(cannot import RSA key from PEM PUBLIC KEY).*/\1/
 --error ER_UDF_ERROR
 SELECT asymmetric_verify(@algorithm, @message_digest, @signature, 'blah-blah', @digest_type);
 
