@@ -14,10 +14,57 @@ INSTALL COMPONENT 'file://component_encryption_udf';
 eval SET @algorithm = "$algorithm";
 
 --echo ** [$algorithm][$key_length] checking asymmetric algorithm functions
---echo **** [$algorithm][$key_length] generating private key
-eval SET @priv = create_asymmetric_priv_key(@algorithm, $key_length);
---echo **** [$algorithm][$key_length] deriving public key
-SET @pub = create_asymmetric_pub_key(@algorithm, @priv);
+if (!$use_openssl_binary)
+{
+  --echo **** [$algorithm][$key_length] generating private key
+  eval SET @priv = create_asymmetric_priv_key(@algorithm, $key_length);
+}
+if ($use_openssl_binary)
+{
+  --let $private_key_file_path = $MYSQLTEST_VARDIR/tmp/private.pem
+  --echo **** [$algorithm][$key_length] generating private key with openssl binary
+  if ($algorithm == 'RSA')
+  {
+    --let $subcommand = genrsa
+  }
+  if ($algorithm == 'DSA')
+  {
+    --let $subcommand = dsaparam -genkey -noout
+  }
+  --exec openssl $subcommand -out $private_key_file_path $key_length
+  --replace_result $private_key_file_path <PRIVATE_KEY_FILE_PATH>
+  eval SET @priv = TRIM(TRAILING '\n' FROM LOAD_FILE('$private_key_file_path'));
+}
+
+if (!$use_openssl_binary)
+{
+  --echo **** [$algorithm][$key_length] deriving public key
+  SET @pub = create_asymmetric_pub_key(@algorithm, @priv);
+}
+if ($use_openssl_binary)
+{
+  --let $public_key_file_path = $MYSQLTEST_VARDIR/tmp/public.pem
+  --echo **** [$algorithm][$key_length] deriving public key with openssl binary
+  if ($algorithm == 'RSA')
+  {
+    --let $subcommand = rsa
+  }
+  if ($algorithm == 'DSA')
+  {
+    --let $subcommand = dsa
+  }
+  --exec openssl $subcommand -in $private_key_file_path -pubout -out $public_key_file_path
+  --replace_result $public_key_file_path <PUBLIC_KEY_FILE_PATH>
+  eval SET @pub = TRIM(TRAILING '\n' FROM LOAD_FILE('$public_key_file_path'));
+  --remove_file $public_key_file_path
+  --remove_file $private_key_file_path
+
+  --let $assert_text = [$algorithm][$key_length] public key created with create_asymmetric_pub_key must be identical to the one created with openssl $subcommand
+  --let $assert_cond = @pub = create_asymmetric_pub_key(@algorithm, @priv)
+  --let $include_silent = 1
+  --source include/assert.inc
+  --let $include_silent =
+}
 
 # for RSA <max message size> = <key length in bytes> - <pkcs1 padding>
 --let $max_message_size = `SELECT $key_length DIV 8`
@@ -36,7 +83,7 @@ if ($algorithm == 'RSA')
   --echo ****** [$algorithm][$key_length] checking encryption with public key of NULL message
   --error ER_UDF_ERROR
   SELECT asymmetric_encrypt(@algorithm, @message, @pub);
-  --echo ****** [$algorithm][$key_length] checking encryption with privcate key of NULL message
+  --echo ****** [$algorithm][$key_length] checking encryption with private key of NULL message
   --error ER_UDF_ERROR
   SELECT asymmetric_encrypt(@algorithm, @message, @priv);
 }
@@ -52,6 +99,15 @@ while ($message_index <= 4)
   {
     --echo ****** [$algorithm][$key_length][message_len=$message_length] checking encryption with public key
     SET @message_enc_with_pub = asymmetric_encrypt(@algorithm, @message, @pub);
+    # RSA encryption with public key should include random bytes in padding and therefore
+    # calls to "asymmetric_encrypt('RSA', @message, @pub)" with the same arguments are expected to
+    # return different results
+    --let $assert_text = [$algorithm][$key_length][message_len=$message_length] message encrypted with public key for the second time must differ
+    --let $assert_cond = @message_enc_with_pub <> asymmetric_encrypt(@algorithm, @message, @pub)
+    --let $include_silent = 1
+    --source include/assert.inc
+    --let $include_silent =
+
     --echo ****** [$algorithm][$key_length][message_len=$message_length] checking decryption with private key
     SET @message_dec_with_priv = asymmetric_decrypt(@algorithm, @message_enc_with_pub, @priv);
     --let $assert_text = [$algorithm][$key_length][message_len=$message_length] message decrypted with private key must match the original one
@@ -62,6 +118,15 @@ while ($message_index <= 4)
 
     --echo ****** [$algorithm][$key_length][message_len=$message_length] checking encryption with private key
     SET @message_enc_with_priv = asymmetric_encrypt(@algorithm, @message, @priv);
+    # RSA encryption with private key should be deterministic and therefore
+    # calls to "asymmetric_encrypt('RSA', @message, @pub)" with the same arguments are expected to
+    # return identical results
+    --let $assert_text = [$algorithm][$key_length][message_len=$message_length] message encrypted with private key for the second time must not differ
+    --let $assert_cond = @message_enc_with_priv = asymmetric_encrypt(@algorithm, @message, @priv)
+    --let $include_silent = 1
+    --source include/assert.inc
+    --let $include_silent =
+
     --echo ****** [$algorithm][$key_length][message_len=$message_length] checking decryption with public key
     SET @message_dec_with_pub = asymmetric_decrypt(@algorithm, @message_enc_with_priv, @pub);
     --let $assert_text = [$algorithm][$key_length][message_len=$message_length] message decrypted with public key must match the original one
@@ -81,6 +146,26 @@ while ($message_index <= 4)
     SET @message_digest = create_digest(@digest_type, @message);
     --echo ******** [$algorithm][$key_length][message_len=$message_length][$digest_name] calculating signature
     SET @message_signature = asymmetric_sign(@algorithm, @message_digest, @priv, @digest_type);
+    if ($algorithm == 'RSA')
+    {
+      # RSA signing with private key should be deterministic and therefore
+      # calls to "asymmetric_sign('RSA', @message_digest, @priv, @digest_type)" with the same arguments
+      # are expected to return identical results
+      --let $assert_text = [$algorithm][$key_length][message_len=$message_length][$digest_name] calculating signature for the second time must not differ
+      --let $assert_cond = @message_signature = asymmetric_sign(@algorithm, @message_digest, @priv, @digest_type)
+    }
+    if ($algorithm == 'DSA')
+    {
+      # DSA signing with private key should include random bytes in padding and therefore
+      # calls to "asymmetric_sign('DSA', @message_digest, @priv, @digest_type)" with the same arguments
+      # are expected to return different results
+      --let $assert_text = [$algorithm][$key_length][message_len=$message_length][$digest_name] calculating signature for the second time must not differ
+      --let $assert_cond = @message_signature <> asymmetric_sign(@algorithm, @message_digest, @priv, @digest_type)
+    }
+    --let $include_silent = 1
+    --source include/assert.inc
+    --let $include_silent =
+
     --echo ******** [$algorithm][$key_length][message_len=$message_length][$digest_name] verifying signature
     SET @verification_result = asymmetric_verify(@algorithm, @message_digest, @message_signature, @pub, @digest_type);
     --let $assert_text = [$algorithm][$key_length][message_len=$message_length][$digest_name] signature must pass verification
