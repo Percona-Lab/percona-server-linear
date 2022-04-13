@@ -1013,7 +1013,7 @@ fi
 %attr(755, root, root) %{_libdir}/mysql/plugin/semisync_source.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/component_test_mysql_thd_store_service.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/component_test_server_telemetry_traces.so
-%attr(755, root, root) %{_libdir}/mysql/plugin/audit_log_filter.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/component_audit_log_filter.so
 
 %dir %{_libdir}/mysql/plugin/debug
 %attr(755, root, root) %{_libdir}/mysql/plugin/debug/data_masking.so
@@ -1064,7 +1064,7 @@ fi
 %attr(755, root, root) %{_libdir}/mysql/plugin/debug/semisync_source.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/debug/component_test_mysql_thd_store_service.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/debug/component_test_server_telemetry_traces.so
-%attr(755, root, root) %{_libdir}/mysql/plugin/debug/audit_log_filter.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/debug/component_audit_log_filter.so
 %if 0%{?mecab}
 %{_libdir}/mysql/mecab
 %attr(755, root, root) %{_libdir}/mysql/plugin/libpluginmecab.so
