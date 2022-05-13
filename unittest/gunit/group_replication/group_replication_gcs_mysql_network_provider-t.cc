@@ -499,7 +499,7 @@ TEST_F(MySQLNetworkProviderTest, NewServerConnectionTest) {
   // Vio *active_vio = (Vio *)malloc(sizeof(Vio));
   MYSQL_VIO active_vio = vio_new(socket_to_use, VIO_TYPE_TCPIP, 0);
   active_vio->mysql_socket.fd = socket_to_use;
-  active_vio->vioshutdown = [](Vio *) { return 0; };
+  active_vio->vioshutdown = [](Vio *, int) { return 0; };
 
   fake_thd.set_active_vio(active_vio);
 
@@ -531,13 +531,13 @@ TEST_F(MySQLNetworkProviderTest, BusyServerConnectionIsRejectedAndCanRetry) {
   THD first_thd(false);
   MYSQL_VIO first_vio = vio_new(first_socket, VIO_TYPE_TCPIP, 0);
   first_vio->mysql_socket.fd = first_socket;
-  first_vio->vioshutdown = [](Vio *) { return 0; };
+  first_vio->vioshutdown = [](Vio *, int) { return 0; };
   first_thd.set_active_vio(first_vio);
 
   THD second_thd(false);
   MYSQL_VIO second_vio = vio_new(second_socket, VIO_TYPE_TCPIP, 0);
   second_vio->mysql_socket.fd = second_socket;
-  second_vio->vioshutdown = [](Vio *) { return 0; };
+  second_vio->vioshutdown = [](Vio *, int) { return 0; };
   second_thd.set_active_vio(second_vio);
 
   Network_connection first_connection(first_socket);
