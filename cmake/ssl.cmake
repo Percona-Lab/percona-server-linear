@@ -482,7 +482,6 @@ MACRO (MYSQL_CHECK_SSL)
       CHECK_SYMBOL_EXISTS(X509_check_host "openssl/x509v3.h" HAVE_X509_CHECK_HOST)
       CHECK_SYMBOL_EXISTS(X509_check_ip "openssl/x509v3.h" HAVE_X509_CHECK_IP)
       cmake_pop_check_state()
-
     ELSE()
       RESET_SSL_VARIABLES()
       FATAL_SSL_NOT_FOUND_ERROR(
