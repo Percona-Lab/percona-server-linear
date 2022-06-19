@@ -16,6 +16,7 @@
 #ifndef AUDIT_LOG_FILTER_SYS_VARS_H_INCLUDED
 #define AUDIT_LOG_FILTER_SYS_VARS_H_INCLUDED
 
+#include "plugin/audit_log_filter/audit_base_component.h"
 #include "plugin/audit_log_filter/component_registry_service.h"
 #include "plugin/audit_log_filter/log_record_formatter/base.h"
 #include "plugin/audit_log_filter/log_writer/base.h"
@@ -27,12 +28,36 @@
 namespace audit_log_filter {
 
 class SysVarServices;
+class SysVars;
 
 using log_record_formatter::AuditLogFormatType;
 using log_writer::AuditLogHandlerType;
 using log_writer_strategy::AuditLogStrategyType;
 
-class SysVars {
+template <typename T>
+class VarWrapper {
+ public:
+  explicit VarWrapper(T def_value) : m_value{def_value}, m_container{nullptr} {}
+
+  VarWrapper &operator=(T val) noexcept {
+    m_value = val;
+    return *this;
+  }
+
+  explicit operator const T &() const noexcept { return m_value; }
+  explicit operator T &() noexcept { return m_value; }
+
+  [[nodiscard]] SysVars *get_container() const noexcept { return m_container; }
+  void set_container(SysVars *container) noexcept { m_container = container; }
+
+  [[nodiscard]] T value() const noexcept { return m_value; }
+
+ private:
+  T m_value;
+  SysVars *m_container;
+};
+
+class SysVars : public AuditBaseComponent {
  public:
   SysVars() = delete;
   explicit SysVars(comp_registry_srv_t *comp_registry_srv);
@@ -79,8 +104,8 @@ class SysVars {
    * @return Audit log filter file logging strategy, may be one of possible
    *         values of AuditLogStrategyType
    */
-  [[nodiscard]] AuditLogStrategyType get_file_strategy() noexcept {
-    return m_file_stategy;
+  [[nodiscard]] AuditLogStrategyType get_file_strategy_type() noexcept {
+    return m_file_stategy_type;
   }
 
   /**
@@ -88,24 +113,38 @@ class SysVars {
    *
    * @return Size of memory buffer used for logging in bytes
    */
-  [[nodiscard]] ulonglong get_buffer_size() noexcept { return m_buffer_size; }
+  [[nodiscard]] ulonglong get_buffer_size() const noexcept {
+    return m_buffer_size;
+  }
 
   /**
    * @brief Get the maximum size of the audit filter log file in bytes.
    *
    * @return Maximum size of the audit filter log file in bytes
    */
-  [[nodiscard]] ulonglong get_rotate_on_size() noexcept {
+  [[nodiscard]] ulonglong get_rotate_on_size() const noexcept {
     return m_rotate_on_size;
   }
 
   /**
-   * @brief Get the number of log files which should be kept when rotations
-   *        are done.
+   * @brief Get the maximum combined size above which log files become subject
+   *        to pruning.
    *
-   * @return Number of rotated log files kept on disk
+   * @return Maximum combined size for log files
    */
-  [[nodiscard]] ulonglong get_rotations() noexcept { return m_rotations; }
+  [[nodiscard]] ulonglong get_log_max_size() const noexcept {
+    return m_log_max_size.value();
+  }
+
+  /**
+   * @brief Get the number of seconds after which log files become subject
+   *        to pruning.
+   *
+   * @return Number of seconds after which log files may be pruned
+   */
+  [[nodiscard]] ulonglong get_log_prune_seconds() const noexcept {
+    return m_log_prune_seconds.value();
+  }
 
   /**
    * @brief Get the syslog messages tag value.
@@ -121,14 +160,20 @@ class SysVars {
    *
    * @return Facility value for syslog
    */
-  [[nodiscard]] int get_syslog_facility() noexcept;
+  [[nodiscard]] int get_syslog_facility() const noexcept;
 
   /**
    * @brief Get the priority value for syslog.
    *
    * @return Priority value for syslog
    */
-  [[nodiscard]] int get_syslog_priority() noexcept;
+  [[nodiscard]] int get_syslog_priority() const noexcept;
+
+ private:
+  /**
+   * @brief Check plugin configuration is correct.
+   */
+  void validate() const noexcept;
 
  private:
   comp_registry_srv_t *m_comp_registry_srv;
@@ -136,13 +181,15 @@ class SysVars {
   char *m_file_name = nullptr;
   AuditLogHandlerType m_handler_type = AuditLogHandlerType::File;
   AuditLogFormatType m_format_type = AuditLogFormatType::New;
-  AuditLogStrategyType m_file_stategy = AuditLogStrategyType::Asynchronous;
+  AuditLogStrategyType m_file_stategy_type = AuditLogStrategyType::Asynchronous;
   ulonglong m_buffer_size = 1048576UL;
   ulonglong m_rotate_on_size = 0UL;
-  ulonglong m_rotations = 0UL;
   char *m_syslog_ident = nullptr;
   ulong m_syslog_facility = 0UL;
   ulong m_syslog_priority = 0UL;
+  VarWrapper<bool> m_log_flush_requested{false};
+  VarWrapper<ulonglong> m_log_max_size{0};
+  VarWrapper<ulonglong> m_log_prune_seconds{0};
 };
 
 }  // namespace audit_log_filter
