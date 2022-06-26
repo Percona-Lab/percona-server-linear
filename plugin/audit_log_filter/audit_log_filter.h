@@ -18,6 +18,7 @@
 
 #include "mysql/plugin_audit.h"
 #include "plugin/audit_log_filter/audit_base_mediator.h"
+#include "plugin/audit_log_filter/audit_record.h"
 #include "plugin/audit_log_filter/component_registry_service.h"
 
 namespace audit_log_filter {
@@ -72,6 +73,9 @@ class AuditLogFilter : public AuditBaseMediator {
    * @brief Handle log files prunning request.
    */
   void on_audit_log_prune_requested() noexcept override;
+
+ private:
+  void get_connection_attrs(MYSQL_THD thd, AuditRecordVariant &audit_record);
 
  private:
   comp_registry_srv_container_t m_comp_registry_srv;
