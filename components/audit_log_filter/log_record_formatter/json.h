@@ -18,6 +18,12 @@
 
 #include "base.h"
 
+#include "components/audit_log_filter/audit_record.h"
+
+#include <mysql/components/services/defs/event_tracking_lifecycle_defs.h>
+
+#include <string_view>
+
 namespace audit_log_filter::log_record_formatter {
 
 template <>
@@ -30,10 +36,8 @@ class LogRecordFormatter<AuditLogFormatType::Json>
    * @param [in] audit_record Audit record
    * @return String representing formatted audit record
    */
-  [[nodiscard]] AuditRecordString apply(const AuditRecordGeneral &audit_record [
-      [maybe_unused]]) const noexcept override {
-    return "";
-  }
+  [[nodiscard]] AuditRecordString apply(
+      const AuditRecordGeneral &audit_record) const noexcept override;
 
   /**
    * @brief Apply formatting to AuditRecordConnection audit record.
@@ -42,21 +46,7 @@ class LogRecordFormatter<AuditLogFormatType::Json>
    * @return String representing formatted audit record
    */
   [[nodiscard]] AuditRecordString apply(
-      const AuditRecordConnection &audit_record
-      [[maybe_unused]]) const noexcept override {
-    return "";
-  }
-
-  /**
-   * @brief Apply formatting to AuditRecordParse audit record.
-   *
-   * @param [in] audit_record Audit record
-   * @return String representing formatted audit record
-   */
-  [[nodiscard]] AuditRecordString apply(const AuditRecordParse &audit_record [
-      [maybe_unused]]) const noexcept override {
-    return "";
-  }
+      const AuditRecordConnection &audit_record) const noexcept override;
 
   /**
    * @brief Apply formatting to AuditRecordTableAccess audit record.
@@ -65,10 +55,7 @@ class LogRecordFormatter<AuditLogFormatType::Json>
    * @return String representing formatted audit record
    */
   [[nodiscard]] AuditRecordString apply(
-      const AuditRecordTableAccess &audit_record
-      [[maybe_unused]]) const noexcept override {
-    return "";
-  }
+      const AuditRecordTableAccess &audit_record) const noexcept override;
 
   /**
    * @brief Apply formatting to AuditRecordGlobalVariable audit record.
@@ -77,10 +64,7 @@ class LogRecordFormatter<AuditLogFormatType::Json>
    * @return String representing formatted audit record
    */
   [[nodiscard]] AuditRecordString apply(
-      const AuditRecordGlobalVariable &audit_record
-      [[maybe_unused]]) const noexcept override {
-    return "";
-  }
+      const AuditRecordGlobalVariable &audit_record) const noexcept override;
 
   /**
    * @brief Apply formatting to AuditRecordServerStartup audit record.
@@ -89,10 +73,7 @@ class LogRecordFormatter<AuditLogFormatType::Json>
    * @return String representing formatted audit record
    */
   [[nodiscard]] AuditRecordString apply(
-      const AuditRecordServerStartup &audit_record
-      [[maybe_unused]]) const noexcept override {
-    return "";
-  }
+      const AuditRecordServerStartup &audit_record) const noexcept override;
 
   /**
    * @brief Apply formatting to AuditRecordServerShutdown audit record.
@@ -101,10 +82,7 @@ class LogRecordFormatter<AuditLogFormatType::Json>
    * @return String representing formatted audit record
    */
   [[nodiscard]] AuditRecordString apply(
-      const AuditRecordServerShutdown &audit_record
-      [[maybe_unused]]) const noexcept override {
-    return "";
-  }
+      const AuditRecordServerShutdown &audit_record) const noexcept override;
 
   /**
    * @brief Apply formatting to AuditRecordCommand audit record.
@@ -112,10 +90,8 @@ class LogRecordFormatter<AuditLogFormatType::Json>
    * @param [in] audit_record Audit record
    * @return String representing formatted audit record
    */
-  [[nodiscard]] AuditRecordString apply(const AuditRecordCommand &audit_record [
-      [maybe_unused]]) const noexcept override {
-    return "";
-  }
+  [[nodiscard]] AuditRecordString apply(
+      const AuditRecordCommand &audit_record) const noexcept override;
 
   /**
    * @brief Apply formatting to AuditRecordQuery audit record.
@@ -123,10 +99,8 @@ class LogRecordFormatter<AuditLogFormatType::Json>
    * @param [in] audit_record Audit record
    * @return String representing formatted audit record
    */
-  [[nodiscard]] AuditRecordString apply(const AuditRecordQuery &audit_record [
-      [maybe_unused]]) const noexcept override {
-    return "";
-  }
+  [[nodiscard]] AuditRecordString apply(
+      const AuditRecordQuery &audit_record) const noexcept override;
 
   /**
    * @brief Apply formatting to AuditRecordStoredProgram audit record.
@@ -135,10 +109,7 @@ class LogRecordFormatter<AuditLogFormatType::Json>
    * @return String representing formatted audit record
    */
   [[nodiscard]] AuditRecordString apply(
-      const AuditRecordStoredProgram &audit_record
-      [[maybe_unused]]) const noexcept override {
-    return "";
-  }
+      const AuditRecordStoredProgram &audit_record) const noexcept override;
 
   /**
    * @brief Apply formatting to AuditRecordAuthentication audit record.
@@ -147,10 +118,7 @@ class LogRecordFormatter<AuditLogFormatType::Json>
    * @return String representing formatted audit record
    */
   [[nodiscard]] AuditRecordString apply(
-      const AuditRecordAuthentication &audit_record
-      [[maybe_unused]]) const noexcept override {
-    return "";
-  }
+      const AuditRecordAuthentication &audit_record) const noexcept override;
 
   /**
    * @brief Apply formatting to AuditRecordMessage audit record.
@@ -158,28 +126,38 @@ class LogRecordFormatter<AuditLogFormatType::Json>
    * @param [in] audit_record Audit record
    * @return String representing formatted audit record
    */
-  [[nodiscard]] AuditRecordString apply(const AuditRecordMessage &audit_record [
-      [maybe_unused]]) const noexcept override {
-    return "";
-  }
+  [[nodiscard]] AuditRecordString apply(
+      const AuditRecordMessage &audit_record) const noexcept override;
+
+  /**
+   * @brief Apply formatting to AuditRecordParse audit record.
+   *
+   * @param [in] audit_record Audit record
+   * @return String representing formatted audit record
+   */
+  [[nodiscard]] AuditRecordString apply(
+      const AuditRecordParse &audit_record) const noexcept override;
 
   /**
    * @brief Get log file header string.
    *
    * @return Log file header string
    */
-  [[nodiscard]] std::string get_file_header() const noexcept override {
-    return "";
-  }
+  [[nodiscard]] std::string get_file_header() const noexcept override;
 
   /**
    * @brief Get log file footer string.
    *
    * @return Log file footer string
    */
-  [[nodiscard]] std::string get_file_footer() const noexcept override {
-    return "";
-  }
+  [[nodiscard]] std::string get_file_footer() const noexcept override;
+
+  /**
+   * @brief Get separator added between event records in a log file.
+   *
+   * @return Event records separator string
+   */
+  [[nodiscard]] std::string get_record_separator() const noexcept override;
 
   /**
    * @brief Insert audit event class and subclass names into record printed to
@@ -189,18 +167,150 @@ class LogRecordFormatter<AuditLogFormatType::Json>
    * @param event_subclass_name Event subclass name
    * @param record_str String representation of audit record
    */
-  void apply_debug_info(std::string_view event_class_name [[maybe_unused]],
-                        std::string_view event_subclass_name [[maybe_unused]],
-                        std::string &record_str
-                        [[maybe_unused]]) noexcept override {}
+  void apply_debug_info(std::string_view event_class_name,
+                        std::string_view event_subclass_name,
+                        std::string &record_str) noexcept override;
 
  private:
+  /**
+   * @brief Get string representation of audit event subclass name.
+   *
+   * @param event Audit event
+   * @return String representation of audit event subclass name
+   */
+  [[nodiscard]] std::string_view event_subclass_to_string(
+      const mysql_event_tracking_general_data *event) const noexcept override;
+
+  /**
+   * @brief Get string representation of audit event subclass name.
+   *
+   * @param event Audit event
+   * @return String representation of audit event subclass name
+   */
+  [[nodiscard]] std::string_view event_subclass_to_string(
+      const mysql_event_tracking_connection_data *event)
+      const noexcept override;
+
+  /**
+   * @brief Get string representation of audit event subclass name.
+   *
+   * @param event Audit event
+   * @return String representation of audit event subclass name
+   */
+  [[nodiscard]] std::string_view event_subclass_to_string(
+      const mysql_event_tracking_table_access_data *event)
+      const noexcept override;
+
+  /**
+   * @brief Get string representation of audit event subclass name.
+   *
+   * @param event Audit event
+   * @return String representation of audit event subclass name
+   */
+  [[nodiscard]] std::string_view event_subclass_to_string(
+      const mysql_event_tracking_global_variable_data *event)
+      const noexcept override;
+
+  /**
+   * @brief Get string representation of audit event subclass name.
+   *
+   * @param event Audit event
+   * @return String representation of audit event subclass name
+   */
+  [[nodiscard]] std::string_view event_subclass_to_string(
+      const mysql_event_tracking_command_data *event) const noexcept override;
+
+  /**
+   * @brief Get string representation of audit event subclass name.
+   *
+   * @param event Audit event
+   * @return String representation of audit event subclass name
+   */
+  [[nodiscard]] std::string_view event_subclass_to_string(
+      const mysql_event_tracking_query_data *event) const noexcept override;
+
+  /**
+   * @brief Get string representation of audit event subclass name.
+   *
+   * @param event Audit event
+   * @return String representation of audit event subclass name
+   */
+  [[nodiscard]] std::string_view event_subclass_to_string(
+      const mysql_event_tracking_authentication_data *event)
+      const noexcept override;
+
+  /**
+   * @brief Get string representation of audit event subclass name.
+   *
+   * @param event Audit event
+   * @return String representation of audit event subclass name
+   */
+  [[nodiscard]] std::string_view event_subclass_to_string(
+      const mysql_event_tracking_startup_data *event) const noexcept override;
+
+  /**
+   * @brief Get string representation of audit event subclass name.
+   *
+   * @param event Audit event
+   * @return String representation of audit event subclass name
+   */
+  [[nodiscard]] std::string_view event_subclass_to_string(
+      const mysql_event_tracking_shutdown_data *event) const noexcept override;
+
+  /**
+   * @brief Get string representation of audit event subclass name.
+   *
+   * @param event Audit event
+   * @return String representation of audit event subclass name
+   */
+  [[nodiscard]] std::string_view event_subclass_to_string(
+      const mysql_event_tracking_stored_program_data *event)
+      const noexcept override;
+
+  /**
+   * @brief Get string representation of audit event subclass name.
+   *
+   * @param event Audit event
+   * @return String representation of audit event subclass name
+   */
+  [[nodiscard]] std::string_view event_subclass_to_string(
+      const mysql_event_tracking_message_data *event) const noexcept override;
+
+  /**
+   * @brief Get string representation of audit event subclass name.
+   *
+   * @param event Audit event
+   * @return String representation of audit event subclass name
+   */
+  [[nodiscard]] std::string_view event_subclass_to_string(
+      const mysql_event_tracking_parse_data *event) const noexcept override;
+
+  /**
+   * @brief Get string representation of connection type name.
+   *
+   * @param connection_type Connection type
+   * @return String representation of connection type name
+   */
+  [[nodiscard]] std::string_view connection_type_name_to_string(
+      int connection_type) const noexcept override;
+
+  /**
+   * @brief Get string representation of shutdown reason.
+   *
+   * @param reason Shutdown reason
+   * @return String representation of shutdown reason
+   */
+  [[nodiscard]] std::string_view shutdown_reason_to_string(
+      mysql_event_tracking_shutdown_reason_t reason) const noexcept override;
+
   /**
    * @brief Get escape rules.
    *
    * @return Escape rules
    */
-  const EscapeRulesContainer &get_escape_rules() const noexcept override;
+  [[nodiscard]] const EscapeRulesContainer &get_escape_rules()
+      const noexcept override;
+
 };
 
 using LogRecordFormatterJson = LogRecordFormatter<AuditLogFormatType::Json>;
