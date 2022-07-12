@@ -1531,6 +1531,8 @@ static inline space_id_t dict_check_sys_tables(bool validate) {
 
   DBUG_TRACE;
 
+  auto guard = create_scope_guard([&pcur]() { pcur.close(); });
+
   ut_ad(dict_sys_mutex_own());
 
   mtr_start(&mtr);
