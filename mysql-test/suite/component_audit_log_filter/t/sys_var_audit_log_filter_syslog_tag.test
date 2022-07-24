@@ -3,12 +3,12 @@
 --source ../inc/audit_comp_install.inc
 
 --error ER_INCORRECT_GLOBAL_LOCAL_VAR
-SET GLOBAL audit_log_filter.syslog_priority=LOG_WARNING;
-SELECT @@global.audit_log_filter.syslog_priority;
+SET GLOBAL audit_log_filter.syslog_tag=audit-filter-test;
+SELECT @@global.audit_log_filter.syslog_tag;
 
---let $restart_parameters="restart: --audit-log-filter.syslog-priority=LOG_WARNING"
+--let $restart_parameters="restart: --audit-log-filter.syslog-tag='audit-filter-test'"
 --source include/restart_mysqld.inc
-SELECT @@global.audit_log_filter.syslog_priority;
+SELECT @@global.audit_log_filter.syslog_tag;
 
 --let $restart_parameters="restart:"
 --source include/restart_mysqld.inc
