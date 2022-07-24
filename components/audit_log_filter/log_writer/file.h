@@ -28,9 +28,8 @@ namespace log_writer {
 template <>
 class LogWriter<AuditLogHandlerType::File> : public LogWriterBase {
  public:
-  LogWriter<AuditLogHandlerType::File>() = delete;
-  LogWriter<AuditLogHandlerType::File>(
-      std::shared_ptr<SysVars> config,
+  LogWriter() = delete;
+  explicit LogWriter(
       std::unique_ptr<log_record_formatter::LogRecordFormatterBase> formatter);
   ~LogWriter() override;
 
