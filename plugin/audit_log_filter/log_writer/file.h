@@ -33,8 +33,7 @@ template <>
 class LogWriter<AuditLogHandlerType::File> : public LogWriterBase {
  public:
   LogWriter<AuditLogHandlerType::File>() = delete;
-  LogWriter<AuditLogHandlerType::File>(
-      std::shared_ptr<SysVars> config,
+  explicit LogWriter<AuditLogHandlerType::File>(
       std::unique_ptr<log_record_formatter::LogRecordFormatterBase> formatter);
   ~LogWriter<AuditLogHandlerType::File>() override;
 
