@@ -26,6 +26,7 @@
 #include "plugin/audit_log_filter/sys_vars.h"
 
 #include <mysql/components/services/mysql_connection_attributes_iterator.h>
+#include <mysql/components/services/security_context.h>
 
 #include "mysql/plugin.h"
 #include "sql/debug_sync.h"
@@ -55,45 +56,6 @@ void my_plugin_perror() noexcept {
   char errbuf[MYSYS_STRERROR_SIZE];
   my_strerror(errbuf, sizeof(errbuf), errno);
   LogPluginErrMsg(ERROR_LEVEL, ER_LOG_PRINTF_MSG, "Error: %s", errbuf);
-}
-
-/**
- * @brief Get user and host name from connection THD instance
- *
- * @param thd Server thread instance
- * @param user_name Returned user name
- * @param user_host Returned host name
- * @return true in case user and host name are fetched successfully,
- *         false otherwise
- */
-bool get_connection_user(MYSQL_THD thd, std::string &user_name,
-                         std::string &user_host) {
-  LEX_STRING user;
-  LEX_STRING host;
-  MYSQL_SECURITY_CONTEXT ctx;
-
-  if (thd_get_security_context(thd, &ctx)) {
-    LogPluginErr(INFORMATION_LEVEL, ER_LOG_PRINTF_MSG,
-                 "Can not get security context");
-    return false;
-  }
-
-  if (security_context_get_option(ctx, "priv_user", &user)) {
-    LogPluginErr(INFORMATION_LEVEL, ER_LOG_PRINTF_MSG,
-                 "Can not get user name from security context");
-    return false;
-  }
-
-  if (security_context_get_option(ctx, "priv_host", &host)) {
-    LogPluginErr(INFORMATION_LEVEL, ER_LOG_PRINTF_MSG,
-                 "Can not get user host from security context");
-    return false;
-  }
-
-  user_name = user.str;
-  user_host = host.str;
-
-  return true;
 }
 
 }  // namespace
@@ -229,6 +191,10 @@ int audit_log_filter_init(MYSQL_PLUGIN plugin_info [[maybe_unused]]) {
       std::move(comp_registry_srv), std::move(audit_rule_registry),
       std::move(audit_udf), std::move(log_writer));
 
+  if (SysVars::get_log_disabled()) {
+    LogPluginErr(WARNING_LEVEL, ER_WARN_AUDIT_LOG_FILTER_DISABLED);
+  }
+
   return 0;
 }
 
@@ -282,6 +248,10 @@ AuditLogFilter::AuditLogFilter(
 
 int AuditLogFilter::notify_event(MYSQL_THD thd, mysql_event_class_t event_class,
                                  const void *event) {
+  if (SysVars::get_log_disabled()) {
+    return 0;
+  }
+
   LogPluginErrMsg(INFORMATION_LEVEL, ER_LOG_PRINTF_MSG,
                   "Audit event %i received ===================", event_class);
 
@@ -320,6 +290,8 @@ int AuditLogFilter::notify_event(MYSQL_THD thd, mysql_event_class_t event_class,
                     "Failed to find '%s' filtering rule", rule_name.c_str());
     return 0;
   }
+
+  SysVars::set_session_filter_id(thd, filter_rule->get_filter_id());
 
   LogPluginErrMsg(INFORMATION_LEVEL, ER_LOG_PRINTF_MSG,
                   "Found filtering rule '%s' with the definition '%s'",
@@ -421,6 +393,58 @@ void AuditLogFilter::get_connection_attrs(MYSQL_THD thd,
   }
 
   attrs_service->deinit(iterator);
+}
+
+bool AuditLogFilter::get_connection_user(
+    MYSQL_THD thd, std::string &user_name, std::string &user_host) noexcept {
+  my_service<SERVICE_TYPE(mysql_thd_security_context)> security_context_service(
+      "mysql_thd_security_context", m_comp_registry_srv.get());
+  my_service<SERVICE_TYPE(mysql_security_context_options)>
+      security_context_opts_service(
+        "mysql_security_context_options", m_comp_registry_srv.get());
+
+  if (!security_context_service.is_valid() ||
+      !security_context_opts_service.is_valid()) {
+    return false;
+  }
+
+  Security_context_handle ctx;
+
+  if (security_context_service->get(thd, &ctx)) {
+    LogPluginErr(INFORMATION_LEVEL, ER_LOG_PRINTF_MSG,
+                 "Can not get security context");
+    return false;
+  }
+
+  MYSQL_LEX_CSTRING user{"", 0};
+  MYSQL_LEX_CSTRING host{"", 0};
+
+  if (security_context_opts_service->get(ctx, "user", &user)) {
+    LogPluginErr(INFORMATION_LEVEL, ER_LOG_PRINTF_MSG,
+                 "Can not get user name from security context");
+    return false;
+  }
+
+  if (security_context_opts_service->get(ctx, "host", &host)) {
+    LogPluginErr(INFORMATION_LEVEL, ER_LOG_PRINTF_MSG,
+                 "Can not get user host from security context");
+    return false;
+  }
+
+  if (user.length == 0 || host.length == 0) {
+    LogPluginErr(INFORMATION_LEVEL, ER_LOG_PRINTF_MSG,
+                 "No user name or host name found in security context");
+    return false;
+  }
+
+  user_name = user.str;
+  user_host = host.str;
+
+  return true;
+}
+
+comp_registry_srv_t *AuditLogFilter::get_comp_registry_srv() noexcept {
+  return m_comp_registry_srv.get();
 }
 
 }  // namespace audit_log_filter
