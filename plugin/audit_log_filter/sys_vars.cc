@@ -16,6 +16,7 @@
 #include "plugin/audit_log_filter/sys_vars.h"
 #include "plugin/audit_log_filter/audit_error_log.h"
 #include "plugin/audit_log_filter/audit_log_filter.h"
+#include "plugin/audit_log_filter/audit_log_reader.h"
 
 #include <mysql/components/services/dynamic_privilege.h>
 #include <mysql/components/services/security_context.h>
@@ -32,6 +33,9 @@
 namespace audit_log_filter {
 namespace {
 
+std::atomic<uint64_t> record_id{0};
+LogBookmark log_bookmark;
+
 /*
  * Status variables
  */
@@ -43,6 +47,7 @@ std::atomic<uint64_t> write_waits{0};
 std::atomic<uint64_t> event_max_drop_size{0};
 std::atomic<uint64_t> current_log_size{0};
 std::atomic<uint64_t> total_log_size{0};
+std::atomic<uint64_t> buffer_bypassing_writes{0};
 
 int show_events_total(THD *, SHOW_VAR *var, char *buff) {
   var->type = SHOW_LONG;
@@ -108,6 +113,14 @@ int show_total_log_size(THD *, SHOW_VAR *var, char *buff) {
   return 0;
 }
 
+int show_buffer_bypassing_writes(THD *, SHOW_VAR *var, char *buff) {
+  var->type = SHOW_LONG;
+  var->value = buff;
+  auto *value = reinterpret_cast<uint64_t *>(buff);
+  *value = buffer_bypassing_writes.load(std::memory_order_relaxed);
+  return 0;
+}
+
 SHOW_VAR status_vars[] = {
     {"Audit_log_filter_events", reinterpret_cast<char *>(&show_events_total),
      SHOW_FUNC, SHOW_SCOPE_GLOBAL},
@@ -129,6 +142,9 @@ SHOW_VAR status_vars[] = {
      SHOW_SCOPE_GLOBAL},
     {"Audit_log_filter_total_size",
      reinterpret_cast<char *>(&show_total_log_size), SHOW_FUNC,
+     SHOW_SCOPE_GLOBAL},
+    {"Audit_log_filter_buffer_bypassing_writes",
+     reinterpret_cast<char *>(&show_buffer_bypassing_writes), SHOW_FUNC,
      SHOW_SCOPE_GLOBAL},
     {nullptr, nullptr, SHOW_UNDEF, SHOW_SCOPE_UNDEF}};
 
@@ -436,6 +452,24 @@ MYSQL_SYSVAR_BOOL(disable, log_disabled, PLUGIN_VAR_RQCMDARG,
                   "connected sessions.",
                   log_disabled_check_func, nullptr, false);
 
+/*
+ * The buffer size for reading from the audit log file, in bytes.
+ * The audit_log_read() function reads no more than this many bytes.
+ * Log file reading is supported only for JSON log format.
+ */
+MYSQL_THDVAR_ULONG(
+    read_buffer_size, PLUGIN_VAR_RQCMDARG,
+    "The buffer size for reading from the audit log file, in bytes.", nullptr,
+    nullptr, 32768UL, 32768UL, ULONG_MAX, 0UL);
+
+/*
+ * Internally used as a storage for log reader context data.
+ */
+MYSQL_THDVAR_STR(log_reader_context,
+                 PLUGIN_VAR_READONLY | PLUGIN_VAR_MEMALLOC |
+                     PLUGIN_VAR_NOSYSVAR | PLUGIN_VAR_NOCMDOPT,
+                 "Log reader context.", nullptr, nullptr, "");
+
 SYS_VAR *sys_vars[] = {MYSQL_SYSVAR(file),
                        MYSQL_SYSVAR(handler),
                        MYSQL_SYSVAR(format),
@@ -450,7 +484,18 @@ SYS_VAR *sys_vars[] = {MYSQL_SYSVAR(file),
                        MYSQL_SYSVAR(syslog_priority),
                        MYSQL_SYSVAR(filter_id),
                        MYSQL_SYSVAR(disable),
+                       MYSQL_SYSVAR(read_buffer_size),
+                       MYSQL_SYSVAR(log_reader_context),
                        nullptr};
+
+#ifndef NDEBUG
+auto get_initial_debug_time_point() {
+  std::tm tm = {};
+  std::stringstream{"2022-08-09 10:00:00"} >>
+      std::get_time(&tm, "%Y-%m-%d %H:%M:%S");
+  return std::chrono::system_clock::from_time_t(std::mktime(&tm));
+}
+#endif
 
 }  // namespace
 
@@ -464,12 +509,6 @@ void SysVars::validate() noexcept {
                  ER_WARN_ADUIT_FILTER_MAX_SIZE_AND_PRUNE_SECONDS_LOG);
   }
 }
-
-// TODO: support for
-// sys vars
-//  MYSQL_SYSVAR(record_buffer),
-//  MYSQL_SYSVAR(query_stack),
-//  audit_log_read_buffer_size
 
 const char *SysVars::get_file_name() noexcept { return log_file_name; }
 
@@ -510,6 +549,27 @@ void SysVars::set_session_filter_id(MYSQL_THD thd, ulong id) noexcept {
 }
 
 bool SysVars::get_log_disabled() noexcept { return log_disabled; }
+
+ulong SysVars::get_read_buffer_size(MYSQL_THD thd) noexcept {
+  return THDVAR(thd, read_buffer_size);
+}
+
+void SysVars::update_log_bookmark(uint64_t id,
+                                  const std::string &timestamp) noexcept {
+  log_bookmark.id = id;
+  log_bookmark.timestamp = timestamp;
+}
+
+LogBookmark SysVars::get_log_bookmark() noexcept { return log_bookmark; }
+
+AuditLogReaderContext *SysVars::get_log_reader_context(MYSQL_THD thd) noexcept {
+  return (AuditLogReaderContext *)THDVAR(thd, log_reader_context);
+}
+
+void SysVars::set_log_reader_context(MYSQL_THD thd,
+                                     AuditLogReaderContext *context) noexcept {
+  THDVAR(thd, log_reader_context) = reinterpret_cast<char *>(context);
+}
 
 uint64_t SysVars::get_events_lost() noexcept {
   return events_lost.load(std::memory_order_relaxed);
@@ -560,6 +620,32 @@ void SysVars::set_total_log_size(uint64_t size) noexcept {
 
 void SysVars::update_total_log_size(uint64_t size) noexcept {
   total_log_size.fetch_add(size, std::memory_order_relaxed);
+}
+
+void SysVars::inc_buffer_bypassing_writes() noexcept {
+  buffer_bypassing_writes.fetch_add(1, std::memory_order_relaxed);
+}
+
+std::chrono::system_clock::time_point SysVars::get_debug_time_point() noexcept {
+  static auto debug_time_point = get_initial_debug_time_point();
+
+  DBUG_EXECUTE_IF("audit_log_filter_reset_log_bookmark", {
+    DBUG_SET("-d,audit_log_filter_reset_log_bookmark");
+    debug_time_point = get_initial_debug_time_point();
+    SysVars::update_log_bookmark(0, "");
+    SysVars::init_record_id(0);
+  });
+
+  debug_time_point += std::chrono::minutes{1};
+  return debug_time_point;
+}
+
+uint64_t SysVars::get_next_record_id() noexcept {
+  return record_id.fetch_add(1, std::memory_order_relaxed);
+}
+
+void SysVars::init_record_id(uint64_t initial_record_id) noexcept {
+  record_id.store(initial_record_id);
 }
 
 }  // namespace audit_log_filter
