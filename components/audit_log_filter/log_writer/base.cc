@@ -16,6 +16,7 @@
 #include "components/audit_log_filter/log_writer/base.h"
 #include "components/audit_log_filter/audit_error_log.h"
 #include "components/audit_log_filter/log_record_formatter.h"
+#include "components/audit_log_filter/sys_vars.h"
 
 #include "my_dbug.h"
 
@@ -29,7 +30,7 @@ LogWriterBase::LogWriterBase(
     : m_formatter{std::move(formatter)} {}
 
 void LogWriterBase::init_formatter() noexcept {
-  m_formatter->init_record_id(get_log_size());
+  SysVars::init_record_id(get_log_size());
 }
 
 void LogWriterBase::write(AuditRecordVariant record) noexcept {
