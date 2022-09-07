@@ -1667,7 +1667,8 @@ static bool redo_log_archive_flush(THD *thd) {
 static std::unique_ptr<Log_user_consumer> log_meb_consumer;
 static innodb_session_t *log_meb_consumer_session;
 
-static bool redo_log_consumer_register(innodb_session_t *session) {
+static bool redo_log_consumer_register(innodb_session_t *session,
+                                       std::string const &name) {
   log_t &log = *log_sys;
 
   IB_mutex_guard checkpointer_latch{&(log.checkpointer_mutex),
@@ -1681,7 +1682,7 @@ static bool redo_log_consumer_register(innodb_session_t *session) {
 
   ut_a(log_meb_consumer.get() == nullptr);
 
-  log_meb_consumer = std::make_unique<Log_user_consumer>("MEB");
+  log_meb_consumer = std::make_unique<Log_user_consumer>(name);
 
   log_meb_consumer->set_consumed_lsn(log_get_checkpoint_lsn(log));
 
