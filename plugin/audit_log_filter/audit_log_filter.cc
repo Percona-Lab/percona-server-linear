@@ -43,18 +43,14 @@
 #define PLUGIN_EXPORT extern "C"
 #endif
 
+// Needed by mysql/components/services/log_builtins.h
 SERVICE_TYPE(log_builtins) *log_bi = nullptr;
 SERVICE_TYPE(log_builtins_string) *log_bs = nullptr;
 
 namespace audit_log_filter {
 namespace {
-AuditLogFilter *audit_log_filter = nullptr;
 
-void my_plugin_perror() noexcept {
-  char errbuf[MYSYS_STRERROR_SIZE];
-  my_strerror(errbuf, sizeof(errbuf), errno);
-  LogPluginErrMsg(ERROR_LEVEL, ER_LOG_PRINTF_MSG, "Error: %s", errbuf);
-}
+AuditLogFilter *audit_log_filter = nullptr;
 
 }  // namespace
 
@@ -180,8 +176,10 @@ int audit_log_filter_init(MYSQL_PLUGIN plugin_info [[maybe_unused]]) {
   }
 
   if (!log_writer->open()) {
-    LogPluginErrMsg(ERROR_LEVEL, ER_LOG_PRINTF_MSG, "Cannot open log writer");
-    my_plugin_perror();
+    char errbuf[MYSYS_STRERROR_SIZE];
+    my_strerror(errbuf, sizeof(errbuf), errno);
+    LogPluginErrMsg(ERROR_LEVEL, ER_LOG_PRINTF_MSG,
+                    "Cannot open log writer, error: %s", errbuf);
     return 1;
   }
 
@@ -194,8 +192,10 @@ int audit_log_filter_init(MYSQL_PLUGIN plugin_info [[maybe_unused]]) {
   }
 
   if (!log_reader->init()) {
-    LogPluginErrMsg(ERROR_LEVEL, ER_LOG_PRINTF_MSG, "Cannot open log reader");
-    my_plugin_perror();
+    char errbuf[MYSYS_STRERROR_SIZE];
+    my_strerror(errbuf, sizeof(errbuf), errno);
+    LogPluginErrMsg(ERROR_LEVEL, ER_LOG_PRINTF_MSG,
+                    "Cannot open log reader, error: %s", errbuf);
     return 1;
   }
 
@@ -255,19 +255,13 @@ AuditLogFilter::AuditLogFilter(
       m_audit_rules_registry{std::move(audit_rules_registry)},
       m_audit_udf{std::move(audit_udf)},
       m_log_writer{std::move(log_writer)},
-      m_filter{std::make_unique<AuditEventFilter>()},
-      m_log_reader{std::move(log_reader)} {
-  m_audit_udf->set_mediator(this);
-}
+      m_log_reader{std::move(log_reader)} {}
 
 int AuditLogFilter::notify_event(MYSQL_THD thd, mysql_event_class_t event_class,
                                  const void *event) {
   if (SysVars::get_log_disabled()) {
     return 0;
   }
-
-  LogPluginErrMsg(INFORMATION_LEVEL, ER_LOG_PRINTF_MSG,
-                  "Audit event %i received ===================", event_class);
 
   SysVars::inc_events_total();
 
@@ -278,24 +272,13 @@ int AuditLogFilter::notify_event(MYSQL_THD thd, mysql_event_class_t event_class,
     return 0;
   }
 
-  LogPluginErrMsg(INFORMATION_LEVEL, ER_LOG_PRINTF_MSG,
-                  "Connection user: %s, host: %s", user_name.c_str(),
-                  user_host.c_str());
-
   // Get connection specific filtering rule
   std::string rule_name;
 
   if (!m_audit_rules_registry->lookup_rule_name(user_name, user_host,
                                                 rule_name)) {
-    LogPluginErrMsg(INFORMATION_LEVEL, ER_LOG_PRINTF_MSG,
-                    "No filtering rule found for user %s@%s, do nothing",
-                    user_name.c_str(), user_host.c_str());
     return 0;
   }
-
-  LogPluginErrMsg(INFORMATION_LEVEL, ER_LOG_PRINTF_MSG,
-                  "Found '%s' filtering rule for user %s@%s", rule_name.c_str(),
-                  user_name.c_str(), user_host.c_str());
 
   auto *filter_rule = m_audit_rules_registry->get_rule(rule_name);
 
@@ -307,10 +290,6 @@ int AuditLogFilter::notify_event(MYSQL_THD thd, mysql_event_class_t event_class,
 
   SysVars::set_session_filter_id(thd, filter_rule->get_filter_id());
 
-  LogPluginErrMsg(INFORMATION_LEVEL, ER_LOG_PRINTF_MSG,
-                  "Found filtering rule '%s' with the definition '%s'",
-                  rule_name.c_str(), filter_rule->to_string().c_str());
-
   // Get actual event info based on event class
   AuditRecordVariant audit_record = get_audit_record(event_class, event);
 
@@ -321,25 +300,18 @@ int AuditLogFilter::notify_event(MYSQL_THD thd, mysql_event_class_t event_class,
     return 0;
   }
 
-  auto ev_name = std::visit(
-      [](const auto &rec) -> std::string_view { return rec.event_class_name; },
-      audit_record);
-
-  LogPluginErrMsg(INFORMATION_LEVEL, ER_LOG_PRINTF_MSG,
-                  "Constructed audit record with name '%s'", ev_name.data());
-
   // Apply filtering rule
-  AuditAction filter_result = m_filter->apply(filter_rule, audit_record);
+  AuditAction filter_result = AuditEventFilter::apply(filter_rule, audit_record);
 
   if (filter_result == AuditAction::Skip) {
-    LogPluginErrMsg(INFORMATION_LEVEL, ER_LOG_PRINTF_MSG,
-                    "Skip logging audit event '%s' with class %i",
-                    ev_name.data(), event_class);
     SysVars::inc_events_filtered();
     return 0;
   }
 
   if (filter_result == AuditAction::Block) {
+    auto ev_name = std::visit(
+        [](const auto &rec) -> std::string_view { return rec.event_class_name; },
+        audit_record);
     LogPluginErrMsg(INFORMATION_LEVEL, ER_LOG_PRINTF_MSG,
                     "Blocked audit event '%s' with class %i", ev_name.data(),
                     event_class);
@@ -349,10 +321,6 @@ int AuditLogFilter::notify_event(MYSQL_THD thd, mysql_event_class_t event_class,
   if (event_class == mysql_event_class_t::MYSQL_AUDIT_CONNECTION_CLASS) {
     get_connection_attrs(thd, audit_record);
   }
-
-  LogPluginErrMsg(INFORMATION_LEVEL, ER_LOG_PRINTF_MSG,
-                  "Writing audit event '%s' with class %i to audit log",
-                  ev_name.data(), event_class);
 
   m_log_writer->write(audit_record);
   SysVars::inc_events_written();
@@ -427,7 +395,7 @@ bool AuditLogFilter::get_connection_user(
   Security_context_handle ctx;
 
   if (security_context_service->get(thd, &ctx)) {
-    LogPluginErr(INFORMATION_LEVEL, ER_LOG_PRINTF_MSG,
+    LogPluginErr(ERROR_LEVEL, ER_LOG_PRINTF_MSG,
                  "Can not get security context");
     return false;
   }
@@ -436,19 +404,19 @@ bool AuditLogFilter::get_connection_user(
   MYSQL_LEX_CSTRING host{"", 0};
 
   if (security_context_opts_service->get(ctx, "user", &user)) {
-    LogPluginErr(INFORMATION_LEVEL, ER_LOG_PRINTF_MSG,
+    LogPluginErr(ERROR_LEVEL, ER_LOG_PRINTF_MSG,
                  "Can not get user name from security context");
     return false;
   }
 
   if (security_context_opts_service->get(ctx, "host", &host)) {
-    LogPluginErr(INFORMATION_LEVEL, ER_LOG_PRINTF_MSG,
+    LogPluginErr(ERROR_LEVEL, ER_LOG_PRINTF_MSG,
                  "Can not get user host from security context");
     return false;
   }
 
   if (user.length == 0 || host.length == 0) {
-    LogPluginErr(INFORMATION_LEVEL, ER_LOG_PRINTF_MSG,
+    LogPluginErr(ERROR_LEVEL, ER_LOG_PRINTF_MSG,
                  "No user name or host name found in security context");
     return false;
   }
@@ -458,6 +426,8 @@ bool AuditLogFilter::get_connection_user(
 
   return true;
 }
+
+AuditUdf *AuditLogFilter::get_udf() noexcept { return m_audit_udf.get(); }
 
 comp_registry_srv_t *AuditLogFilter::get_comp_registry_srv() noexcept {
   return m_comp_registry_srv.get();

@@ -29,6 +29,7 @@
 
 #include <syslog.h>
 #include <atomic>
+#include <iomanip>
 
 namespace audit_log_filter {
 namespace {
@@ -256,8 +257,7 @@ MYSQL_SYSVAR_ULONGLONG(buffer_size, log_write_buffer_size,
  * The audit_log_filter.rotate_on_size variable specifies the maximum size
  * of the audit log file. Upon reaching this size, the audit log will be
  * rotated. For this variable to take effect, set the audit_log_filter.handler
- * variable to FILE and the audit_log_filter.rotations variable to a value
- * greater than zero.
+ * variable to FILE.
  */
 MYSQL_SYSVAR_ULONGLONG(
     rotate_on_size, log_rotate_on_size, PLUGIN_VAR_RQCMDARG,
@@ -563,7 +563,8 @@ void SysVars::update_log_bookmark(uint64_t id,
 LogBookmark SysVars::get_log_bookmark() noexcept { return log_bookmark; }
 
 AuditLogReaderContext *SysVars::get_log_reader_context(MYSQL_THD thd) noexcept {
-  return (AuditLogReaderContext *)THDVAR(thd, log_reader_context);
+  return reinterpret_cast<AuditLogReaderContext *>(
+      THDVAR(thd, log_reader_context));
 }
 
 void SysVars::set_log_reader_context(MYSQL_THD thd,
@@ -626,6 +627,7 @@ void SysVars::inc_buffer_bypassing_writes() noexcept {
   buffer_bypassing_writes.fetch_add(1, std::memory_order_relaxed);
 }
 
+#ifndef NDEBUG
 std::chrono::system_clock::time_point SysVars::get_debug_time_point() noexcept {
   static auto debug_time_point = get_initial_debug_time_point();
 
@@ -639,6 +641,7 @@ std::chrono::system_clock::time_point SysVars::get_debug_time_point() noexcept {
   debug_time_point += std::chrono::minutes{1};
   return debug_time_point;
 }
+#endif
 
 uint64_t SysVars::get_next_record_id() noexcept {
   return record_id.fetch_add(1, std::memory_order_relaxed);

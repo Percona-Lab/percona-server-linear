@@ -44,7 +44,6 @@ SELECT audit_log_filter_remove_user('%');
 
 --echo #
 --echo # Cleanup
-DELETE FROM mysql.audit_log_user;
-DELETE FROM mysql.audit_log_filter;
+--source audit_tables_cleanup.inc
 
 SET GLOBAL audit_log_filter_prune_seconds = @old_prune_seconds;

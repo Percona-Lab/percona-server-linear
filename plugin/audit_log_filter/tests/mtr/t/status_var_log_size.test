@@ -32,5 +32,4 @@ SET GLOBAL audit_log_filter_flush = ON;
 
 --echo #
 --echo # Cleanup
-DELETE FROM mysql.audit_log_user;
-DELETE FROM mysql.audit_log_filter;
+--source audit_tables_cleanup.inc

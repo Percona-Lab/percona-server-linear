@@ -1,3 +1,4 @@
+--source audit_tables_init.inc
 --echo #
 --echo # Check wrong argument number
 --error 1123
@@ -101,5 +102,4 @@ SET SESSION debug="-d,udf_audit_log_user_set_update_filter_failure";
 
 --echo #
 --echo # Cleanup
-DELETE FROM mysql.audit_log_user;
-DELETE FROM mysql.audit_log_filter;
+--source audit_tables_cleanup.inc
