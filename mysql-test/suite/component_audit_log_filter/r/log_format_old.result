@@ -7,5 +7,3 @@ OK
 SET GLOBAL audit_log_filter.flush = ON;
 #
 # Cleanup
-DELETE FROM mysql.audit_log_user;
-DELETE FROM mysql.audit_log_filter;
