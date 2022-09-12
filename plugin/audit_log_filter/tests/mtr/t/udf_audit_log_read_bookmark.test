@@ -1,3 +1,4 @@
+--source audit_tables_init.inc
 
 --echo #
 --echo # Check wrong argument number
@@ -33,7 +34,6 @@ SELECT audit_log_read_bookmark();
 SET GLOBAL DEBUG='-d,audit_log_filter_debug_timestamp';
 SET GLOBAL DEBUG='-d,audit_log_filter_reset_log_bookmark';
 
-DELETE FROM mysql.audit_log_user;
-DELETE FROM mysql.audit_log_filter;
+--source audit_tables_cleanup.inc
 
 DROP TABLE t1;

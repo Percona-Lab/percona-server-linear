@@ -47,5 +47,3 @@ SELECT @@session.audit_log_filter_filter_id;
 #
 # Cleanup
 DROP USER user1, user2;
-DELETE FROM mysql.audit_log_user;
-DELETE FROM mysql.audit_log_filter;
