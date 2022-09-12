@@ -4,6 +4,7 @@ OK
 SELECT audit_log_filter_set_user('%', 'log_all');
 audit_log_filter_set_user('%', 'log_all')
 OK
-SET GLOBAL audit_log_filter.flush = ON;
+memory/sql/THD::variables current_alloc Ok
 #
 # Cleanup
+DROP TABLE test;
