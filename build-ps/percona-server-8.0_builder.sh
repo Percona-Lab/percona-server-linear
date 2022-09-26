@@ -308,6 +308,7 @@ get_sources(){
     if [ ${BUILD_TOKUDB_TOKUBACKUP} != 1 ]; then
         rm -rf storage/tokudb
         rm -rf plugin/tokudb-backup-plugin
+        rm -rf mysql-test/suite/tokudb*
     else
         # set tokudb version - can be seen with show variables like '%version%'
         sed -i "1s/^/SET(TOKUDB_VERSION ${TOKUDB_VERSION})\n/" storage/tokudb/CMakeLists.txt
@@ -354,6 +355,24 @@ get_system(){
     return
 }
 
+apply_workaround_bug_304121(){
+    cat > /tmp/bugzilla_bug_304121.patch <<- EOF
+--- /usr/lib/rpm/find-debuginfo.sh	2022-07-29 11:43:38.582288603 +0000
++++ /usr/lib/rpm/find-debuginfo.sh	2022-07-29 11:43:17.089255640 +0000
+@@ -309,7 +309,7 @@
+
+   echo "extracting debug info from \$f"
+   id=\$(/usr/lib/rpm/debugedit -b "\$RPM_BUILD_DIR" -d /usr/src/debug \\
+-			      -i -l "\$SOURCEFILE" "\$f") || exit
++			      -i -l "\$SOURCEFILE" "\$f") || true
+   if [ \$nlinks -gt 1 ]; then
+     eval linkedid_\$inum=\\\$id
+   fi
+EOF
+    patch -ruN -d /usr/lib/rpm < /tmp/bugzilla_bug_304121.patch
+    return
+}
+
 install_deps() {
     if [ $INSTALL = 0 ]
     then
@@ -371,19 +390,26 @@ install_deps() {
         RHEL=$(rpm --eval %rhel)
         ARCH=$(echo $(uname -m) | sed -e 's:i686:i386:g')
         yum -y update
-        add_percona_yum_repo
-        yum -y install http://www.percona.com/downloads/percona-release/redhat/0.1-4/percona-release-0.1-4.noarch.rpm || true
+        if [ "${RHEL}" -lt 9 ]; then
+            add_percona_yum_repo
+            yum install -y https://repo.percona.com/yum/percona-release-latest.noarch.rpm
+            percona-release enable tools testing
+            percona-release enable tools experimental
+        else
+            yum -y install yum-utils
+            yum-config-manager --enable ol9_codeready_builder
+        fi
         yum -y install epel-release
         yum -y install git numactl-devel rpm-build gcc-c++ gperf ncurses-devel perl readline-devel openssl-devel jemalloc 
         yum -y install time zlib-devel libaio-devel bison cmake3 cmake pam-devel libeatmydata jemalloc-devel pkg-config
         yum -y install perl-Time-HiRes libcurl-devel openldap-devel unzip wget libcurl-devel patchelf systemd-devel
-        yum -y install perl-Env perl-Data-Dumper perl-JSON MySQL-python perl-Digest perl-Digest-MD5 perl-Digest-Perl-MD5 || true
+        yum -y install perl-Env perl-Data-Dumper perl-JSON perl-Digest perl-Digest-MD5 perl-Digest-Perl-MD5 || true
         if [ "${RHEL}" -lt 8 ]; then
             until yum -y install centos-release-scl; do
                 echo "waiting"
                 sleep 1
             done
-            yum -y install  gcc-c++ devtoolset-8-gcc-c++ devtoolset-8-binutils devtoolset-8-gcc devtoolset-8-gcc-c++
+            yum -y install gcc-c++ devtoolset-8-gcc-c++ devtoolset-8-binutils devtoolset-8-gcc devtoolset-8-gcc-c++
             yum -y install ccache devtoolset-8-libasan-devel devtoolset-8-libubsan-devel devtoolset-8-valgrind devtoolset-8-valgrind-devel
             yum -y install libasan libicu-devel libtool libzstd-devel lz4-devel make pkg-config
             yum -y install re2-devel redhat-lsb-core lz4-static
@@ -394,21 +420,16 @@ install_deps() {
             yum -y install binutils gcc gcc-c++ tar rpm-build rsync bison glibc glibc-devel libstdc++-devel make openssl-devel pam-devel perl perl-JSON perl-Memoize pkg-config
             yum -y install automake autoconf cmake cmake3 jemalloc jemalloc-devel
 	    yum -y install libaio-devel ncurses-devel numactl-devel readline-devel time
-            wget https://rpmfind.net/linux/fedora/linux/releases/29/Everything/x86_64/os/Packages/r/rpcgen-1.4-1.fc29.x86_64.rpm
-            yum -y install rpcgen-1.4-1.fc29.x86_64.rpm
-	    yum -y install zstd libzstd libzstd-devel
-	    yum -y install cmake
-            yum -y install cyrus-sasl-devel cyrus-sasl-scram krb5-devel
-        fi
-        if [ "x${RHEL}" = "x8" ]; then
-            yum -y install centos-release-stream
-            yum -y install git gcc-toolset-10-gcc gcc-toolset-10-gcc-c++ gcc-toolset-10-annobin
-            source /opt/rh/gcc-toolset-10/enable
+	    yum -y install rpcgen
+	    yum -y install libzstd libzstd-devel
+	    yum -y install cyrus-sasl-devel cyrus-sasl-scram krb5-devel
         fi
         if [ "x${RHEL}" = "x7" ]; then
-            yum -y install devtoolset-10
+            apply_workaround_bug_304121
+            yum -y install devtoolset-11
+            yum -y install devtoolset-11-annobin-plugin-gcc
             yum -y install cyrus-sasl-gssapi cyrus-sasl-gs2 cyrus-sasl-md5 cyrus-sasl-plain
-            source /opt/rh/devtoolset-10/enable
+            source /opt/rh/devtoolset-11/enable
         fi
 	if [ "x${RHEL}" = "x6" ]; then
             source /opt/rh/devtoolset-8/enable
@@ -421,12 +442,32 @@ install_deps() {
 	else
             yum -y install libevent-devel
         fi
+        if [ "x$RHEL" = "x7" ]; then
+            yum -y --enablerepo=centos-sclo-rh-testing install devtoolset-11-gcc-c++ devtoolset-11-binutils devtoolset-11-valgrind devtoolset-11-valgrind-devel devtoolset-11-libatomic-devel
+            yum -y --enablerepo=centos-sclo-rh-testing install devtoolset-11-libasan-devel devtoolset-11-libubsan-devel
+            rm -f /usr/bin/cmake
+	    cp -p /usr/bin/cmake3 /usr/bin/cmake
+        fi
+        if [ "x$RHEL" = "x8" ]; then
+            yum -y install libtirpc-devel
+            yum -y install centos-release-stream
+            yum -y install gcc-toolset-11-binutils gcc-toolset-11-valgrind gcc-toolset-11-valgrind-devel gcc-toolset-11-libatomic-devel
+            yum -y install gcc-toolset-11-libasan-devel gcc-toolset-11-libubsan-devel
+            yum -y remove centos-release-stream
+        fi
+        if [ "x$RHEL" = "x9" ]; then
+            yum -y install libtirpc-devel
+        else
+            yum -y install MySQL-python
+        fi
     else
-        apt-get -y install dirmngr || true
         add_percona_apt_repo
         apt-get update
+        apt-get -y install lsb_release || true
         apt-get -y install dirmngr || true
-        apt-get -y install lsb-release wget
+        apt-get -y install gnupg2 lsb-release wget git curl
+        wget https://repo.percona.com/apt/percona-release_latest.$(lsb_release -sc)_all.deb && dpkg -i percona-release_latest.$(lsb_release -sc)_all.deb
+        percona-release enable tools testing
         export DEBIAN_FRONTEND="noninteractive"
         export DIST="$(lsb_release -sc)"
             until apt-get update; do
@@ -672,10 +713,10 @@ build_rpm(){
         source /opt/rh/devtoolset-8/enable
     fi
     if [ "x${RHEL}" = "x7" ]; then
-        source /opt/rh/devtoolset-10/enable
+        source /opt/rh/devtoolset-11/enable
     fi
     if [ "x${RHEL}" = "x8" ]; then
-        source /opt/rh/gcc-toolset-10/enable
+        source /opt/rh/gcc-toolset-12/enable
     fi
     build_mecab_lib
     build_mecab_dict
@@ -687,7 +728,7 @@ build_rpm(){
         sudo ln -s /opt/rh/devtoolset-8/root/usr/bin/strip /usr/bin/strip
     fi
     if [ "x${RHEL}" = "x7" ]; then
-        source /opt/rh/devtoolset-10/enable
+        source /opt/rh/devtoolset-11/enable
     fi
     if [ ${ARCH} = x86_64 ]; then
         rpmbuild --define "_topdir ${WORKDIR}/rpmbuild" --define "dist .el${RHEL}" --define "with_mecab ${MECAB_INSTALL_DIR}/usr" --rebuild rpmbuild/SRPMS/${SRCRPM}
@@ -858,10 +899,10 @@ build_tarball(){
           source /opt/rh/devtoolset-8/enable
       fi
       if [ "x${RHEL}" = "x7" ]; then
-          source /opt/rh/devtoolset-10/enable
+          source /opt/rh/devtoolset-11/enable
       fi
       if [ "x${RHEL}" = "x8" ]; then
-          source /opt/rh/gcc-toolset-10/enable
+          source /opt/rh/gcc-toolset-12/enable
       fi
     fi
     #
@@ -942,7 +983,7 @@ RPM_RELEASE=1
 DEB_RELEASE=1
 DEBUG=0
 REVISION=0
-BRANCH="8.0"
+BRANCH="release-8.0.30-22"
 RPM_RELEASE=1
 DEB_RELEASE=1
 MECAB_INSTALL_DIR="${WORKDIR}/mecab-install"
@@ -950,13 +991,13 @@ REPO="https://github.com/percona/percona-server.git"
 PRODUCT=Percona-Server-8.0
 MYSQL_VERSION_MAJOR=8
 MYSQL_VERSION_MINOR=0
-MYSQL_VERSION_PATCH=27
-MYSQL_VERSION_EXTRA=-18
-PRODUCT_FULL=Percona-Server-8.0.27
-BOOST_PACKAGE_NAME=boost_1_73_0
+MYSQL_VERSION_PATCH=30
+MYSQL_VERSION_EXTRA=-22
+PRODUCT_FULL=Percona-Server-8.0.30
+BOOST_PACKAGE_NAME=boost_1_77_0
 BUILD_TOKUDB_TOKUBACKUP=0
-PERCONAFT_BRANCH=Percona-Server-8.0.27-18
-TOKUBACKUP_BRANCH=Percona-Server-8.0.27-18
+PERCONAFT_BRANCH=Percona-Server-8.0.30-22
+TOKUBACKUP_BRANCH=Percona-Server-8.0.30-22
 parse_arguments PICK-ARGS-FROM-ARGV "$@"
 
 check_workdir
