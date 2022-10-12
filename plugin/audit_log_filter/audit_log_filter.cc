@@ -98,6 +98,7 @@ DECLARE_AUDIT_UDF(audit_log_filter_remove_user)
 DECLARE_AUDIT_UDF(audit_log_filter_flush)
 DECLARE_AUDIT_UDF(audit_log_read)
 DECLARE_AUDIT_UDF(audit_log_read_bookmark)
+DECLARE_AUDIT_UDF(audit_log_rotate)
 
 #define DECLARE_AUDIT_UDF_INFO(NAME) \
   UdfFuncInfo { #NAME, &NAME##_udf, &NAME##_udf_init, &NAME##_udf_deinit }
@@ -109,7 +110,8 @@ static std::array udfs_list{
     DECLARE_AUDIT_UDF_INFO(audit_log_filter_remove_user),
     DECLARE_AUDIT_UDF_INFO(audit_log_filter_flush),
     DECLARE_AUDIT_UDF_INFO(audit_log_read),
-    DECLARE_AUDIT_UDF_INFO(audit_log_read_bookmark)};
+    DECLARE_AUDIT_UDF_INFO(audit_log_read_bookmark),
+    DECLARE_AUDIT_UDF_INFO(audit_log_rotate)};
 
 /**
  * @brief Initialize the plugin at server start or plugin installation.
@@ -205,7 +207,9 @@ int audit_log_filter_init(MYSQL_PLUGIN plugin_info [[maybe_unused]]) {
       std::move(audit_udf), std::move(log_writer), std::move(log_reader));
 
   if (SysVars::get_log_disabled()) {
-    LogPluginErr(WARNING_LEVEL, ER_WARN_AUDIT_LOG_FILTER_DISABLED);
+    LogPluginErrMsg(WARNING_LEVEL, ER_LOG_PRINTF_MSG,
+                    "Audit Log Filter is disabled. Enable it with "
+                    "audit_log_filter_disable = false.");
   } else {
     audit_log_filter->send_audit_start_event();
   }
@@ -226,6 +230,7 @@ int audit_log_filter_deinit(void *arg [[maybe_unused]]) {
   }
 
   audit_log_filter->send_audit_stop_event();
+  audit_log_filter->deinit();
 
   LogPluginErr(INFORMATION_LEVEL, ER_LOG_PRINTF_MSG,
                "Uninstalled Audit Event Filter");
@@ -260,11 +265,18 @@ AuditLogFilter::AuditLogFilter(
       m_audit_rules_registry{std::move(audit_rules_registry)},
       m_audit_udf{std::move(audit_udf)},
       m_log_writer{std::move(log_writer)},
-      m_log_reader{std::move(log_reader)} {}
+      m_log_reader{std::move(log_reader)},
+      m_is_active{true} {}
+
+void AuditLogFilter::deinit() noexcept {
+  m_is_active = false;
+  m_audit_udf->deinit();
+  m_log_writer->close();
+}
 
 int AuditLogFilter::notify_event(MYSQL_THD thd, mysql_event_class_t event_class,
                                  const void *event) {
-  if (SysVars::get_log_disabled()) {
+  if (SysVars::get_log_disabled() || !m_is_active) {
     return 0;
   }
 
@@ -376,6 +388,10 @@ void AuditLogFilter::send_audit_stop_event() noexcept {
 }
 
 bool AuditLogFilter::on_audit_rule_flush_requested() noexcept {
+  if (!m_is_active) {
+    return false;
+  }
+
   const bool is_flushed = m_audit_rules_registry->load();
 
   DBUG_EXECUTE_IF("audit_log_filter_rotate_after_audit_rules_flush",
@@ -384,15 +400,23 @@ bool AuditLogFilter::on_audit_rule_flush_requested() noexcept {
   return is_flushed;
 }
 
-void AuditLogFilter::on_audit_log_flush_requested() noexcept {
-  m_log_writer->flush();
-}
-
 void AuditLogFilter::on_audit_log_prune_requested() noexcept {
-  m_log_writer->prune();
+  if (m_is_active) {
+    m_log_writer->prune();
+  }
 }
 
-void AuditLogFilter::on_audit_log_rotated() noexcept { m_log_reader->init(); }
+void AuditLogFilter::on_audit_log_rotate_requested() noexcept {
+  if (m_is_active) {
+    m_log_writer->rotate();
+  }
+}
+
+void AuditLogFilter::on_audit_log_rotated() noexcept {
+  if (m_is_active) {
+    m_log_reader->init();
+  }
+}
 
 void AuditLogFilter::get_connection_attrs(MYSQL_THD thd,
                                           AuditRecordVariant &audit_record) {
@@ -453,21 +477,19 @@ bool AuditLogFilter::get_connection_user(
   MYSQL_LEX_CSTRING user{"", 0};
   MYSQL_LEX_CSTRING host{"", 0};
 
-  if (security_context_opts_service->get(ctx, "user", &user)) {
+  if (security_context_opts_service->get(ctx, "priv_user", &user)) {
     LogPluginErr(ERROR_LEVEL, ER_LOG_PRINTF_MSG,
                  "Can not get user name from security context");
     return false;
   }
 
-  if (security_context_opts_service->get(ctx, "host", &host)) {
+  if (security_context_opts_service->get(ctx, "priv_host", &host)) {
     LogPluginErr(ERROR_LEVEL, ER_LOG_PRINTF_MSG,
                  "Can not get user host from security context");
     return false;
   }
 
   if (user.length == 0 || host.length == 0) {
-    LogPluginErr(ERROR_LEVEL, ER_LOG_PRINTF_MSG,
-                 "No user name or host name found in security context");
     return false;
   }
 
