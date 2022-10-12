@@ -1,6 +1,10 @@
 --source audit_tables_init.inc
 
 SET @old_prune_seconds = @@global.audit_log_filter_prune_seconds;
+SET @old_max_size = @@global.audit_log_filter_max_size;
+
+SET GLOBAL audit_log_filter_prune_seconds = 0;
+SET GLOBAL audit_log_filter_max_size = 0;
 
 SELECT audit_log_filter_set_filter('log_all', '{"filter": {"log": true}}');
 SELECT audit_log_filter_set_user('%', 'log_all');
@@ -47,3 +51,4 @@ SELECT audit_log_filter_remove_user('%');
 --source audit_tables_cleanup.inc
 
 SET GLOBAL audit_log_filter_prune_seconds = @old_prune_seconds;
+SET GLOBAL audit_log_filter_max_size = @old_max_size;
