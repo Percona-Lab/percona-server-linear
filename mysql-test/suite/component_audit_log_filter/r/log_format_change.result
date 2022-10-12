@@ -4,9 +4,11 @@ OK
 SELECT audit_log_filter_set_user('%', 'log_all');
 audit_log_filter_set_user('%', 'log_all')
 OK
-SELECT audit_log_rotate();
-audit_log_rotate()
-OK
-Rotated files Ok
+# restart: --audit_log_filter.format=OLD
+# restart: --audit_log_filter.format=JSON
+# restart: --audit_log_filter.format=NEW
+File format Ok
+File format Ok
+File format Ok
 #
 # Cleanup
