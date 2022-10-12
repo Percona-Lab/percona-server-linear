@@ -12995,9 +12995,6 @@ ER_CONN_CONTROL_FAILED_CONN_THRESHOLD_REACHED_WITH_WARN
 ER_CONN_CONTROL_DELAYED_CONN_STATS
   eng "Delayed %llu connection attempts during last %llu seconds"
 
-ER_WARN_AUDIT_LOG_FILTER_DISABLED
-  eng "Audit Log Filter is disabled. Enable it with audit_log_filter_disable = false."
-
 ER_AUDIT_INIT_STARTED
   eng "Initializing Audit Event Filter..."
 
