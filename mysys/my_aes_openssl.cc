@@ -134,7 +134,7 @@ static const EVP_CIPHER *aes_evp_type(const my_aes_opmode mode) {
 */
 int my_create_key(unsigned char *rkey, const unsigned char *key,
                   uint32 key_length, enum my_aes_opmode mode,
-                  vector<string> *kdf_options) {
+                  std::vector<std::string> *kdf_options) {
   if (kdf_options) {
     if (kdf_options->size() < 1) {
       return 1;
@@ -151,7 +151,7 @@ int my_aes_encrypt(const unsigned char *source, uint32 source_length,
                    unsigned char *dest, const unsigned char *key,
                    uint32 key_length, enum my_aes_opmode mode,
                    const unsigned char *iv, bool padding,
-                   vector<string> *kdf_options) {
+                   std::vector<std::string> *kdf_options) {
 #if OPENSSL_VERSION_NUMBER < 0x10100000L
   EVP_CIPHER_CTX stack_ctx;
   EVP_CIPHER_CTX *ctx = &stack_ctx;
@@ -198,7 +198,7 @@ int my_aes_decrypt(const unsigned char *source, uint32 source_length,
                    unsigned char *dest, const unsigned char *key,
                    uint32 key_length, enum my_aes_opmode mode,
                    const unsigned char *iv, bool padding,
-                   vector<string> *kdf_options) {
+                   std::vector<std::string> *kdf_options) {
 #if OPENSSL_VERSION_NUMBER < 0x10100000L
   EVP_CIPHER_CTX stack_ctx;
   EVP_CIPHER_CTX *ctx = &stack_ctx;
