@@ -17,6 +17,7 @@ TOKUDB_BACKUP_VERSION = "@@TOKUDB_BACKUP_VERSION@@"
 TMP=$(CURDIR)/debian/tmp/
 TMPD=$(CURDIR)/debian/tmp-debug/
 prefix=/usr
+rpath='$$ORIGIN/../private'
 
 ARCH = $(shell dpkg-architecture -qDEB_BUILD_ARCH)
 ARCH_OS = $(shell dpkg-architecture -qDEB_BUILD_ARCH_OS)
