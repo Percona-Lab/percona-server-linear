@@ -1239,9 +1239,9 @@ The following options may be given as the first argument:
  --replica-enable-event=name 
  Tells the replication applier thread to enable the events
  that match the specified wildcard pattern without setting
- it as SLAVESIDE_DISABLED. To specify more than one event,
- use the directive multiple times, once for each event.
- This will work for cross-database events. Example:
+ it as REPLICA_SIDE_DISABLED. To specify more than one
+ event, use the directive multiple times, once for each
+ event. This will work for cross-database events. Example:
  replica-enable-event=foo%.bar% will enable the events in
  all databases on replica server that start with 'foo' and
  whose event names start with 'bar'. It is recommended to
@@ -1652,6 +1652,9 @@ The following options may be given as the first argument:
  cache instances)
  --table-open-cache-instances=# 
  The number of table cache instances
+ --table-open-cache-triggers=# 
+ The number of cached open tables with fully loaded
+ triggers
  --tablespace-definition-cache=# 
  The number of cached tablespace definitions
  --tc-heuristic-recover=name 
@@ -2211,6 +2214,7 @@ sync-source-info 10000
 sysdate-is-now FALSE
 table-encryption-privilege-check FALSE
 table-open-cache-instances 16
+table-open-cache-triggers 524288
 tablespace-definition-cache 256
 tc-heuristic-recover OFF
 temptable-max-mmap 1073741824
