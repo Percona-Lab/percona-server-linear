@@ -8066,6 +8066,7 @@ Rows_log_event::~Rows_log_event() {
 #ifdef MYSQL_SERVER
 int Rows_log_event::unpack_current_row(const Relay_log_info *const rli,
                                        MY_BITMAP const *cols,
+                                       MY_BITMAP const *local_cols,
                                        bool is_after_image, bool only_seek) {
   assert(m_table);
 
@@ -8113,6 +8114,11 @@ int Rows_log_event::unpack_current_row(const Relay_log_info *const rli,
               return true;
             if (!is_after_image &&  // Always exclude virtual generated columns
                 field->is_virtual_gcol())  // if not processing after-image
+              return true;
+            if (!bitmap_is_subset(  // Exclude generated columns which base
+                                    // columns are excluded from the binlog row
+                                    // image
+                    &field->gcol_info->base_columns_map, local_cols))
               return true;
             if (field->m_indexed)  // Never exclude generated columns that
                                    // have indexes
@@ -8833,7 +8839,7 @@ void Rows_log_event::do_post_row_operations(Relay_log_info const *rli,
       conditions. So this is probably a case of a corrupt event.
     */
     const uchar *previous_m_curr_row = m_curr_row;
-    error = unpack_current_row(rli, &m_cols, true /*is AI*/);
+    error = unpack_current_row(rli, &m_cols, &m_local_cols, true /*is AI*/);
 
     if (!error && previous_m_curr_row == m_curr_row) {
       error = 1;
@@ -9118,7 +9124,9 @@ int Rows_log_event::do_index_scan_and_update(Relay_log_info const *rli) {
   */
 
   prepare_record(m_table, &this->m_local_cols, false);
-  if ((error = unpack_current_row(rli, &m_cols, false /*is not AI*/))) goto end;
+  if ((error = unpack_current_row(rli, &m_cols, &m_local_cols,
+                                  false /*is not AI*/)))
+    goto end;
 
   /*
     Trying to do an index scan without a usable key
@@ -9341,7 +9349,7 @@ int Update_rows_log_event::skip_after_image_for_update_event(
       m_curr_row==curr_bi_start.
     */
     m_curr_row = m_curr_row_end;
-    return unpack_current_row(rli, &m_cols_ai, true /*is AI*/,
+    return unpack_current_row(rli, &m_cols_ai, &m_local_cols_ai, true /*is AI*/,
                               true /*only_seek*/);
   }
   return 0;
@@ -9358,7 +9366,8 @@ int Rows_log_event::do_hash_row(Relay_log_info const *rli) {
   /* Prepare the record, unpack and save positions. */
   entry->positions->bi_start = m_curr_row;  // save the bi start pos
   prepare_record(m_table, &this->m_local_cols, false);
-  if ((error = unpack_current_row(rli, &m_cols, false /*is not AI*/))) {
+  if ((error = unpack_current_row(rli, &m_cols, &m_local_cols,
+                                  false /*is not AI*/))) {
     hash_slave_rows_free_entry freer;
     freer(entry);
     goto end;
@@ -9396,8 +9405,8 @@ int Rows_log_event::do_hash_row(Relay_log_info const *rli) {
 
     /* We shouldn't need this, but lets not leave loose ends */
     prepare_record(m_table, &this->m_local_cols, false);
-    error =
-        unpack_current_row(rli, &m_cols_ai, true /*is AI*/, true /*only_seek*/);
+    error = unpack_current_row(rli, &m_cols_ai, &m_local_cols_ai,
+                               true /*is AI*/, true /*only_seek*/);
 
     /*
       This is the situation after unpacking the AI:
@@ -9487,7 +9496,8 @@ int Rows_log_event::do_scan_and_update(Relay_log_info const *rli) {
             m_curr_row_end = entry->positions->bi_ends;
 
             prepare_record(table, &this->m_local_cols, false);
-            if ((error = unpack_current_row(rli, &m_cols, false /*is not AI*/)))
+            if ((error = unpack_current_row(rli, &m_cols, &m_local_cols,
+                                            false /*is not AI*/)))
               goto close_table;
 
             if (record_compare(table, &this->m_local_cols))
@@ -9624,7 +9634,8 @@ int Rows_log_event::do_table_scan_and_update(Relay_log_info const *rli) {
 
   /** unpack the before image */
   prepare_record(table, &this->m_local_cols, false);
-  if (!(error = unpack_current_row(rli, &m_cols, false /*is not AI*/))) {
+  if (!(error = unpack_current_row(rli, &m_cols, &m_local_cols,
+                                   false /*is not AI*/))) {
     /** save a copy so that we can compare against it later */
     store_record(m_table, record[1]);
 
@@ -12213,7 +12224,8 @@ int Write_rows_log_event::write_row(const Relay_log_info *const rli,
                  table->file->ht->db_type != DB_TYPE_NDBCLUSTER);
 
   /* unpack row into table->record[0] */
-  if ((error = unpack_current_row(rli, &m_cols, true /*is AI*/))) return error;
+  if ((error = unpack_current_row(rli, &m_cols, &m_local_cols, true /*is AI*/)))
+    return error;
 
   /*
     When m_curr_row == m_curr_row_end, it means a row that contains nothing,
@@ -12374,7 +12386,7 @@ int Write_rows_log_event::write_row(const Relay_log_info *const rli,
     */
     if (!get_flags(COMPLETE_ROWS_F)) {
       restore_record(table, record[1]);
-      error = unpack_current_row(rli, &m_cols, true /*is AI*/);
+      error = unpack_current_row(rli, &m_cols, &m_local_cols, true /*is AI*/);
     }
 
 #ifndef NDEBUG
@@ -12540,7 +12552,7 @@ int Delete_rows_log_event::do_exec_row(const Relay_log_info *const rli) {
   int error;
   assert(m_table != nullptr);
   if (m_rows_lookup_algorithm == ROW_LOOKUP_NOT_NEEDED) {
-    error = unpack_current_row(rli, &m_cols, false, false);
+    error = unpack_current_row(rli, &m_cols, &m_local_cols, false, false);
     if (error) return error;
   }
   /* m_table->record[0] contains the BI */
@@ -12677,7 +12689,7 @@ int Update_rows_log_event::do_exec_row(const Relay_log_info *const rli) {
   int error = 0;
 
   if (m_rows_lookup_algorithm == ROW_LOOKUP_NOT_NEEDED) {
-    error = unpack_current_row(rli, &m_cols, false, false);
+    error = unpack_current_row(rli, &m_cols, &m_local_cols, false, false);
     if (error) return error;
   }
 
@@ -12696,7 +12708,8 @@ int Update_rows_log_event::do_exec_row(const Relay_log_info *const rli) {
 
   m_curr_row = m_curr_row_end;
   /* this also updates m_curr_row_end */
-  if ((error = unpack_current_row(rli, &m_cols_ai, true /*is AI*/)))
+  if ((error = unpack_current_row(rli, &m_cols_ai, &m_local_cols_ai,
+                                  true /*is AI*/)))
     return error;
 
   // Invoke check constraints on the unpacked row.
