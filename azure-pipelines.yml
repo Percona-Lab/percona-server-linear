@@ -63,7 +63,7 @@ jobs:
 
   variables:
     UBUNTU_CODE_NAME: focal
-    BOOST_VERSION: boost_1_73_0
+    BOOST_VERSION: boost_1_77_0
     BOOST_DIR: $(Pipeline.Workspace)/boost
     USE_CCACHE: 1
     CCACHE_DIR: $(Pipeline.Workspace)/ccache
