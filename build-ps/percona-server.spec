@@ -374,14 +374,17 @@ Obsoletes:      mariadb-libs
 Obsoletes:      mysql-connector-c-shared < 6.2
 Obsoletes:      mysql-libs < %{version}-%{release}
 Provides:       mysql-shared
+%ifarch x86_64
 %if 0%{?rhel} < 9
 Requires(pre):  percona-server-shared-compat
+%endif
 %endif
 
 %description -n percona-server-shared
 This package contains the shared libraries (*.so*) which certain languages
 and applications need to dynamically load and use Percona Server.
 
+%ifarch x86_64
 %if 0%{?compatlib}
 %package -n percona-server-shared-compat
 Summary:        Shared compat libraries for Percona Server %{compatver}-%{percona_compatver} database client applications
@@ -406,6 +409,7 @@ Conflicts:      Percona-Server-shared-57
 %description -n percona-server-shared-compat
 This package contains the shared compat libraries for Percona Server %{compatver}-%{percona_compatver} client
 applications.
+%endif
 %endif
 
 %if 0%{?tokudb}
@@ -603,16 +607,18 @@ mkdir release
 )
 
 %install
-%if 0%{?compatlib}
-  # Install compat libs
-  %if 0%{?rhel} > 6
-    install -D -m 0755 percona-compatlib/usr/lib64/libmysqlclient.so.18.1.0 %{buildroot}%{_libdir}/mysql/libmysqlclient.so.18.1.0
-    install -D -m 0755 percona-compatlib/usr/lib64/libmysqlclient_r.so.18.1.0 %{buildroot}%{_libdir}/mysql/libmysqlclient_r.so.18.1.0
-  %else
-    install -D -m 0755 percona-compatlib/usr/lib64/libmysqlclient.so.16.0.0 %{buildroot}%{_libdir}/mysql/libmysqlclient.so.16.0.0
-    install -D -m 0755 percona-compatlib/usr/lib64/libmysqlclient_r.so.16.0.0 %{buildroot}%{_libdir}/mysql/libmysqlclient_r.so.16.0.0
-  %endif # 0%{?rhel} > 6
-%endif # 0%{?compatlib}
+%ifarch x86_64
+  %if 0%{?compatlib}
+    # Install compat libs
+    %if 0%{?rhel} > 6
+      install -D -m 0755 percona-compatlib/usr/lib64/libmysqlclient.so.18.1.0 %{buildroot}%{_libdir}/mysql/libmysqlclient.so.18.1.0
+      install -D -m 0755 percona-compatlib/usr/lib64/libmysqlclient_r.so.18.1.0 %{buildroot}%{_libdir}/mysql/libmysqlclient_r.so.18.1.0
+    %else
+      install -D -m 0755 percona-compatlib/usr/lib64/libmysqlclient.so.16.0.0 %{buildroot}%{_libdir}/mysql/libmysqlclient.so.16.0.0
+      install -D -m 0755 percona-compatlib/usr/lib64/libmysqlclient_r.so.16.0.0 %{buildroot}%{_libdir}/mysql/libmysqlclient_r.so.16.0.0
+    %endif # 0%{?rhel} > 6
+  %endif # 0%{?compatlib}
+%endif # arch x86_64
 
 MBD=$RPM_BUILD_DIR/%{src_dir}
 
@@ -802,6 +808,7 @@ fi
 
 %postun -n percona-server-shared -p /sbin/ldconfig
 
+%ifarch x86_64
 %if 0%{?compatlib}
 %if 0%{?rhel} > 6
 %post -n percona-server-shared-compat
@@ -835,6 +842,7 @@ for lib in libmysqlclient{.so.16.0.0,.so.16,_r.so.16.0.0,_r.so.16}; do
   fi
 done
 /sbin/ldconfig
+%endif
 %endif
 %endif
 
@@ -1005,6 +1013,9 @@ fi
 %attr(755, root, root) %{_libdir}/mysql/plugin/component_test_table_access.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/semisync_replica.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/semisync_source.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/component_test_mysql_thd_store_service.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/component_test_server_telemetry_traces.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/audit_log_filter.so
 
 %dir %{_libdir}/mysql/plugin/debug
 %attr(755, root, root) %{_libdir}/mysql/plugin/debug/data_masking.so
@@ -1053,6 +1064,9 @@ fi
 %attr(755, root, root) %{_libdir}/mysql/plugin/debug/component_test_table_access.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/debug/semisync_replica.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/debug/semisync_source.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/debug/component_test_mysql_thd_store_service.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/debug/component_test_server_telemetry_traces.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/debug/audit_log_filter.so
 %if 0%{?mecab}
 %{_libdir}/mysql/mecab
 %attr(755, root, root) %{_libdir}/mysql/plugin/libpluginmecab.so
@@ -1103,6 +1117,8 @@ fi
 %endif
 %attr(755, root, root) %{_libdir}/mysql/plugin/component_keyring_kms.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/debug/component_keyring_kms.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/component_masking_functions.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/debug/component_masking_functions.so
 #
 #%attr(644, root, root) %{_datadir}/percona-server/fill_help_tables.sql
 #%attr(644, root, root) %{_datadir}/percona-server/mysql_sys_schema.sql
@@ -1115,6 +1131,7 @@ fi
 %attr(644, root, root) %{_datadir}/percona-server/innodb_memcached_config.sql
 %attr(644, root, root) %{_datadir}/percona-server/install_rewriter.sql
 %attr(644, root, root) %{_datadir}/percona-server/uninstall_rewriter.sql
+%attr(644, root, root) %{_datadir}/percona-server/audit_log_filter_linux_install.sql
 %if 0%{?systemd}
 %attr(644, root, root) %{_unitdir}/mysqld.service
 %attr(644, root, root) %{_unitdir}/mysqld@.service
@@ -1195,7 +1212,9 @@ fi
 %attr(644, root, root) %{_mandir}/man1/comp_err.1*
 %attr(644, root, root) %{_mandir}/man1/mysql_config.1*
 %attr(755, root, root) %{_bindir}/mysql_config
+%ifarch %{multiarchs}
 %attr(755, root, root) %{_bindir}/mysql_config-%{__isa_bits}
+%endif
 %{_includedir}/mysql
 %{_datadir}/aclocal/mysql.m4
 %{_libdir}/mysql/lib%{shared_lib_pri_name}.a
@@ -1213,6 +1232,7 @@ fi
 %attr(755, root, root) %{_includedir}/coredumper/coredumper.h
 %attr(755, root, root) /usr/lib/libcoredumper.a
 
+%ifarch x86_64
 %if 0%{?compatlib}
 %files -n percona-server-shared-compat
 %defattr(-, root, root, -)
@@ -1221,6 +1241,7 @@ fi
 %attr(644, root, root) %{_sysconfdir}/ld.so.conf.d/mysql-%{_arch}.conf
 %{_libdir}/mysql/libmysqlclient.so.%{compatlib}.*
 %{_libdir}/mysql/libmysqlclient_r.so.%{compatlib}.*
+%endif
 %endif
 
 %files -n percona-server-test
@@ -1447,9 +1468,9 @@ fi
 %files -n percona-icu-data-files
 %defattr(-, root, root, -)
 %doc %{?license_files_server}
-%dir %attr(755, root, root) %{_libdir}/mysql/private/icudt69l
-%{_libdir}/mysql/private/icudt69l/unames.icu
-%{_libdir}/mysql/private/icudt69l/brkitr
+%dir %attr(755, root, root) %{_libdir}/mysql/private/icudt73l
+%{_libdir}/mysql/private/icudt73l/*.icu
+%{_libdir}/mysql/private/icudt73l/brkitr
 
 %changelog
 * Fri Feb 12 2021 Percona Development Team <info@percona.com> - 8.0.22-13
