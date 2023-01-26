@@ -119,7 +119,7 @@ IF(LIBFUZZER_COMPILE_FLAGS)
     ../src/sql_lexer.cc
     ${CMAKE_SOURCE_DIR}/sql/sql_lex_hash.cc
     COMPONENT Router
-    DEPENDENCIES GenServerSource
+    DEPENDENCIES GenServerSource GenError
     LINK_LIBRARIES harness_stdx;mysys
     SKIP_INSTALL
     )
@@ -131,7 +131,7 @@ IF(LIBFUZZER_COMPILE_FLAGS)
     ../src/sql_lexer.cc
     ${CMAKE_SOURCE_DIR}/sql/sql_lex_hash.cc
     COMPONENT Router
-    DEPENDENCIES GenServerSource
+    DEPENDENCIES GenServerSource GenError
     LINK_LIBRARIES harness_stdx;mysys
     SKIP_INSTALL
     )
