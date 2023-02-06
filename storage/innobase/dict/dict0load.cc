@@ -60,6 +60,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "mysql_version.h"
 #include "page0page.h"
 #include "rem0cmp.h"
+#include "scope_guard.h"
 #include "srv0srv.h"
 #include "srv0start.h"
 #include "ut0math.h"
@@ -1435,6 +1436,8 @@ TODO - This function is to be removed by WL#16210
   mtr_t mtr;
 
   DBUG_TRACE;
+
+  auto guard = create_scope_guard([&pcur]() { pcur.close(); });
 
   ut_ad(dict_sys_mutex_own());
 
