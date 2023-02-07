@@ -1,3 +1,5 @@
+# Valgrind reports false positives coming from coredumper internals
+--source include/not_valgrind.inc
 # ASAN disables core dumps
 --source include/not_asan.inc
 
