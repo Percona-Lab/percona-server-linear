@@ -7133,9 +7133,8 @@ static bool add_set_gtid_purged(MYSQL *mysql_con, bool ftwrl_done) {
   setting the SET @@GLOBAL.GTID_PURGED in the output.
 
   @param[in]          mysql_con     the connection to the server
-  @param[in]      ftwrl_done    FLUSH TABLES WITH READ LOCK query was issued
-
   @param[in]          is_gtid_enabled  true if server has gtid_mode on
+  @param[in]          ftwrl_done    FLUSH TABLES WITH READ LOCK query was issued
 
   @retval             false         successful according to the value
                                     of opt_set_gtid_purged.
