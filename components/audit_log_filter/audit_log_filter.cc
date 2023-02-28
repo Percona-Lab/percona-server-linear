@@ -15,6 +15,7 @@
 
 #include "components/audit_log_filter/audit_log_filter.h"
 #include "components/audit_log_filter/audit_filter.h"
+#include "components/audit_log_filter/audit_keyring.h"
 #include "components/audit_log_filter/audit_log_reader.h"
 #include "components/audit_log_filter/audit_psi_info.h"
 #include "components/audit_log_filter/audit_rule.h"
@@ -22,6 +23,7 @@
 #include "components/audit_log_filter/audit_udf.h"
 #include "components/audit_log_filter/log_record_formatter.h"
 #include "components/audit_log_filter/log_writer.h"
+#include "components/audit_log_filter/log_writer/file_handle.h"
 #include "components/audit_log_filter/sys_vars.h"
 
 #include <mysql/components/component_implementation.h>
@@ -45,6 +47,7 @@
 
 #include <mysql/psi/mysql_memory.h>
 
+#include "sql/mysqld.h"
 #include "sql/sql_class.h"
 #include <scope_guard.h>
 
@@ -207,6 +210,8 @@ DECLARE_AUDIT_STR_UDF(audit_log_filter_flush)
 DECLARE_AUDIT_STR_UDF(audit_log_read)
 DECLARE_AUDIT_STR_UDF(audit_log_read_bookmark)
 DECLARE_AUDIT_STR_UDF(audit_log_rotate)
+DECLARE_AUDIT_STR_UDF(audit_log_encryption_password_get)
+DECLARE_AUDIT_STR_UDF(audit_log_encryption_password_set)
 DECLARE_AUDIT_INT_UDF(audit_log_session_filter_id)
 
 #define DECLARE_AUDIT_STR_UDF_INFO(NAME)                          \
@@ -229,6 +234,8 @@ static std::array udfs_list{
     DECLARE_AUDIT_STR_UDF_INFO(audit_log_read),
     DECLARE_AUDIT_STR_UDF_INFO(audit_log_read_bookmark),
     DECLARE_AUDIT_STR_UDF_INFO(audit_log_rotate),
+    DECLARE_AUDIT_STR_UDF_INFO(audit_log_encryption_password_get),
+    DECLARE_AUDIT_STR_UDF_INFO(audit_log_encryption_password_set),
     DECLARE_AUDIT_INT_UDF_INFO(audit_log_session_filter_id)};
 
 /**
@@ -245,7 +252,7 @@ mysql_service_status_t audit_log_filter_init() {
   log_bi = mysql_service_log_builtins;
   log_bs = mysql_service_log_builtins_string;
 
-  auto comp_registry_srv = get_component_registry_service();
+  const auto *comp_registry_srv = SysVars::get_comp_registry_srv();
 
   auto comp_scope_guard = create_scope_guard([&] {
     if (comp_registry_srv != nullptr) {
@@ -261,7 +268,19 @@ mysql_service_status_t audit_log_filter_init() {
 
   SysVars::validate();
 
-  auto audit_udf = std::make_unique<AuditUdf>(comp_registry_srv.get());
+  auto is_keyring_initialized = audit_keyring::check_keyring_initialized();
+
+  if (is_keyring_initialized &&
+      !audit_keyring::check_generate_initial_encryption_options()) {
+    LogComponentErr(ERROR_LEVEL, ER_AUDIT_INIT_ENCRYPTION_PASSWORD_FAILURE);
+    return 1;
+  }
+
+  SysVars::set_log_encryption_enabled(is_keyring_initialized &&
+                                      SysVars::get_encryption_type() !=
+                                          AuditLogEncryptionType::None);
+
+  auto audit_udf = std::make_unique<AuditUdf>();
 
   if (audit_udf == nullptr) {
     LogComponentErr(ERROR_LEVEL, ER_AUDIT_INIT_UDF_CREATE_FAILURE);
@@ -273,8 +292,7 @@ mysql_service_status_t audit_log_filter_init() {
     return 1;
   }
 
-  auto audit_rule_registry =
-      std::make_unique<AuditRuleRegistry>(comp_registry_srv.get());
+  auto audit_rule_registry = std::make_unique<AuditRuleRegistry>();
 
   if (audit_rule_registry == nullptr) {
     LogComponentErr(ERROR_LEVEL, ER_AUDIT_INIT_FILTERS_INIT_FAILURE);
@@ -296,9 +314,8 @@ mysql_service_status_t audit_log_filter_init() {
 
   auto log_writer = get_log_writer(std::move(formatter));
 
-  if (log_writer == nullptr) {
-    LogComponentErr(ERROR_LEVEL, ER_LOG_PRINTF_MSG,
-                    "Failed to create log writer instance");
+  if (log_writer == nullptr || !log_writer->init()) {
+    LogComponentErr(ERROR_LEVEL, ER_AUDIT_INIT_WRITER_INIT_FAILURE);
     return 1;
   }
 
@@ -309,7 +326,7 @@ mysql_service_status_t audit_log_filter_init() {
     return 1;
   }
 
-  auto log_reader = std::make_unique<AuditLogReader>(comp_registry_srv.get());
+  auto log_reader = std::make_unique<AuditLogReader>();
 
   if (log_reader == nullptr) {
     LogComponentErr(ERROR_LEVEL, ER_AUDIT_INIT_READER_INIT_FAILURE);
@@ -324,9 +341,9 @@ mysql_service_status_t audit_log_filter_init() {
     return 1;
   }
 
-  audit_log_filter = new AuditLogFilter(
-      std::move(comp_registry_srv), std::move(audit_rule_registry),
-      std::move(audit_udf), std::move(log_writer), std::move(log_reader));
+  audit_log_filter =
+      new AuditLogFilter(std::move(audit_rule_registry), std::move(audit_udf),
+                         std::move(log_writer), std::move(log_reader));
 
   if (SysVars::get_log_disabled()) {
     LogComponentErr(WARNING_LEVEL, ER_AUDIT_INIT_DISABLED_WARN);
@@ -362,13 +379,11 @@ mysql_service_status_t audit_log_filter_deinit() {
 }
 
 AuditLogFilter::AuditLogFilter(
-    comp_registry_srv_container_t comp_registry_srv,
     std::unique_ptr<AuditRuleRegistry> audit_rules_registry,
     std::unique_ptr<AuditUdf> audit_udf,
     std::unique_ptr<log_writer::LogWriterBase> log_writer,
     std::unique_ptr<AuditLogReader> log_reader)
-    : m_comp_registry_srv{std::move(comp_registry_srv)},
-      m_audit_rules_registry{std::move(audit_rules_registry)},
+    : m_audit_rules_registry{std::move(audit_rules_registry)},
       m_audit_udf{std::move(audit_udf)},
       m_log_writer{std::move(log_writer)},
       m_log_reader{std::move(log_reader)},
@@ -519,6 +534,16 @@ void AuditLogFilter::on_audit_log_rotate_requested() noexcept {
   }
 }
 
+void AuditLogFilter::on_encryption_password_prune_requested() noexcept {
+  if (m_is_active && SysVars::get_password_history_keep_days() > 0 &&
+      audit_keyring::check_keyring_initialized()) {
+    audit_keyring::prune_encryption_options(
+        SysVars::get_password_history_keep_days(),
+        log_writer::FileHandle::get_log_names_list(mysql_data_home,
+                                                   SysVars::get_file_name()));
+  }
+}
+
 void AuditLogFilter::on_audit_log_rotated() noexcept {
   if (m_is_active) {
     m_log_reader->init();
@@ -528,7 +553,7 @@ void AuditLogFilter::on_audit_log_rotated() noexcept {
 void AuditLogFilter::get_connection_attrs(MYSQL_THD thd,
                                           AuditRecordVariant &audit_record) {
   my_service<SERVICE_TYPE(mysql_connection_attributes_iterator)> attrs_service(
-      "mysql_connection_attributes_iterator", m_comp_registry_srv.get());
+      "mysql_connection_attributes_iterator", SysVars::get_comp_registry_srv());
 
   if (!attrs_service.is_valid()) {
     return;
@@ -563,10 +588,10 @@ void AuditLogFilter::get_connection_attrs(MYSQL_THD thd,
 bool AuditLogFilter::get_connection_user(
     MYSQL_THD thd, std::string &user_name, std::string &user_host) noexcept {
   my_service<SERVICE_TYPE(mysql_thd_security_context)> security_context_service(
-      "mysql_thd_security_context", m_comp_registry_srv.get());
+      "mysql_thd_security_context", SysVars::get_comp_registry_srv());
   my_service<SERVICE_TYPE(mysql_security_context_options)>
-      security_context_opts_service(
-        "mysql_security_context_options", m_comp_registry_srv.get());
+      security_context_opts_service("mysql_security_context_options",
+                                    SysVars::get_comp_registry_srv());
 
   if (!security_context_service.is_valid() ||
       !security_context_opts_service.is_valid()) {
@@ -607,10 +632,6 @@ bool AuditLogFilter::get_connection_user(
 }
 
 AuditUdf *AuditLogFilter::get_udf() noexcept { return m_audit_udf.get(); }
-
-comp_registry_srv_t *AuditLogFilter::get_comp_registry_srv() noexcept {
-  return m_comp_registry_srv.get();
-}
 
 AuditLogReader *AuditLogFilter::get_log_reader() noexcept {
   return m_log_reader.get();
