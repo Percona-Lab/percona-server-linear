@@ -16,9 +16,9 @@
 #ifndef AUDIT_LOG_FILTER_SYS_VARS_H_INCLUDED
 #define AUDIT_LOG_FILTER_SYS_VARS_H_INCLUDED
 
+#include "plugin/audit_log_filter/component_registry_service.h"
 #include "plugin/audit_log_filter/log_record_formatter/base.h"
 #include "plugin/audit_log_filter/log_writer/base.h"
-#include "plugin/audit_log_filter/log_writer_strategy/base.h"
 
 #include <memory>
 #include <string>
@@ -29,8 +29,10 @@ struct AuditLogReaderContext;
 class SysVars;
 
 using log_record_formatter::AuditLogFormatType;
+using log_writer::AuditLogCompressionType;
+using log_writer::AuditLogEncryptionType;
 using log_writer::AuditLogHandlerType;
-using log_writer_strategy::AuditLogStrategyType;
+using log_writer::AuditLogStrategyType;
 
 struct LogBookmark {
   uint64_t id;
@@ -149,6 +151,54 @@ class SysVars {
   [[nodiscard]] static int get_syslog_priority() noexcept;
 
   /**
+   * @brief Get audit log compression type.
+   *
+   * @return Audit log compression type, may be one of possible values
+   *         for AuditLogCompressionType
+   */
+  [[nodiscard]] static AuditLogCompressionType get_compression_type() noexcept;
+
+  /**
+   * @brief Get audit log encryption type.
+   *
+   * @return Audit log encryption type, may be one of possible values
+   *         for AuditLogEncryptionType
+   */
+  [[nodiscard]] static AuditLogEncryptionType get_encryption_type() noexcept;
+
+  /**
+   * @brief Set audit log encryption enabled/disabled.
+   *
+   * @param is_enabled Indicates if audit log encryption is enabled.
+   */
+  static void set_log_encryption_enabled(bool is_enabled) noexcept;
+
+  /**
+   * @brief Check if audit log encryption is enabled.
+   *
+   * @return true in case audit log encryption is enabled,
+   *         false otherwise
+   */
+  [[nodiscard]] static bool get_log_encryption_enabled() noexcept;
+
+  /**
+   * @brief Get the number of days after which archived audit log encryption
+   *        passwords are removed.
+   *
+   * @return number of days after which archived audit log encryption passwords
+   *         are removed
+   */
+  [[nodiscard]] static ulonglong get_password_history_keep_days() noexcept;
+
+  /**
+   * @brief Get mean value of randomly generated iterations count used by
+   *        password based derivation routine.
+   *
+   * @return mean value of randomly generated PBKDF iterations count
+   */
+  [[nodiscard]] static int get_key_derivation_iter_count_mean() noexcept;
+
+  /**
    * @brief Set filter_id for a session.
    *
    * @param thd MYSQL_THD for current session
@@ -236,7 +286,7 @@ class SysVars {
    * @brief Increment counter for the number of times data is written to log
    *        synchronously bypassing write buffer in asynchronous mode.
    */
-  static void inc_buffer_bypassing_writes() noexcept;
+  static void inc_direct_writes() noexcept;
 
   /**
    * @brief Update bookmark to latest event written to log.
@@ -273,10 +323,20 @@ class SysVars {
 
 #ifndef NDEBUG
   /**
-   * @brief Get time point from predefined sequence, used for testing.
+   * @brief Get time point from predefined sequence,
+   *        used for log rotation testing.
    * @return Time point
    */
-  static std::chrono::system_clock::time_point get_debug_time_point() noexcept;
+  static std::chrono::system_clock::time_point
+  get_debug_time_point_for_rotation() noexcept;
+
+  /**
+   * @brief Get time point from predefined sequence,
+   *        used for log encryption testing.
+   * @return Time point
+   */
+  static std::chrono::system_clock::time_point
+  get_debug_time_point_for_encryption() noexcept;
 #endif
 
   /**
@@ -296,6 +356,28 @@ class SysVars {
    * @param [in] initial_record_id Initial record sequence number
    */
   static void init_record_id(uint64_t initial_record_id) noexcept;
+
+  /**
+   * @brief Store ID of currently active encryption options
+   *
+   * @param password_id Encryption options ID
+   */
+  static void set_encryption_options_id(const std::string &options_id) noexcept;
+
+  /**
+   * @brief Get ID of currently active encryption options
+   *
+   * @return Encryption options ID
+   */
+  static std::string get_encryption_options_id() noexcept;
+
+  /**
+   * @brief Get component registry service instance.
+   *
+   * @return component registry service instance
+   */
+  static decltype(get_component_registry_service().get())
+  get_comp_regystry_srv() noexcept;
 };
 
 }  // namespace audit_log_filter
