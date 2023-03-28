@@ -221,8 +221,11 @@ void max_size_update_func(MYSQL_THD thd, SYS_VAR *, void *val_ptr,
 
   if (*val > 0) {
     if (SysVars::get_log_prune_seconds() > 0) {
-      push_warning(thd, Sql_condition::SL_WARNING,
-                   ER_WARN_ADUIT_FILTER_MAX_SIZE_AND_PRUNE_SECONDS, nullptr);
+      push_warning(
+          thd, Sql_condition::SL_WARNING, 42000,
+          "Both audit_log_filter.max_size and audit_log_filter.prune_seconds "
+          "are set to non-zero, audit_log_filter_max_size takes precedence and "
+          "audit_log_filter_prune_seconds is ignored.");
     }
 
     get_audit_log_filter_instance()->on_audit_log_prune_requested();
@@ -236,8 +239,11 @@ void prune_seconds_update_func(MYSQL_THD thd, SYS_VAR *, void *val_ptr,
 
   if (*val > 0) {
     if (SysVars::get_log_max_size() > 0) {
-      push_warning(thd, Sql_condition::SL_WARNING,
-                   ER_WARN_ADUIT_FILTER_MAX_SIZE_AND_PRUNE_SECONDS, nullptr);
+      push_warning(
+          thd, Sql_condition::SL_WARNING, 42000,
+          "Both audit_log_filter.max_size and audit_log_filter.prune_seconds "
+          "are set to non-zero, audit_log_filter_max_size takes precedence and "
+          "audit_log_filter_prune_seconds is ignored.");
     }
 
     get_audit_log_filter_instance()->on_audit_log_prune_requested();
@@ -729,7 +735,7 @@ void SysVars::validate() noexcept {
     LogComponentErr(
         WARNING_LEVEL, ER_LOG_PRINTF_MSG,
         "Both audit_log_filter.max_size and audit_log_filter.prune_seconds are "
-        "set to non-zero. audit_log_filter.max_size takes precedence and "
+        "set to non-zero, audit_log_filter.max_size takes precedence and "
         "audit_log_filter.prune_seconds is ignored");
   }
 }
