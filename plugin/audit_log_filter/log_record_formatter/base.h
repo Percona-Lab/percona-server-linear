@@ -43,6 +43,7 @@ struct AuditRecordMessage;
 struct AuditRecordStartAudit;
 struct AuditRecordStopAudit;
 struct AuditRecordUnknown;
+struct ExtendedInfo;
 
 namespace log_record_formatter {
 
@@ -53,7 +54,6 @@ enum class AuditLogFormatType {
   New,
   Old,
   Json,
-  Csv,
   FormatsCount  // This item must be last in the list
 };
 
@@ -423,7 +423,17 @@ class LogRecordFormatterBase {
    *
    * @return Escape rules
    */
-  virtual const EscapeRulesContainer &get_escape_rules() const noexcept = 0;
+  [[nodiscard]] virtual const EscapeRulesContainer &get_escape_rules()
+      const noexcept = 0;
+
+  /**
+   * @brief Get string representation of extra attributes
+   *        for audit log record.
+   * @param info Extended record info
+   * @return Formatted string
+   */
+  [[nodiscard]] virtual std::string extra_attrs_to_string(
+      const ExtendedInfo &info) const noexcept = 0;
 };
 
 class LogRecordFormatterBaseXml : public LogRecordFormatterBase {
