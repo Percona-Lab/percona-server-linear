@@ -33,6 +33,31 @@
 namespace audit_log_filter {
 namespace {
 
+const size_t kMaxDbNameLength = 64;
+
+bool has_system_variables_privilege(MYSQL_THD thd) {
+  my_service<SERVICE_TYPE(mysql_thd_security_context)> security_context_service(
+      "mysql_thd_security_context", SysVars::get_comp_regystry_srv());
+  my_service<SERVICE_TYPE(global_grants_check)> grants_check_service(
+      "global_grants_check", SysVars::get_comp_regystry_srv());
+
+  bool has_audit_admin_grant = false;
+  bool has_system_variables_admin_grant = false;
+
+  if (security_context_service.is_valid() && grants_check_service.is_valid()) {
+    Security_context_handle ctx;
+
+    if (!security_context_service->get(thd, &ctx)) {
+      has_audit_admin_grant = grants_check_service->has_global_grant(
+          ctx, STRING_WITH_LEN("AUDIT_ADMIN"));
+      has_system_variables_admin_grant = grants_check_service->has_global_grant(
+          ctx, STRING_WITH_LEN("SYSTEM_VARIABLES_ADMIN"));
+    }
+  }
+
+  return has_audit_admin_grant && has_system_variables_admin_grant;
+}
+
 /*
  * Internally used variables
  */
@@ -158,6 +183,8 @@ SHOW_VAR status_vars[] = {
  */
 char *log_file_name;
 const char default_log_file_name[] = "audit_filter.log";
+char *config_database_name;
+const char default_config_database_name[] = "mysql";
 ulong log_handler_type = static_cast<ulong>(AuditLogHandlerType::File);
 ulong log_format_type = static_cast<ulong>(AuditLogFormatType::New);
 ulong log_strategy_type =
@@ -178,6 +205,7 @@ ulong log_encryption_type = static_cast<ulong>(AuditLogEncryptionType::None);
 ulonglong log_password_history_keep_days = 0;
 int key_derivation_iter_count_mean = 0;
 const int default_key_derivation_iter_count_mean = 600000;
+bool json_with_unix_timestamp = false;
 
 /*
  * The audit_log_filter.file variable is used to specify the filename that’s
@@ -210,13 +238,12 @@ MYSQL_SYSVAR_ENUM(handler, log_handler_type,
 
 /*
  * The audit_log_filter.format variable is used to specify the audit filter
- * log format. The audit log filter plugin supports four log formats:
- * OLD, NEW, JSON, and CSV. OLD and NEW formats are based on XML, where
+ * log format. The audit log filter plugin supports three log formats:
+ * OLD, NEW and JSON. OLD and NEW formats are based on XML, where
  * the former outputs log record properties as XML attributes and the latter
  * as XML tags.
  */
-const char *audit_log_filter_format_names[] = {"NEW", "OLD", "JSON", "CSV",
-                                               nullptr};
+const char *audit_log_filter_format_names[] = {"NEW", "OLD", "JSON", nullptr};
 TYPELIB audit_log_filter_format_typelib = {
     array_elements(audit_log_filter_format_names) - 1,
     "audit_log_filter_format_typelib", audit_log_filter_format_names, nullptr};
@@ -419,26 +446,7 @@ MYSQL_THDVAR_ULONG(
  */
 int log_disabled_check_func(MYSQL_THD thd, SYS_VAR *var, void *save,
                             st_mysql_value *value) {
-  my_service<SERVICE_TYPE(mysql_thd_security_context)> security_context_service(
-      "mysql_thd_security_context", SysVars::get_comp_regystry_srv());
-  my_service<SERVICE_TYPE(global_grants_check)> grants_check_service(
-      "global_grants_check", SysVars::get_comp_regystry_srv());
-
-  bool has_audit_admin_grant = false;
-  bool has_system_variables_admin_grant = false;
-
-  if (security_context_service.is_valid() && grants_check_service.is_valid()) {
-    Security_context_handle ctx;
-
-    if (!security_context_service->get(thd, &ctx)) {
-      has_audit_admin_grant = grants_check_service->has_global_grant(
-          ctx, STRING_WITH_LEN("AUDIT_ADMIN"));
-      has_system_variables_admin_grant = grants_check_service->has_global_grant(
-          ctx, STRING_WITH_LEN("SYSTEM_VARIABLES_ADMIN"));
-    }
-  }
-
-  if (!has_audit_admin_grant || !has_system_variables_admin_grant) {
+  if (!has_system_variables_privilege(thd)) {
     my_error(ER_SPECIFIC_ACCESS_DENIED_ERROR, MYF(0),
              "SYSTEM_VARIABLES_ADMIN and AUDIT_ADMIN");
     return 1;
@@ -554,6 +562,54 @@ MYSQL_SYSVAR_INT(key_derivation_iterations_count_mean,
                  INT_MAX, 0);
 
 /*
+ * The audit_log_filter.format_unix_timestamp variable when enabled causes
+ * each log file record to include a time field. The field value is an integer
+ * that represents the UNIX timestamp value indicating the date and time when
+ * the audit event was generated. Applies to JSON formatted logs only.
+ */
+int format_unix_timestamp_check_func(MYSQL_THD thd, SYS_VAR *var, void *save,
+                                     st_mysql_value *value) {
+  if (!has_system_variables_privilege(thd)) {
+    my_error(ER_SPECIFIC_ACCESS_DENIED_ERROR, MYF(0),
+             "SYSTEM_VARIABLES_ADMIN and AUDIT_ADMIN");
+    return 1;
+  }
+
+  return check_func_bool(thd, var, save, value);
+}
+
+void format_unix_timestamp_update_func(MYSQL_THD, SYS_VAR *, void *val_ptr,
+                                       const void *save) {
+  const auto new_val = *static_cast<const bool *>(save);
+
+  if (json_with_unix_timestamp != new_val) {
+    *static_cast<bool *>(val_ptr) = new_val;
+
+    if (SysVars::get_format_type() == AuditLogFormatType::Json) {
+      get_audit_log_filter_instance()->on_audit_log_rotate_requested();
+    }
+  }
+}
+
+MYSQL_SYSVAR_BOOL(format_unix_timestamp, json_with_unix_timestamp,
+                  PLUGIN_VAR_RQCMDARG,
+                  "Add 'time' field to JSON formatted log records representing "
+                  "the UNIX timestamp value indicating the date and time when "
+                  "the audit event was generated.",
+                  format_unix_timestamp_check_func,
+                  format_unix_timestamp_update_func, false);
+
+/*
+ * The audit_log_filter.database variable specifies which database the plugin
+ * uses to find its tables. Defaults to 'mysql'.
+ */
+MYSQL_SYSVAR_STR(database, config_database_name,
+                 PLUGIN_VAR_RQCMDARG | PLUGIN_VAR_READONLY |
+                     PLUGIN_VAR_MEMALLOC,
+                 "Specifies which database the plugin uses to find its tables.",
+                 nullptr, nullptr, default_config_database_name);
+
+/*
  * Internally used as a storage for log reader context data.
  */
 MYSQL_THDVAR_STR(log_reader_context,
@@ -580,6 +636,8 @@ SYS_VAR *sys_vars[] = {MYSQL_SYSVAR(file),
                        MYSQL_SYSVAR(disable),
                        MYSQL_SYSVAR(read_buffer_size),
                        MYSQL_SYSVAR(log_reader_context),
+                       MYSQL_SYSVAR(format_unix_timestamp),
+                       MYSQL_SYSVAR(database),
                        nullptr};
 
 #ifndef NDEBUG
@@ -597,7 +655,16 @@ SHOW_VAR *SysVars::get_status_var_defs() noexcept { return status_vars; }
 
 SYS_VAR **SysVars::get_sys_var_defs() noexcept { return sys_vars; }
 
-void SysVars::validate() noexcept {
+bool SysVars::validate() noexcept {
+  auto *db_name = get_config_database_name();
+
+  if (db_name == nullptr || strlen(db_name) == 0 ||
+      strlen(db_name) > kMaxDbNameLength) {
+    LogPluginErrMsg(ERROR_LEVEL, ER_LOG_PRINTF_MSG,
+                    "Bad audit_log_filter_database value");
+    return false;
+  }
+
   if (SysVars::get_log_max_size() > 0 && SysVars::get_log_prune_seconds() > 0) {
     LogPluginErrMsg(
         WARNING_LEVEL, ER_LOG_PRINTF_MSG,
@@ -605,9 +672,15 @@ void SysVars::validate() noexcept {
         "set to non-zero, audit_log_filter_max_size takes precedence and "
         "audit_log_filter_prune_seconds is ignored");
   }
+
+  return true;
 }
 
 const char *SysVars::get_file_name() noexcept { return log_file_name; }
+
+const char *SysVars::get_config_database_name() noexcept {
+  return config_database_name;
+}
 
 AuditLogHandlerType SysVars::get_handler_type() noexcept {
   return static_cast<AuditLogHandlerType>(log_handler_type);
@@ -663,6 +736,10 @@ ulonglong SysVars::get_password_history_keep_days() noexcept {
 
 int SysVars::get_key_derivation_iter_count_mean() noexcept {
   return key_derivation_iter_count_mean;
+}
+
+bool SysVars::get_format_unix_timestamp() noexcept {
+  return json_with_unix_timestamp;
 }
 
 void SysVars::set_session_filter_id(MYSQL_THD thd, ulong id) noexcept {

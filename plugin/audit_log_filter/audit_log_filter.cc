@@ -176,7 +176,9 @@ int audit_log_filter_init(MYSQL_PLUGIN plugin_info [[maybe_unused]]) {
   LogPluginErr(INFORMATION_LEVEL, ER_LOG_PRINTF_MSG,
                "Initializing Audit Event Filter...");
 
-  SysVars::validate();
+  if (!SysVars::validate()) {
+    return 1;
+  }
 
   auto comp_registry_srv = SysVars::get_comp_regystry_srv();
 
@@ -223,12 +225,6 @@ int audit_log_filter_init(MYSQL_PLUGIN plugin_info [[maybe_unused]]) {
   if (audit_rule_registry == nullptr) {
     LogPluginErr(ERROR_LEVEL, ER_LOG_PRINTF_MSG,
                  "Failed to create audit rule registry instance");
-    return 1;
-  }
-
-  if (!audit_rule_registry->load()) {
-    LogPluginErr(ERROR_LEVEL, ER_LOG_PRINTF_MSG,
-                 "Failed to load filtering rules");
     return 1;
   }
 
