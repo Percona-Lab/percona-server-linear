@@ -7,6 +7,5 @@ OK
 SELECT audit_log_rotate();
 audit_log_rotate()
 <file_name>
-Rotated files Ok
 #
 # Cleanup
