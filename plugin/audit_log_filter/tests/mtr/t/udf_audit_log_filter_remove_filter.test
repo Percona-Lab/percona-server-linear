@@ -1,4 +1,6 @@
+--source include/have_debug.inc
 --source audit_tables_init.inc
+
 --echo #
 --echo # Check wrong argument number
 --error 1123
