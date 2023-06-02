@@ -271,11 +271,12 @@ mysql_service_status_t audit_log_filter_init() {
   log_bi = mysql_service_log_builtins;
   log_bs = mysql_service_log_builtins_string;
 
-  const auto *comp_registry_srv = SysVars::get_comp_registry_srv();
+  const auto *comp_registry_srv = SysVars::acquire_comp_registry_srv();
 
   auto comp_scope_guard = create_scope_guard([&] {
     if (comp_registry_srv != nullptr) {
       SysVars::deinit();
+      SysVars::release_comp_registry_srv();
     }
   });
 
@@ -360,6 +361,10 @@ mysql_service_status_t audit_log_filter_init() {
     return 1;
   }
 
+  // In case of successful initialization,
+  // prevent comp_registry_srv from being released by the comp_scope_guard.
+  comp_registry_srv = nullptr;
+
   if (SysVars::get_log_disabled()) {
     LogComponentErr(WARNING_LEVEL, ER_AUDIT_INIT_DISABLED_WARN);
   } else {
@@ -389,6 +394,8 @@ mysql_service_status_t audit_log_filter_deinit() {
   LogComponentErr(INFORMATION_LEVEL, ER_AUDIT_DEINIT_DONE);
 
   SysVars::deinit();
+  SysVars::release_comp_registry_srv();
+
   delete audit_log_filter;
   audit_log_filter = nullptr;
 
@@ -407,7 +414,7 @@ AuditLogFilter::AuditLogFilter(
       m_is_active{true} {}
 
 bool AuditLogFilter::init() noexcept {
-  auto *reg_srv = SysVars::get_comp_registry_srv();
+  const auto *reg_srv = SysVars::get_comp_registry_srv();
 
   if (reg_srv->acquire(
           "mysql_thd_security_context",
@@ -447,8 +454,6 @@ void AuditLogFilter::deinit() noexcept {
   reg_srv->release(reinterpret_cast<my_h_service>(
       const_cast<SERVICE_TYPE_NO_CONST(global_grants_check) *>(
           m_grants_check_srv)));
-
-  mysql_plugin_registry_release(reg_srv);
 }
 
 int AuditLogFilter::notify_event(audit_event_class_t event_class,
@@ -593,6 +598,7 @@ void AuditLogFilter::on_audit_log_rotate_requested(
     log_writer::FileRotationResult *result) noexcept {
   if (m_is_active) {
     m_log_writer->rotate(result);
+    m_log_writer->prune();
   }
 }
 
