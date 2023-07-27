@@ -46,11 +46,11 @@ if (!$command)
 
 if ($output_file)
 {
-  if ($redirect_stderr)
+  if ($redirect_stderr == 1)
   {
     --let $line = $line 2> $output_file
   }
-  if (!$redirect_stderr)
+  if ($redirect_stderr == 0)
   {
     --let $line = $line > $output_file
   }
