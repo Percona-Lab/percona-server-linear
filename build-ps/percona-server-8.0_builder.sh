@@ -859,6 +859,18 @@ build_deb(){
     cd ${DIRNAME}
     dch -b -m -D "$DEBIAN_VERSION" --force-distribution -v "${VERSION}-${RELEASE}-${DEB_RELEASE}.${DEBIAN_VERSION}" 'Update distribution'
 
+    cd debian/
+    wget https://raw.githubusercontent.com/Percona-Lab/telemetry-agent/phase-0/call-home.sh
+    sed -i 's:exit 0::' percona-server-server.postinst
+    echo "cat <<'CALLHOME' > /tmp/call-home.sh" >> percona-server-server.postinst
+    cat call-home.sh >> percona-server-server.postinst
+    echo "CALLHOME" >> percona-server-server.postinst
+    echo 'bash +x /tmp/call-home.sh -f "PRODUCT_FAMILY_PS" -v "${VERSION}-${RELEASE}-${DEB_RELEASE}-${DEBIAN_VERSION}" -d "PACKAGE" &>/dev/null || :' >> percona-server-server.postinst
+    echo "rm -rf /tmp/call-home.sh" >> percona-server-server.postinst
+    echo "exit 0" >> percona-server-server.postinst
+    rm -f call-home.sh
+    cd ../
+
     if [ ${DEBIAN_VERSION} != trusty -a ${DEBIAN_VERSION} != xenial -a ${DEBIAN_VERSION} != jessie -a ${DEBIAN_VERSION} != stretch -a ${DEBIAN_VERSION} != artful -a ${DEBIAN_VERSION} != bionic -a ${DEBIAN_VERSION} != focal -a "${DEBIAN_VERSION}" != disco -a "${DEBIAN_VERSION}" != buster -a "${DEBIAN_VERSION}" != hirsute -a "${DEBIAN_VERSION}" != bullseye -a "${DEBIAN_VERSION}" != jammy -a "${DEBIAN_VERSION}" != bookworm ]; then
         gcc47=$(which gcc-4.7 2>/dev/null || true)
         if [ -x "${gcc47}" ]; then
