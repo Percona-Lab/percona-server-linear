@@ -50,7 +50,7 @@ OPTIMIZE TABLE t1;
 
 --echo
 --echo *** updating the table with another record also containing the '%' character
-SET @special_string = 'sd%he%ff';
+SET @special_string = 'sda%he%ff';
 --let $special_string = `SELECT @special_string`
 --let $old_expected_number_of_records = $expected_number_of_records
 # for both default and mecab parser
@@ -99,7 +99,7 @@ OPTIMIZE TABLE t1;
 --echo *** creating a list of all printable characters (ASCII 33..126)
 --echo *** (whitespace and control characters are excluded)
 
-SELECT GROUP_CONCAT(CHAR(value + 33 USING utf8mb4) SEPARATOR '') INTO @special_characters FROM SEQUENCE_TABLE(127 - 33) AS tt;
+SELECT GROUP_CONCAT(CHAR(value + 33 USING utf8mb4) SEPARATOR '') INTO @special_characters FROM PERCONA_SEQUENCE_TABLE(127 - 33) AS tt;
 SELECT @special_characters;
 
 --echo
