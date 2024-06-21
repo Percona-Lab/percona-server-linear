@@ -1,6 +1,6 @@
 #include <tunables/global>
 
-/usr/sbin/mysqld {
+/usr/sbin/mysqld flags=(complain) {
   #include <abstractions/base>
   #include <abstractions/nameservice>
   #include <abstractions/user-tmp>
@@ -54,8 +54,8 @@
 # Allow error msg and charset access
   /usr/share/mysql/ r,
   /usr/share/mysql/** r,
-  /usr/share/mysql-8.0/ r,
-  /usr/share/mysql-8.0/** r,
+  /usr/share/mysql-@MYSQL_BASE_VERSION@/ r,
+  /usr/share/mysql-@MYSQL_BASE_VERSION@/** r,
 
 # Allow data dir access
   /var/lib/mysql/ r,
@@ -75,6 +75,10 @@
 
 # Allow access to openssl config
   /etc/ssl/openssl.cnf r,
+
+# Allow access to PS telemetry directory
+  /usr/local/percona/telemetry/ps/ rw,
+  /usr/local/percona/telemetry/ps/** rw,
 
   # Site-specific additions and overrides. See local/README for details.
   #include <local/usr.sbin.mysqld>
