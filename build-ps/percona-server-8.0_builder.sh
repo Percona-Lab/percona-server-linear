@@ -448,6 +448,7 @@ install_deps() {
         if [ "x$RHEL" = "x8" ]; then
             yum -y install libtirpc-devel
             yum -y install centos-release-stream
+            switch_to_vault_repo
             yum -y install gcc-toolset-11-binutils gcc-toolset-11-valgrind gcc-toolset-11-valgrind-devel gcc-toolset-11-libatomic-devel
             yum -y install gcc-toolset-11-libasan-devel gcc-toolset-11-libubsan-devel
             yum -y remove centos-release-stream
