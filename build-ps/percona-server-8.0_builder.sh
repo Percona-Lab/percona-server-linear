@@ -103,15 +103,10 @@ add_percona_yum_repo(){
     return
 }
 
-add_percona_apt_repo(){
-  if [ ! -f /etc/apt/sources.list.d/percona-dev.list ]; then
-    cat >/etc/apt/sources.list.d/percona-dev.list <<EOL
-deb http://jenkins.percona.com/apt-repo/ @@DIST@@ main
-deb-src http://jenkins.percona.com/apt-repo/ @@DIST@@ main
-EOL
-    sed -i "s:@@DIST@@:$OS_NAME:g" /etc/apt/sources.list.d/percona-dev.list
-  fi
-  return
+switch_to_vault_repo() {
+    sed -i 's/mirrorlist/#mirrorlist/g' /etc/yum.repos.d/CentOS-*
+    sed -i 's|#\s*baseurl=http://mirror.centos.org|baseurl=http://vault.centos.org|g' /etc/yum.repos.d/CentOS-*
+    sed -i 's/enabled=0/enabled=1/g' /etc/yum.repos.d/CentOS-Linux-PowerTools.repo
 }
 
 get_sources(){
@@ -386,6 +381,22 @@ install_deps() {
     if [ "x$OS" = "xrpm" ]; then
         RHEL=$(rpm --eval %rhel)
         ARCH=$(echo $(uname -m) | sed -e 's:i686:i386:g')
+        if [ "x${RHEL}" = "x7" -o "x${RHEL}" = "x8" ]; then
+            switch_to_vault_repo
+        fi
+        if [ x"$ARCH" = "xx86_64" ]; then
+            if [ "${RHEL}" -lt 9 ]; then
+              #  add_percona_yum_repo
+                yum install -y https://repo.percona.com/yum/percona-release-latest.noarch.rpm
+                percona-release enable tools testing
+              #  percona-release enable tools experimental
+            fi
+            yum -y install yum-utils
+            yum-config-manager --enable ol"${RHEL}"_codeready_builder
+        else
+            yum -y install yum-utils
+            yum-config-manager --enable ol"${RHEL}"_codeready_builder
+        fi
         yum -y update
         if [ "${RHEL}" -lt 9 ]; then
             add_percona_yum_repo
@@ -450,17 +461,27 @@ install_deps() {
             yum -y install libtirpc-devel
             yum -y install centos-release-stream
             switch_to_vault_repo
-            yum -y install gcc-toolset-11-binutils gcc-toolset-11-valgrind gcc-toolset-11-valgrind-devel gcc-toolset-11-libatomic-devel
-            yum -y install gcc-toolset-11-libasan-devel gcc-toolset-11-libubsan-devel
-            yum -y remove centos-release-stream
+            yum -y install gcc-toolset-12-gcc gcc-toolset-12-gcc-c++ gcc-toolset-12-binutils gcc-toolset-12-annobin-annocheck gcc-toolset-12-annobin-plugin-gcc gcc-toolset-12-libatomic-devel
+            if [ x"$ARCH" = "xx86_64" ]; then
+                yum -y remove centos-release-stream
+            fi
         fi
         if [ "x$RHEL" = "x9" ]; then
             yum -y install libtirpc-devel
+            yum -y install gcc-toolset-12-gcc gcc-toolset-12-gcc-c++ gcc-toolset-12-binutils gcc-toolset-12-annobin-annocheck gcc-toolset-12-annobin-plugin-gcc gcc-toolset-12-libatomic-devel
+            if [ x"$ARCH" = "xx86_64" ]; then
+                pushd /opt/rh/gcc-toolset-12/root/usr/lib/gcc/x86_64-redhat-linux/12/plugin/
+                ln -s annobin.so gcc-annobin.so
+                popd
+            else
+                pushd /opt/rh/gcc-toolset-12/root/usr/lib/gcc/aarch64-redhat-linux/12/plugin/
+                ln -s annobin.so gcc-annobin.so
+                popd
+            fi
         else
             yum -y install MySQL-python
         fi
     else
-        add_percona_apt_repo
         apt-get update
         apt-get -y install lsb_release || true
         apt-get -y install dirmngr || true
