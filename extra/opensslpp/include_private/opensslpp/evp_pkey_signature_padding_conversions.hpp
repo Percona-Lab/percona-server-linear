@@ -14,45 +14,32 @@
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA */
 
-#ifndef OPENSSLPP_BIO_HPP
-#define OPENSSLPP_BIO_HPP
+#ifndef OPENSSLPP_EVP_PKEY_ALGORITHM_CONVERSIONS_HPP
+#define OPENSSLPP_EVP_PKEY_ALGORITHM_CONVERSIONS_HPP
 
-#include <memory>
-#include <string_view>
+#include <cassert>
 
-#include "opensslpp/bio_fwd.hpp"
+#include <openssl/rsa.h>
 
-#include <opensslpp/accessor_fwd.hpp>
+#include <opensslpp/evp_pkey_signature_padding.hpp>
 
 namespace opensslpp {
 
-class bio final {
-  friend class accessor<bio>;
-
- public:
-  bio();
-  explicit bio(std::string_view buffer);
-
-  ~bio() noexcept = default;
-
-  bio(const bio &obj) = delete;
-  bio(bio &&obj) noexcept = default;
-
-  bio &operator=(const bio &obj) = delete;
-  bio &operator=(bio &&obj) noexcept = default;
-
-  std::string_view sv() const;
-
- private:
-  // should not be declared final as this prevents optimization for empty
-  // deleter in std::unique_ptr
-  struct bio_deleter {
-    void operator()(void *b) const noexcept;
-  };
-
-  using impl_ptr = std::unique_ptr<void, bio_deleter>;
-  impl_ptr impl_;
-};
+inline int evp_pkey_signature_padding_to_native_padding(
+    evp_pkey_signature_padding padding) noexcept {
+  int res = RSA_PKCS1_PADDING;
+  switch (padding) {
+    case evp_pkey_signature_padding::rsa_pkcs1:
+      res = RSA_PKCS1_PADDING;
+      break;
+    case evp_pkey_signature_padding::rsa_pkcs1_pss:
+      res = RSA_PKCS1_PSS_PADDING;
+      break;
+    default:
+      res = RSA_PKCS1_PADDING;
+  }
+  return res;
+}
 
 }  // namespace opensslpp
 
