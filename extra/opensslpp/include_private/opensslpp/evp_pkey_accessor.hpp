@@ -14,45 +14,18 @@
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA */
 
-#ifndef OPENSSLPP_BIO_HPP
-#define OPENSSLPP_BIO_HPP
+#ifndef OPENSSLPP_EVP_PKEY_ACCESSOR_HPP
+#define OPENSSLPP_EVP_PKEY_ACCESSOR_HPP
 
-#include <memory>
-#include <string_view>
+#include <openssl/evp.h>
 
-#include "opensslpp/bio_fwd.hpp"
+#include <opensslpp/evp_pkey_fwd.hpp>
 
-#include <opensslpp/accessor_fwd.hpp>
+#include "opensslpp/typed_accessor.hpp"
 
 namespace opensslpp {
 
-class bio final {
-  friend class accessor<bio>;
-
- public:
-  bio();
-  explicit bio(std::string_view buffer);
-
-  ~bio() noexcept = default;
-
-  bio(const bio &obj) = delete;
-  bio(bio &&obj) noexcept = default;
-
-  bio &operator=(const bio &obj) = delete;
-  bio &operator=(bio &&obj) noexcept = default;
-
-  std::string_view sv() const;
-
- private:
-  // should not be declared final as this prevents optimization for empty
-  // deleter in std::unique_ptr
-  struct bio_deleter {
-    void operator()(void *b) const noexcept;
-  };
-
-  using impl_ptr = std::unique_ptr<void, bio_deleter>;
-  impl_ptr impl_;
-};
+using evp_pkey_accessor = typed_accessor<evp_pkey, EVP_PKEY>;
 
 }  // namespace opensslpp
 
