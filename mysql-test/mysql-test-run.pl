@@ -309,10 +309,10 @@ our @DEFAULT_SUITES = qw(
   jdv
 
   component_audit_log_filter
-  component_encryption_udf
   percona
   percona_innodb
   percona-pam-for-mysql
+  component_encryption_udf
   component_masking_functions
   procfs
   rocksdb
