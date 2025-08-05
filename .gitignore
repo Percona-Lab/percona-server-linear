@@ -28,6 +28,7 @@ scalability_jobs_*
 .cproject
 .project
 .settings/
+.idea
 
 # Cache directory used by e.g. clangd.
 .cache/
