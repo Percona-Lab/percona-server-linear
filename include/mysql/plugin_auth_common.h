@@ -38,6 +38,10 @@
 /** the max allowed length for a user name */
 #define MYSQL_USERNAME_LENGTH 96
 
+#ifndef MYSQL_ABI_CHECK
+#include <stdbool.h>
+#endif
+
 /**
   return values of the plugin authenticate_user() method.
 */
