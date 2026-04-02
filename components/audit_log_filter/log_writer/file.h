@@ -110,11 +110,18 @@ class LogWriter<AuditLogHandlerType::File> : public LogWriterBase {
   void do_write(const std::string &record, bool print_separator) noexcept;
 
   /**
-   * @brief Get current log file size while m_write_mutex is held.
+   * @brief Get current log file size while m_write_lock is held.
    *
    * @return Current log file size in bytes
    */
   [[nodiscard]] uint64_t do_get_log_size() const noexcept;
+
+  /**
+   * @brief Write whitespace padding.
+   *
+   * @return Number of written bytes
+   */
+  size_t write_padding();
 
   /**
    * @brief Implement actual file rotation logic.
@@ -124,7 +131,7 @@ class LogWriter<AuditLogHandlerType::File> : public LogWriterBase {
   void do_rotate(FileRotationResult *result) noexcept;
 
   /**
-   * @brief Prune outdated log files while m_write_mutex is held.
+   * @brief Prune outdated log files while m_write_lock is held.
    */
   void do_prune() noexcept;
 
