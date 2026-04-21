@@ -76,7 +76,8 @@ SET(KEYRING_KMIP_LIBRARIES
   keyring_common
   OpenSSL::SSL
   OpenSSL::Crypto
-  kmippp
+  kmipclient
+  kmiputil
 )
 
 MYSQL_ADD_COMPONENT(keyring_kmip
