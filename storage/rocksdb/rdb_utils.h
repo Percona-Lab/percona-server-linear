@@ -17,7 +17,6 @@
 
 /* C++ standard header files */
 #include <chrono>
-#include <functional>
 #include <regex>
 #include <string>
 #include <unordered_map>
