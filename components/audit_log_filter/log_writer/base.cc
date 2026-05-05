@@ -29,8 +29,6 @@ LogWriterBase::LogWriterBase(
     std::unique_ptr<log_record_formatter::LogRecordFormatterBase> formatter)
     : m_formatter{std::move(formatter)} {}
 
-LogWriterBase::~LogWriterBase() = default;
-
 void LogWriterBase::init_formatter() noexcept { SysVars::init_record_id(0); }
 
 void LogWriterBase::write(const AuditRecordVariant &record) noexcept {
