@@ -40,6 +40,7 @@
 #include "vio/vio_priv.h"
 
 #include <openssl/dh.h>
+#include <openssl/evp.h>
 
 #if OPENSSL_VERSION_NUMBER < 0x10002000L
 #include <openssl/ec.h>
@@ -497,11 +498,16 @@ int set_fips_mode(const uint fips_mode, char err_string[OPENSSL_ERROR_LENGTH]) {
   if (fips_mode > 2) {
     goto EXIT;
   }
+#if OPENSSL_VERSION_NUMBER < 0x30000000L
   fips_mode_old = FIPS_mode();
+#else
+  fips_mode_old = EVP_default_properties_is_fips_enabled(NULL);
+#endif
   if (fips_mode_old == fips_mode) {
     rc = 1;
     goto EXIT;
   }
+#if OPENSSL_VERSION_NUMBER < 0x30000000L
   if (!(rc = FIPS_mode_set(fips_mode))) {
     /*
       If OS doesn't have FIPS enabled openssl library and user sets FIPS mode
@@ -511,6 +517,9 @@ int set_fips_mode(const uint fips_mode, char err_string[OPENSSL_ERROR_LENGTH]) {
       allow successful cryptographic operation and will not abort the server.
     */
     FIPS_mode_set(fips_mode_old);
+#else
+  if (!(rc = EVP_default_properties_enable_fips(NULL, fips_mode))) {
+#endif
     err_library = ERR_get_error();
     ERR_error_string_n(err_library, err_string, OPENSSL_ERROR_LENGTH - 1);
     err_string[OPENSSL_ERROR_LENGTH - 1] = '\0';
@@ -524,7 +533,11 @@ EXIT:
 
   @returns openssl current fips mode
 */
+#if OPENSSL_VERSION_NUMBER < 0x30000000L
 uint get_fips_mode() { return FIPS_mode(); }
+#else
+uint get_fips_mode() { return EVP_default_properties_is_fips_enabled(NULL); }
+#endif
 
 long process_tls_version(const char *tls_version) {
   const char *separator = ",";
