@@ -159,7 +159,7 @@ hp_process_field_data_to_chunkset(HP_SHARE *info, const uchar *data,
       continue;
     }
 
-    to_copy= min(length, to_copy);
+    to_copy= MY_MIN(length, to_copy);
 
     if (is_compare)
     {
@@ -479,7 +479,7 @@ int hp_extract_record(HP_INFO *info, uchar *record, const uchar *pos)
         to_copy= share->recordspace.chunk_dataspace_length;
       }
 
-      to_copy= min(length, to_copy);
+      to_copy= MY_MIN(length, to_copy);
 
       memcpy(to, curr_chunk + src_offset, (size_t) to_copy);
       src_offset+= to_copy;

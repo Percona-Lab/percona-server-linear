@@ -102,19 +102,12 @@ DROP DATABASE mysqltest;
 
 SET PASSWORD FOR 'mysqltest_1'@'localhost' = PASSWORD('newpass');
 
-SET @testtemp= @@global.profiling;
-SET @@global.profiling=1;
-SELECT @@global.profiling;
-SET @@global.profiling=0;
-SELECT @@global.profiling;
-SET @@global.profiling= @testtemp;
-
-SET @testtemp= @@global.innodb_lazy_drop_table;
-SET @@global.innodb_lazy_drop_table= 1;
-SELECT @@global.innodb_lazy_drop_table;
-SET @@global.innodb_lazy_drop_table= 0;
-SELECT @@global.innodb_lazy_drop_table;
-SET @@global.innodb_lazy_drop_table= @testtemp;
+SET @testtemp= @@global.innodb_fast_shutdown;
+SET @@global.innodb_fast_shutdown= 2;
+SELECT @@global.innodb_fast_shutdown;
+SET @@global.innodb_fast_shutdown= 0;
+SELECT @@global.innodb_fast_shutdown;
+SET @@global.innodb_fast_shutdown= @testtemp;
 
 connection default;
 
