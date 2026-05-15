@@ -173,9 +173,6 @@ const char *ha_legacy_type_name(legacy_db_type legacy_type)
 }
 #endif
 
-static int commit_one_phase_low(THD *thd, bool all, THD_TRANS *trans,
-                                bool is_real_trans);
-
 /**
   Database name that hold most of mysqld system tables.
   Current code assumes that, there exists only some
@@ -252,6 +249,7 @@ struct st_sys_tbl_chk_params
     SUPPORTED_SYSTEM_TABLE
   } status;                                    // OUT param
 };
+
 
 static plugin_ref ha_default_plugin(THD *thd)
 {

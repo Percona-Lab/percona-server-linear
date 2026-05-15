@@ -1,1 +1,1 @@
---enforce_storage_engine=innodb
+--enforce_storage_engine=myisam
