@@ -53,11 +53,6 @@ Created 1/20/1994 Heikki Tuuri
 /* Enable UNIV_LOG_ARCHIVE in XtraDB */
 #define UNIV_LOG_ARCHIVE 1
 
-#ifndef PERCONA_INNODB_VERSION
-#define PERCONA_INNODB_VERSION 29.3
-#endif
-
-
 /* The following is the InnoDB version as shown in
 SELECT plugin_version FROM information_schema.plugins;
 calculated in make_version_string() in sql/sql_show.cc like this:

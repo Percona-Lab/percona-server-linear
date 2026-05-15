@@ -132,14 +132,18 @@ ulonglong max_of_int_range(int var_type);
    have the name length availa ble, specify 0. Specify 0 for 'create' to
    simply obtain the existong value or specify a size value to have the
    storage allocated if it does not yet exist. */
-extern void* getopt_constraint_get_max_value(const char *name,
-                                             size_t length, size_t create);
-extern void* getopt_constraint_get_min_value(const char *name,
-                                             size_t length, size_t create);
-extern my_bool* getopt_constraint_get_hidden_value(const char *name,
-                                             size_t length, my_bool create);
-extern my_bool* getopt_constraint_get_readonly_value(const char *name,
-                                             size_t length, my_bool create);
+extern const void* getopt_constraint_get_max_value(const char *name,
+                                                   size_t length,
+                                                   size_t create);
+extern const void* getopt_constraint_get_min_value(const char *name,
+                                                   size_t length,
+                                                   size_t create);
+extern const my_bool* getopt_constraint_get_hidden_value(const char *name,
+                                                         size_t length,
+                                                         my_bool create);
+extern const my_bool* getopt_constraint_get_readonly_value(const char *name,
+                                                           size_t length,
+                                                           my_bool create);
 
 
 C_MODE_END

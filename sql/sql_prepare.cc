@@ -2353,7 +2353,9 @@ end:
   }
   // Updates THD stats and the global user stats.
   thd->update_stats(true);
+#ifndef EMBEDDED_LIBRARY
   update_global_user_stats(thd, true, time(NULL));
+#endif
 
   DBUG_VOID_RETURN;
 }
@@ -2812,7 +2814,9 @@ end:
   }
   // Updates THD stats and the global user stats.
   thd->update_stats(true);
+#ifndef EMBEDDED_LIBRARY
   update_global_user_stats(thd, true, time(NULL));
+#endif
 
   DBUG_VOID_RETURN;
 }
@@ -2987,7 +2991,9 @@ end:
   }
   // Updates THD stats and the global user stats.
   thd->update_stats(true);
+#ifndef EMBEDDED_LIBRARY
   update_global_user_stats(thd, true, time(NULL));
+#endif
 
   DBUG_VOID_RETURN;
 }
@@ -3113,7 +3119,9 @@ end:
   }
   // Updates THD stats and the global user stats.
   thd->update_stats(true);
+#ifndef EMBEDDED_LIBRARY
   update_global_user_stats(thd, true, time(NULL));
+#endif
 
   DBUG_VOID_RETURN;
 }
