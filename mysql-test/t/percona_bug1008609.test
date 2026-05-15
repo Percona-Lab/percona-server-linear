@@ -7,7 +7,6 @@
 
 let $MYSQLD_BOOTSTRAP_CMD= $MYSQLD_BOOTSTRAP_CMD
   --default-storage-engine=MyISAM
-  --skip-innodb
   --userstat=on;
 
 --write_file $MYSQLTEST_VARDIR/tmp/percona_bug1008609.sql

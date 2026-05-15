@@ -144,8 +144,6 @@ static char **defaults_argv;
 enum enum_info_type { INFO_INFO,INFO_ERROR,INFO_RESULT};
 typedef enum enum_info_type INFO_TYPE;
 
-my_bool opt_no_remove_eol_carret=0;
-
 static MYSQL mysql;			/* The connection */
 static my_bool ignore_errors=0,wait_flag=0,quick=0,
                connected=0,opt_raw_data=0,unbuffered=0,output_tables=0,
@@ -1639,10 +1637,6 @@ static struct my_option my_long_options[] =
    NO_ARG, 1, 0, 0, 0, 0, 0},
   {"skip-line-numbers", 'L', "Don't write line number for errors.", 0, 0, 0, GET_NO_ARG,
    NO_ARG, 0, 0, 0, 0, 0, 0},
-  {"no-remove-eol-carret", OPT_NO_REMOVE_EOL_CARRET, "Do not remove \\r before \\n in batch mode", 
-  (uchar**)&opt_no_remove_eol_carret , (uchar**)&opt_no_remove_eol_carret, 0, 
-   GET_BOOL,
-   NO_ARG, 0, 0, 0, 0, 0, 0},
   {"unbuffered", 'n', "Flush buffer after each query.", &unbuffered,
    &unbuffered, 0, GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0},
   {"column-names", OPT_COLUMN_NAMES, "Write column names in results.",
@@ -2353,14 +2347,14 @@ static COMMANDS *find_command(char *name)
 void write_syslog(String *line){
 #ifndef __WIN__
   uint length= line->length();
-  uint chunk_len= min(MAX_SYSLOG_MESSAGE, length);
+  uint chunk_len= MY_MIN(MAX_SYSLOG_MESSAGE, length);
   char *ptr= line->c_ptr_safe();
   char buff[MAX_SYSLOG_MESSAGE + 1];
 
   for (;
        length;
-       length-= chunk_len, ptr+= chunk_len, chunk_len= min(MAX_SYSLOG_MESSAGE,
-                                                           length))
+       length-= chunk_len, ptr+= chunk_len,
+           chunk_len= MY_MIN(MAX_SYSLOG_MESSAGE, length))
   {
     char *str;
     if (length == chunk_len)
