@@ -340,7 +340,6 @@ extern SHOW_COMP_OPTION have_query_cache;
 extern SHOW_COMP_OPTION have_geometry, have_rtree_keys;
 extern SHOW_COMP_OPTION have_crypt;
 extern SHOW_COMP_OPTION have_compress;
-extern SHOW_COMP_OPTION have_flashcache;
 
 /*
   Prototypes for helper functions

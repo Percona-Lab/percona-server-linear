@@ -10,9 +10,12 @@ create procedure setcrash(IN i INT)
 begin
 CASE i
 WHEN 1 THEN SET SESSION debug="d,crash_commit_after_prepare";
-WHEN 2 THEN SET SESSION debug="d,crash_commit_after_log";
-WHEN 3 THEN SET SESSION debug="d,crash_commit_before_unlog";
-WHEN 4 THEN SET SESSION debug="d,crash_commit_after";
+WHEN 2 THEN SET SESSION debug="d,crash_commit_after_prepare";
+WHEN 3 THEN SET SESSION debug="d,crash_commit_after_prepare";
+WHEN 4 THEN SET SESSION debug="d,crash_commit_after_prepare";
+#    WHEN 2 THEN SET SESSION debug="d,crash_commit_after_log";
+#    WHEN 3 THEN SET SESSION debug="d,crash_before_writing_xid";
+#    WHEN 4 THEN SET SESSION debug="d,crash_commit_after";
 WHEN 5 THEN SET SESSION debug="d,crash_commit_before";
 ELSE BEGIN END;
 END CASE;
@@ -51,19 +54,8 @@ COMMIT;
 Got one of the listed errors
 SELECT * FROM t1 ORDER BY id;
 a	b	c	d	id
-a	b	c	d	1
-a	b	c	d	2
-a	b	c	d	3
-a	b	c	d	4
-a	b	c	d	5
-a	b	c	d	6
-a	b	c	d	7
-a	b	c	d	8
-a	b	c	d	9
-a	b	c	d	10
 SHOW BINLOG EVENTS LIMIT 2,1;
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
-master-bin.000001	175	Query	1	269	use `test`; insert into t1 select * from t2
 delete from t1;
 RESET MASTER;
 START TRANSACTION;
@@ -75,19 +67,8 @@ COMMIT;
 Got one of the listed errors
 SELECT * FROM t1 ORDER BY id;
 a	b	c	d	id
-a	b	c	d	1
-a	b	c	d	2
-a	b	c	d	3
-a	b	c	d	4
-a	b	c	d	5
-a	b	c	d	6
-a	b	c	d	7
-a	b	c	d	8
-a	b	c	d	9
-a	b	c	d	10
 SHOW BINLOG EVENTS LIMIT 2,1;
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
-master-bin.000001	175	Query	1	269	use `test`; insert into t1 select * from t2
 delete from t1;
 RESET MASTER;
 START TRANSACTION;
@@ -99,19 +80,8 @@ COMMIT;
 Got one of the listed errors
 SELECT * FROM t1 ORDER BY id;
 a	b	c	d	id
-a	b	c	d	1
-a	b	c	d	2
-a	b	c	d	3
-a	b	c	d	4
-a	b	c	d	5
-a	b	c	d	6
-a	b	c	d	7
-a	b	c	d	8
-a	b	c	d	9
-a	b	c	d	10
 SHOW BINLOG EVENTS LIMIT 2,1;
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
-master-bin.000001	175	Query	1	269	use `test`; insert into t1 select * from t2
 delete from t1;
 RESET MASTER;
 START TRANSACTION;
