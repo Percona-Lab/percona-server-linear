@@ -1,4 +1,4 @@
-# Testing of INFORMATION_SCHEMA.PROCESSLIST fields ROWS_SENT, ROWS_EXAMINED, ROWS_READ
+# Testing of INFORMATION_SCHEMA.PROCESSLIST fields ROWS_SENT and ROWS_EXAMINED
 --source include/have_debug_sync.inc
 
 --disable_warnings

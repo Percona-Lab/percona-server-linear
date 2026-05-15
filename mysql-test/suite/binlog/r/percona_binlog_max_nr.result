@@ -9,8 +9,8 @@ CREATE TABLE t1 (a int primary key auto_increment, b blob);
 flush logs;
 show binary logs;
 Log_name	File_size
-master-bin.000006	#
-master-bin.000007	#
+master-bin.N	N
+master-bin.N	N
 DROP TABLE t1;
 reset master;
 ##############################################################
@@ -23,8 +23,8 @@ master-bin.000001	#
 CREATE TABLE t1 (a int primary key auto_increment, b blob);
 show binary logs;
 Log_name	File_size
-master-bin.000005	#
-master-bin.000006	#
+master-bin.N	N
+master-bin.N	N
 DROP TABLE t1;
 reset master;
 End of tests

@@ -555,8 +555,6 @@ extern my_error_reporter my_charset_error_reporter;
 
 #define my_b_tell(info) ((info)->pos_in_file + \
 			 (size_t) (*(info)->current_pos - (info)->request_pos))
-#define my_b_write_tell(info) ((info)->pos_in_file + \
-			       ((info)->write_pos - (info)->write_buffer))
 
 #define my_b_get_buffer_start(info) (info)->request_pos 
 #define my_b_get_bytes_in_buffer(info) (char*) (info)->read_end -   \

@@ -479,9 +479,9 @@ SHOW_VAR* enumerate_sys_vars(THD *thd, bool sorted, enum enum_var_type type)
     for (i= 0; i < count; i++)
     {
       sys_var *var= (sys_var*) my_hash_element(&system_variable_hash, i);
-      my_bool *hidden= getopt_constraint_get_hidden_value(var->name.str, 
-                                                          var->name.length,
-                                                          FALSE);
+      const my_bool *hidden=
+        getopt_constraint_get_hidden_value(var->name.str, var->name.length,
+                                           FALSE);
 
       if (hidden && *hidden)
         continue;

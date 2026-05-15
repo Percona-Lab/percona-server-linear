@@ -28,7 +28,6 @@
 #include "rpl_rli.h"     // rotate_relay_log
 #include "rpl_mi.h"
 #include "debug_sync.h"
-#include "query_response_time.h"
 
 /**
   Reload/resets privileges and the different caches.
@@ -333,14 +332,9 @@ bool reload_acl_and_cache(THD *thd, unsigned long options,
    mysql_mutex_unlock(&LOCK_active_mi);
  }
 #endif
-#ifdef HAVE_RESPONSE_TIME_DISTRIBUTION
- if (options & REFRESH_QUERY_RESPONSE_TIME)
- {
-   query_response_time_flush();
- }
-#endif // HAVE_RESPONSE_TIME_DISTRIBUTION
   if (options & REFRESH_USER_RESOURCES)
     reset_mqh((LEX_USER *) NULL, 0);             /* purecov: inspected */
+#ifndef EMBEDDED_LIBRARY
   if (options & REFRESH_TABLE_STATS)
   {
     mysql_mutex_lock(&LOCK_global_table_stats);
@@ -374,6 +368,23 @@ bool reload_acl_and_cache(THD *thd, unsigned long options,
       init_global_thread_stats();
     }
     mysql_mutex_unlock(&LOCK_global_user_client_stats);
+  }
+#endif
+  if (options & REFRESH_FLUSH_PAGE_BITMAPS)
+  {
+    result= ha_flush_changed_page_bitmaps();
+    if (result)
+    {
+      my_error(ER_UNKNOWN_ERROR, MYF(0), "FLUSH CHANGED_PAGE_BITMAPS");
+    }
+  }
+  if (options & REFRESH_RESET_PAGE_BITMAPS)
+  {
+    result= ha_purge_changed_page_bitmaps(0);
+    if (result)
+    {
+      my_error(ER_UNKNOWN_ERROR, MYF(0), "RESET CHANGED_PAGE_BITMAPS");
+    }
   }
  if (*write_to_binlog != -1)
    *write_to_binlog= tmp_write_to_binlog;

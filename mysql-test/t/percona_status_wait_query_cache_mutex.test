@@ -32,4 +32,4 @@ reap;
 --connection default
 --disconnect mutex_locked_conn
 --disconnect try_mutex_lock_conn
-SET GLOBAL query_cache_size=0;
+SET GLOBAL query_cache_size=default;

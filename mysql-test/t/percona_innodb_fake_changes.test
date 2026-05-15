@@ -25,7 +25,8 @@ let $t1_checksum_1= `CHECKSUM TABLE t1 EXTENDED`;
 let $innodb_rows_inserted_1= `SELECT VARIABLE_VALUE FROM INFORMATION_SCHEMA.GLOBAL_STATUS WHERE VARIABLE_NAME='Innodb_rows_inserted'`;
 let $innodb_rows_deleted_1= `SELECT VARIABLE_VALUE FROM INFORMATION_SCHEMA.GLOBAL_STATUS WHERE VARIABLE_NAME='Innodb_rows_deleted'`;
 let $innodb_rows_updated_1= `SELECT VARIABLE_VALUE FROM INFORMATION_SCHEMA.GLOBAL_STATUS WHERE VARIABLE_NAME='Innodb_rows_updated'`;
-let $table_rows_estimate_1= `SELECT ROWS FROM INFORMATION_SCHEMA.INNODB_TABLE_STATS WHERE TABLE_SCHEMA LIKE 'test' AND TABLE_NAME LIKE 't1'`;
+let $table_rows_estimate_1= `SELECT NUM_ROWS FROM INFORMATION_SCHEMA.INNODB_SYS_TABLESTATS WHERE NAME LIKE 'test/t1'`;
+let $table_dml_counter_1= `SELECT MODIFIED_COUNTER FROM INFORMATION_SCHEMA.INNODB_SYS_TABLESTATS WHERE NAME LIKE 'test/t1'`;
 let $table_rows_changed_1= `SELECT ROWS_CHANGED FROM INFORMATION_SCHEMA.TABLE_STATISTICS WHERE TABLE_SCHEMA LIKE 'test' AND TABLE_NAME LIKE 't1'`;
 let $table_rows_changed_x_indexes_1= `SELECT ROWS_CHANGED_X_INDEXES FROM INFORMATION_SCHEMA.TABLE_STATISTICS WHERE TABLE_SCHEMA LIKE 'test' AND TABLE_NAME LIKE 't1'`;
 
@@ -45,7 +46,8 @@ let $t1_checksum_2= `CHECKSUM TABLE t1 EXTENDED`;
 let $innodb_rows_inserted_2= `SELECT VARIABLE_VALUE FROM INFORMATION_SCHEMA.GLOBAL_STATUS WHERE VARIABLE_NAME='Innodb_rows_inserted'`;
 let $innodb_rows_deleted_2= `SELECT VARIABLE_VALUE FROM INFORMATION_SCHEMA.GLOBAL_STATUS WHERE VARIABLE_NAME='Innodb_rows_deleted'`;
 let $innodb_rows_updated_2= `SELECT VARIABLE_VALUE FROM INFORMATION_SCHEMA.GLOBAL_STATUS WHERE VARIABLE_NAME='Innodb_rows_updated'`;
-let $table_rows_estimate_2= `SELECT ROWS FROM INFORMATION_SCHEMA.INNODB_TABLE_STATS WHERE TABLE_SCHEMA LIKE 'test' AND TABLE_NAME LIKE 't1'`;
+let $table_rows_estimate_2= `SELECT NUM_ROWS FROM INFORMATION_SCHEMA.INNODB_SYS_TABLESTATS WHERE NAME LIKE 'test/t1'`;
+let $table_dml_counter_2= `SELECT MODIFIED_COUNTER FROM INFORMATION_SCHEMA.INNODB_SYS_TABLESTATS WHERE NAME LIKE 'test/t1'`;
 let $table_rows_changed_2= `SELECT ROWS_CHANGED FROM INFORMATION_SCHEMA.TABLE_STATISTICS WHERE TABLE_SCHEMA LIKE 'test' AND TABLE_NAME LIKE 't1'`;
 let $table_rows_changed_x_indexes_2= `SELECT ROWS_CHANGED_X_INDEXES FROM INFORMATION_SCHEMA.TABLE_STATISTICS WHERE TABLE_SCHEMA LIKE 'test' AND TABLE_NAME LIKE 't1'`;
 --disable_query_log
@@ -54,6 +56,7 @@ eval SELECT "$innodb_rows_inserted_2" - "$innodb_rows_inserted_1" AS should_be_0
 eval SELECT "$innodb_rows_deleted_2" - "$innodb_rows_deleted_1" AS should_be_0;
 eval SELECT "$innodb_rows_updated_2" - "$innodb_rows_updated_1" AS should_be_0;
 eval SELECT "$table_rows_estimate_2" - "$table_rows_estimate_1" AS should_be_0;
+eval SELECT "$table_dml_counter_2" - "$table_dml_counter_1" AS should_be_0;
 eval SELECT "$table_rows_changed_2" - "$table_rows_changed_1" AS should_be_0;
 eval SELECT "$table_rows_changed_x_indexes_2" - "$table_rows_changed_x_indexes_1" AS should_be_0;
 --enable_query_log
@@ -64,7 +67,7 @@ CREATE TABLE t1 (a INT PRIMARY KEY) ENGINE=InnoDB;
 SET autocommit=0;
 SET innodb_fake_changes=1;
 BEGIN;
---error 1005
+--error ER_ILLEGAL_HA
 CREATE TABLE t2 (a INT) ENGINE=InnoDB;
 --error 1051
 DROP TABLE t1;
@@ -87,7 +90,8 @@ COMMIT;
 let $t2_checksum_1= `CHECKSUM TABLE t2 EXTENDED`;
 let $innodb_rows_deleted_1= `SELECT VARIABLE_VALUE FROM INFORMATION_SCHEMA.GLOBAL_STATUS WHERE VARIABLE_NAME='Innodb_rows_deleted'`;
 let $innodb_rows_updated_1= `SELECT VARIABLE_VALUE FROM INFORMATION_SCHEMA.GLOBAL_STATUS WHERE VARIABLE_NAME='Innodb_rows_updated'`;
-let $table_rows_estimate_1= `SELECT ROWS FROM INFORMATION_SCHEMA.INNODB_TABLE_STATS WHERE TABLE_SCHEMA LIKE 'test' AND TABLE_NAME LIKE 't2'`;
+let $table_rows_estimate_1= `SELECT NUM_ROWS FROM INFORMATION_SCHEMA.INNODB_SYS_TABLESTATS WHERE NAME LIKE 'test/t2'`;
+let $table_dml_counter_1= `SELECT MODIFIED_COUNTER FROM INFORMATION_SCHEMA.INNODB_SYS_TABLESTATS WHERE NAME LIKE 'test/t2'`;
 let $table_rows_changed_1= `SELECT ROWS_CHANGED FROM INFORMATION_SCHEMA.TABLE_STATISTICS WHERE TABLE_SCHEMA LIKE 'test' AND TABLE_NAME LIKE 't2'`;
 let $table_rows_changed_x_indexes_1= `SELECT ROWS_CHANGED_X_INDEXES FROM INFORMATION_SCHEMA.TABLE_STATISTICS WHERE TABLE_SCHEMA LIKE 'test' AND TABLE_NAME LIKE 't2'`;
 
@@ -100,7 +104,8 @@ COMMIT;
 let $t2_checksum_2= `CHECKSUM TABLE t2 EXTENDED`;
 let $innodb_rows_deleted_2= `SELECT VARIABLE_VALUE FROM INFORMATION_SCHEMA.GLOBAL_STATUS WHERE VARIABLE_NAME='Innodb_rows_deleted'`;
 let $innodb_rows_updated_2= `SELECT VARIABLE_VALUE FROM INFORMATION_SCHEMA.GLOBAL_STATUS WHERE VARIABLE_NAME='Innodb_rows_updated'`;
-let $table_rows_estimate_2= `SELECT ROWS FROM INFORMATION_SCHEMA.INNODB_TABLE_STATS WHERE TABLE_SCHEMA LIKE 'test' AND TABLE_NAME LIKE 't2'`;
+let $table_rows_estimate_2= `SELECT NUM_ROWS FROM INFORMATION_SCHEMA.INNODB_SYS_TABLESTATS WHERE NAME LIKE 'test/t2'`;
+let $table_dml_counter_2= `SELECT MODIFIED_COUNTER FROM INFORMATION_SCHEMA.INNODB_SYS_TABLESTATS WHERE NAME LIKE 'test/t2'`;
 let $table_rows_changed_2= `SELECT ROWS_CHANGED FROM INFORMATION_SCHEMA.TABLE_STATISTICS WHERE TABLE_SCHEMA LIKE 'test' AND TABLE_NAME LIKE 't2'`;
 let $table_rows_changed_x_indexes_2= `SELECT ROWS_CHANGED_X_INDEXES FROM INFORMATION_SCHEMA.TABLE_STATISTICS WHERE TABLE_SCHEMA LIKE 'test' AND TABLE_NAME LIKE 't2'`;
 
@@ -108,6 +113,7 @@ let $table_rows_changed_x_indexes_2= `SELECT ROWS_CHANGED_X_INDEXES FROM INFORMA
 eval SELECT "$t2_checksum_1" LIKE "$t2_checksum_2" AS should_be_1;
 eval SELECT "$innodb_rows_deleted_2" - "$innodb_rows_deleted_1" AS should_be_0;
 eval SELECT "$innodb_rows_updated_2" - "$innodb_rows_updated_1" AS should_be_0;
+eval SELECT "$table_rows_estimate_2" - "$table_rows_estimate_1" AS should_be_0;
 eval SELECT "$table_rows_estimate_2" - "$table_rows_estimate_1" AS should_be_0;
 eval SELECT "$table_rows_changed_2" - "$table_rows_changed_1" AS should_be_0;
 eval SELECT "$table_rows_changed_x_indexes_2" - "$table_rows_changed_x_indexes_1" AS should_be_0;

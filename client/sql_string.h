@@ -264,7 +264,7 @@ public:
 			   uint32 full_length, char fill_char);
   bool append_identifier(const char *name,
 			 uint length,
-			 CHARSET_INFO *ci,
+			 const CHARSET_INFO *ci,
 			 int quote_char);
   int strstr(const String &search,uint32 offset=0); // Returns offset to substring or -1
   int strrstr(const String &search,uint32 offset=0); // Returns offset to substring or -1
