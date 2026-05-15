@@ -1522,7 +1522,7 @@ ibuf_add_ops(
 
 	for (i = 0; i < IBUF_OP_COUNT; i++) {
 #ifdef HAVE_ATOMIC_BUILTINS
-		(void) os_atomic_increment_ulint(&arr[i], ops[i]);
+		os_atomic_increment_ulint(&arr[i], ops[i]);
 #else /* HAVE_ATOMIC_BUILTINS */
 		arr[i] += ops[i];
 #endif /* HAVE_ATOMIC_BUILTINS */
@@ -3532,8 +3532,6 @@ ibuf_insert_low(
 
 	ut_ad(!(thr_get_trx(thr)->fake_changes));
 
-	ut_ad(!(thr_get_trx(thr)->fake_changes));
-
 	do_merge = FALSE;
 
 	/* Perform dirty reads of ibuf->size and ibuf->max_size, to
@@ -4969,7 +4967,7 @@ reset_bit:
 	mem_heap_free(heap);
 
 #ifdef HAVE_ATOMIC_BUILTINS
-	(void) os_atomic_increment_ulint(&ibuf->n_merges, 1);
+	os_atomic_increment_ulint(&ibuf->n_merges, 1);
 	ibuf_add_ops(ibuf->n_merged_ops, mops);
 	ibuf_add_ops(ibuf->n_discarded_ops, dops);
 #else /* HAVE_ATOMIC_BUILTINS */

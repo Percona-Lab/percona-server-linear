@@ -55,6 +55,8 @@ should_be_0
 0
 should_be_0
 0
+should_be_0
+0
 DROP TABLE t1;
 # DDL must result in error
 CREATE TABLE t1 (a INT PRIMARY KEY) ENGINE=InnoDB;
@@ -62,9 +64,9 @@ SET autocommit=0;
 SET innodb_fake_changes=1;
 BEGIN;
 CREATE TABLE t2 (a INT) ENGINE=InnoDB;
-ERROR HY000: Can't create table 'test.t2' (errno: 131)
+ERROR HY000: Table storage engine for 't2' doesn't have this option
 DROP TABLE t1;
-ERROR 42S02: Unknown table 't1'
+ERROR 42S02: Unknown table 'test.t1'
 TRUNCATE TABLE t1;
 ERROR HY000: Got error 131 during COMMIT
 ALTER TABLE t1 ENGINE=MyISAM;
@@ -85,6 +87,8 @@ COMMIT;
 ERROR HY000: Got error 131 during COMMIT
 should_be_1
 1
+should_be_0
+0
 should_be_0
 0
 should_be_0

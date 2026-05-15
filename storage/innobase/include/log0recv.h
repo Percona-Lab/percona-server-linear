@@ -51,7 +51,7 @@ UNIV_INTERN
 ib_uint64_t
 recv_calc_lsn_on_data_add(
 /*======================*/
-	ib_uint64_t	lsn,	/*!< in: old lsn */
+	lsn_t		lsn,	/*!< in: old lsn */
 	ib_uint64_t	len);	/*!< in: this many bytes of data is
 				added, log block headers not included */
 
