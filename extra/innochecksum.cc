@@ -45,11 +45,23 @@ The parts not included are excluded by #ifndef UNIV_INNOCHECKSUM. */
 #include "univ.i"                /*  include all of this */
 
 #include "buf0checksum.h"        /* buf_calc_page_*() */
+#include "dict0mem.h"            /* DICT_TF_BITS et al */
 #include "fil0fil.h"             /* FIL_* */
 #include "fsp0fsp.h"             /* fsp_flags_get_page_size() &
                                     fsp_flags_get_zip_size() */
 #include "mach0data.h"           /* mach_read_from_4() */
 #include "ut0crc32.h"            /* ut_crc32_init() */
+
+/** Smallest compressed page size */
+#define PAGE_ZIP_MIN_SIZE       (1 << 10)
+
+#define DICT_TF_FORMAT_SHIFT            5       /* file format */
+#define DICT_TF_FORMAT_MASK                                             \
+    ((~(~0 << (DICT_TF_BITS - DICT_TF_FORMAT_SHIFT))) << DICT_TF_FORMAT_SHIFT)
+#define DICT_TF_FORMAT_51               0       /*!< InnoDB/MySQL up to 5.1 */
+#define DICT_TF_FORMAT_ZIP              1       /*!< InnoDB plugin for 5.1:
+                                                  compressed tables,
+                                                  new BLOB treatment */
 
 #ifdef UNIV_NONINL
 # include "fsp0fsp.ic"
@@ -66,6 +78,7 @@ static ullint end_page;
 static ullint do_page;
 static my_bool use_end_page;
 static my_bool do_one_page;
+static my_bool display_format;
 ulong srv_page_size;              /* replaces declaration in srv0srv.c */
 static ulong physical_page_size;  /* Page size in bytes on disk. */
 static ulong logical_page_size;   /* Page size when uncompressed. */
@@ -201,6 +214,8 @@ static struct my_option innochecksum_options[] =
     &debug, &debug, 0, GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0},
   {"count", 'c', "Print the count of pages in the file.",
     &just_count, &just_count, 0, GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0},
+  {"format_info", 'f', "Display information about the file format and exit",
+    0, 0, 0, GET_NO_ARG, NO_ARG, 0, 0, 0, 0, 0, 0},
   {"start_page", 's', "Start on this page number (0 based).",
     &start_page, &start_page, 0, GET_ULL, REQUIRED_ARG,
     0, 0, ULONGLONG_MAX, 0, 1, 0},
@@ -245,6 +260,9 @@ innochecksum_get_one_option(
   case 'e':
     use_end_page= 1;
     break;
+  case 'f':
+    display_format= 1;
+    break;
   case 'p':
     end_page= start_page= do_page;
     use_end_page= 1;
@@ -282,6 +300,54 @@ static int get_options(
   return 0;
 } /* get_options */
 
+static
+void
+display_format_info(uchar *page)
+{
+  ulint page_type;
+  ulint flags;
+
+  /* Read page type. Pre-5.1.7 InnoDB always have zero in FIL_PAGE_TYPE for the
+  first page, later versions initialize it to FIL_PAGE_TYPE_FSP_HDR. */
+  page_type= mach_read_from_2(page + FIL_PAGE_TYPE);
+
+  /* Read FSP flags from the page header. */
+  flags = mach_read_from_4(page + FSP_HEADER_OFFSET + FSP_SPACE_FLAGS);
+
+  if (!page_type)
+  {
+    printf("Detected file format: Antelope (pre-5.1.7).\n");
+    if (flags != 0) {
+      printf("But FSP_SPACE_FLAGS is non-zero: %lu. Corrupted tablespace?\n",
+              flags);
+    }
+  }
+  else if (page_type == FIL_PAGE_TYPE_FSP_HDR)
+  {
+    ulint format = flags & DICT_TF_FORMAT_MASK >> DICT_TF_FORMAT_SHIFT;
+    ulint zip_size = fsp_flags_get_zip_size(flags);
+
+    if (!flags)
+    {
+      printf("Detected file format: Antelope (5.1.7 or newer).\n");
+    }
+    else if (format == DICT_TF_FORMAT_ZIP)
+    {
+      printf("Detected file format: Barracuda ");
+      if (!zip_size)
+        printf("(not compressed).\n");
+      else
+        printf("(compressed with KEY_BLOCK_SIZE=%lu).\n", zip_size);
+    }
+    else
+      printf("Unknown file format: %lu\n", format);
+  }
+  else
+  {
+    printf("Bogus FIL_PAGE_TYPE value: %lu. Cannot detect the file format.\n",
+           page_type);
+  }
+}
 
 int main(int argc, char **argv)
 {
@@ -373,8 +439,9 @@ int main(int argc, char **argv)
       printf("InnoChecksum; checking pages in range %llu to %llu\n", start_page, use_end_page ? end_page : (pages - 1));
   }
 
-  /* seek to the necessary position */
-  if (start_page)
+  /* seek to the necessary position, ignore with -f as we only need to read the
+  first page */
+  if (start_page && !display_format)
   {
 
     offset= (off_t)start_page * (off_t)physical_page_size;
@@ -408,6 +475,13 @@ int main(int argc, char **argv)
     {
       fprintf(stderr, "Error; bytes read (%lu) doesn't match page size (%lu)\n", bytes, physical_page_size);
       return 1;
+    }
+
+    if (display_format)
+    {
+      /* for -f, analyze only the first page and exit */
+      display_format_info(buf);
+      return 0;
     }
 
     /* check the "stored log sequence numbers" */

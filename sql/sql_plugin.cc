@@ -2255,7 +2255,7 @@ static int check_func_int(THD *thd, struct st_mysql_sys_var *var,
   my_bool fixed1, fixed2;
   long long orig, val;
   struct my_option options;
-  void *vmin, *vmax;
+  const void *vmin, *vmax;
   value->val_int(value, &orig);
   val= orig;
   plugin_opt_set_limits(&options, var);
@@ -2292,7 +2292,7 @@ static int check_func_long(THD *thd, struct st_mysql_sys_var *var,
   my_bool fixed1, fixed2;
   long long orig, val;
   struct my_option options;
-  void *vmin, *vmax;
+  const void *vmin, *vmax;
   value->val_int(value, &orig);
   val= orig;
   plugin_opt_set_limits(&options, var);
@@ -2329,7 +2329,7 @@ static int check_func_longlong(THD *thd, struct st_mysql_sys_var *var,
   my_bool fixed1, fixed2;
   long long orig, val;
   struct my_option options;
-  void *vmin, *vmax;
+  const void *vmin, *vmax;
   value->val_int(value, &orig);
   val= orig;
   plugin_opt_set_limits(&options, var);
@@ -2519,7 +2519,7 @@ sys_var *find_sys_var(THD *thd, const char *str, uint length)
   plugin_ref plugin;
   DBUG_ENTER("find_sys_var");
 
-  my_bool *hidden= getopt_constraint_get_hidden_value(str, 0, FALSE);
+  const my_bool *hidden= getopt_constraint_get_hidden_value(str, 0, FALSE);
   if (hidden && *hidden)
   {
     var= NULL;

@@ -312,11 +312,11 @@ sub start_mysqlds()
 
   if (!$opt_no_log)
   {
-    w2log("\nStarting MySQL (Percona Server)\n","$opt_log",0,0);
+    w2log("\nStarting MySQL (Percona Server) servers\n","$opt_log",0,0);
   }
   else
   {
-    print "\nStarting MySQL (Percona Server)\n";
+    print "\nStarting MySQL (Percona Server) servers\n";
   }
   @groups = &find_groups($groupids);
   for ($i = 0; defined($groups[$i]); $i++)
