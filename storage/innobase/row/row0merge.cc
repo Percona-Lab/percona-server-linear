@@ -1521,6 +1521,11 @@ end_of_index:
 
 		rec = page_cur_get_rec(cur);
 
+		if (srv_pass_corrupt_table && !rec) {
+			err = DB_CORRUPTION;
+			goto func_exit;
+		}
+
 		offsets = rec_get_offsets(rec, clust_index, NULL,
 					  ULINT_UNDEFINED, &row_heap);
 
@@ -3578,7 +3583,7 @@ row_merge_build_indexes(
 
 	block_size = 3 * srv_sort_buf_size;
 	block = static_cast<row_merge_block_t*>(
-		os_mem_alloc_large(&block_size));
+		os_mem_alloc_large(&block_size, FALSE));
 
 	if (block == NULL) {
 		DBUG_RETURN(DB_OUT_OF_MEMORY);
