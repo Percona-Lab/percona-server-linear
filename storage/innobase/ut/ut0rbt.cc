@@ -893,7 +893,7 @@ rbt_add_preallocated_node(
 	}
 
 	/* Append the node, the hope here is that the caller knows
-	   what s/he is doing. */
+	what s/he is doing. */
 	rbt_tree_add_child(tree, parent, node);
 	rbt_balance_tree(tree, node);
 
