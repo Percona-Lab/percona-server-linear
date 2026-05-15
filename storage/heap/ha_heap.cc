@@ -681,8 +681,7 @@ heap_prepare_hp_create_info(TABLE *table_arg, bool internal_table,
     if (field->null_bit)
     {
       column->null_bit= field->null_bit;
-      column->null_pos= (uint) (field->null_ptr -
-                                (uchar*) table_arg->record[0]);
+      column->null_pos= field->null_offset();
     }
     else
     {
@@ -818,7 +817,7 @@ heap_prepare_hp_create_info(TABLE *table_arg, bool internal_table,
         keydef[key].flag|= HA_VAR_LENGTH_KEY;
         /* Save number of bytes used to store length */
         if (seg->flag & HA_BLOB_PART)
-          seg->bit_start= field->pack_length() - share->blob_ptr_size;
+          seg->bit_start= field->pack_length() - portable_sizeof_char_ptr;
         else
           seg->bit_start= 1;
         break;
@@ -829,7 +828,7 @@ heap_prepare_hp_create_info(TABLE *table_arg, bool internal_table,
         keydef[key].flag|= HA_VAR_LENGTH_KEY;
         /* Save number of bytes used to store length */
         if (seg->flag & HA_BLOB_PART)
-          seg->bit_start= field->pack_length() - share->blob_ptr_size;
+          seg->bit_start= field->pack_length() - portable_sizeof_char_ptr;
         else
           seg->bit_start= 2;
         /*

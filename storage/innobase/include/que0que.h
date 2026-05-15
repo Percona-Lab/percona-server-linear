@@ -500,8 +500,6 @@ struct que_fork_t{
 #define QUE_NODE_CALL		31
 #define QUE_NODE_EXIT		32
 
-#define QUE_NODE_INSERT_STATS	34
-
 /* Query thread states */
 #define QUE_THR_RUNNING		1
 #define QUE_THR_PROCEDURE_WAIT	2

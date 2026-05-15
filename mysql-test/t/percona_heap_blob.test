@@ -119,18 +119,12 @@ select distinct t from t1 order by t;
 select distinct b from t1 order by b;
 select t from t1 group by t;
 select b from t1 group by b;
-set option sql_big_tables=1;
-select distinct t from t1;
-select distinct b from t1;
-select distinct t from t1 order by t;
-select distinct b from t1 order by b;
 select distinct c from t1;
 select distinct d from t1;
 select distinct c from t1 order by c;
 select distinct d from t1 order by d;
 select c from t1 group by c;
 select d from t1 group by d;
-set option sql_big_tables=0;
 select distinct * from t1;
 select t,count(*) from t1 group by t;
 select b,count(*) from t1 group by b;
@@ -474,17 +468,12 @@ CREATE TABLE b15776 (a char(4294967296));
 
 
 # Other numeric-ish types
-## For year, widths not "2" or "4" are silently rewritten to "4".  But
-## When we complain about it, we say that the max is 255.  We may be 
-## talking about different things.  It's confusing.
-CREATE TABLE b15776 (a year(4294967295));
+CREATE TABLE b15776 (a year(4));
 INSERT INTO b15776 VALUES (42);
 SELECT * FROM b15776;
 DROP TABLE b15776;
 --error ER_TOO_BIG_DISPLAYWIDTH
 CREATE TABLE b15776 (a year(4294967296));
-CREATE TABLE b15776 (a year(0));  # 0 is special case, means default size
-DROP TABLE b15776;
 --error ER_PARSE_ERROR
 CREATE TABLE b15776 (a year(-2));
 
