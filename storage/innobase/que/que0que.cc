@@ -204,6 +204,9 @@ que_thr_end_lock_wait(
 {
 	que_thr_t*	thr;
 	ibool		was_active;
+	ulint		sec;
+	ulint		ms;
+	ib_uint64_t	now;
 
 	ut_ad(lock_mutex_own());
 	ut_ad(trx_mutex_own(trx));
@@ -219,6 +222,13 @@ que_thr_end_lock_wait(
 	was_active = thr->is_active;
 
 	que_thr_move_to_run_state(thr);
+
+	if (innobase_get_slow_log() && trx->take_stats) {
+		ut_usectime(&sec, &ms);
+		now = (ib_uint64_t)sec * 1000000 + ms;
+		trx->lock_que_wait_timer
+			+= (ulint)(now - trx->lock_que_wait_ustarted);
+	}
 
 	trx->lock.que_state = TRX_QUE_RUNNING;
 
@@ -542,20 +552,10 @@ que_graph_free_recursive(
 
 		que_graph_free_recursive(cre_ind->ind_def);
 		que_graph_free_recursive(cre_ind->field_def);
-		if (srv_use_sys_stats_table)
-			que_graph_free_recursive(cre_ind->stats_def);
 		que_graph_free_recursive(cre_ind->commit_node);
 
 		mem_heap_free(cre_ind->heap);
 
-		break;
-	case QUE_NODE_INSERT_STATS:
-		cre_ind = node;
-
-		que_graph_free_recursive(cre_ind->stats_def);
-		que_graph_free_recursive(cre_ind->commit_node);
-
-		mem_heap_free(cre_ind->heap);
 		break;
 	case QUE_NODE_PROC:
 		que_graph_free_stat_list(((proc_node_t*) node)->stat_list);
@@ -1009,8 +1009,6 @@ que_node_print_info(
 		str = "CREATE TABLE";
 	} else if (type == QUE_NODE_CREATE_INDEX) {
 		str = "CREATE INDEX";
-	} else if (type == QUE_NODE_INSERT_STATS) {
-		str = "INSERT TO SYS_STATS";
 	} else if (type == QUE_NODE_FOR) {
 		str = "FOR LOOP";
 	} else if (type == QUE_NODE_RETURN) {
@@ -1125,8 +1123,6 @@ que_thr_step(
 		thr = dict_create_table_step(thr);
 	} else if (type == QUE_NODE_CREATE_INDEX) {
 		thr = dict_create_index_step(thr);
-	} else if (type == QUE_NODE_INSERT_STATS) {
-		thr = dict_insert_stats_step(thr);
 	} else if (type == QUE_NODE_ROW_PRINTF) {
 		thr = row_printf_step(thr);
 	} else {
