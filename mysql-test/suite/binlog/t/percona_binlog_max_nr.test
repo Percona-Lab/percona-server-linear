@@ -26,7 +26,11 @@ commit;
 --enable_query_log
 
 flush logs;
-source include/show_binary_logs.inc;
+# We are not using include/show_binary_logs.inc here as the numerical suffix
+# differs depending on the log format, and here we are testing only the count
+# of files.
+--replace_regex /[[:digit:]]+/N/
+show binary logs;
 
 DROP TABLE t1;
 
@@ -52,7 +56,8 @@ while ($c)
 commit;
 --enable_query_log
 
-source include/show_binary_logs.inc;
+--replace_regex /[[:digit:]]+/N/
+show binary logs;
 DROP TABLE t1;
 
 reset master;
