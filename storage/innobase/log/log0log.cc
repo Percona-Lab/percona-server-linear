@@ -2,6 +2,7 @@
 
 Copyright (c) 1995, 2026, Oracle and/or its affiliates.
 Copyright (c) 2009, Google Inc.
+Copyright (c) 2016, Percona Inc. All Rights Reserved.
 
 Portions of this file contain modifications contributed and copyrighted by
 Google, Inc. Those modifications are gratefully acknowledged and are described
@@ -1115,6 +1116,7 @@ void log_print(const log_t &log, FILE *file) {
   lsn_t max_assigned_lsn;
   lsn_t current_lsn;
   lsn_t oldest_lsn;
+  lsn_t max_checkpoint_age{};
   uint64_t file_min_id{};
   uint64_t file_max_id{};
 
@@ -1138,6 +1140,9 @@ void log_print(const log_t &log, FILE *file) {
     dirty_pages_added_up_to_lsn =
         buf_flush_list_added->smallest_not_added_lsn();
     oldest_lsn = log_checkpointing->get_available_for_checkpoint_lsn();
+    max_checkpoint_age = ut_uint64_align_down(
+        ib::redo::handler->get_capacity_estimate().max_history_length,
+        OS_FILE_LOG_BLOCK_SIZE);
     log_limits_mutex_exit();
   } else {
     oldest_lsn = last_checkpoint_lsn;
@@ -1178,6 +1183,16 @@ void log_print(const log_t &log, FILE *file) {
   if (log_sys == nullptr) {
     return;
   }
+
+  fprintf(file,
+          "Modified age no less than    " LSN_PF
+          "\n"
+          "Checkpoint age               " LSN_PF
+          "\n"
+          "Max checkpoint age           " LSN_PF "\n",
+          current_lsn - buf_pool_get_oldest_modification_lwm(),
+          current_lsn - last_checkpoint_lsn, max_checkpoint_age);
+
   time_t current_time = time(nullptr);
 
   double time_elapsed = difftime(current_time, log.last_printout_time);
