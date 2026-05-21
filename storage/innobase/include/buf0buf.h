@@ -155,8 +155,9 @@ enum buf_page_state : uint8_t {
 will be used to print table IO stats */
 struct buf_pool_info_t {
   /* General buffer pool info */
-  ulint pool_unique_id;              /*!< Buffer Pool ID */
-  ulint pool_size;                   /*!< Buffer Pool size in pages */
+  ulint pool_unique_id; /*!< Buffer Pool ID */
+  ulint pool_size;      /*!< Buffer Pool size in pages */
+  ulint pool_size_bytes;
   ulint lru_len;                     /*!< Length of buf_pool->LRU */
   ulint old_lru_len;                 /*!< buf_pool->LRU_old_len */
   ulint free_list_len;               /*!< Length of buf_pool->free list */
@@ -2123,6 +2124,8 @@ struct buf_pool_stat_t {
   /** Flush_list size in bytes.  Protected by flush_list_mutex */
   uint64_t flush_list_bytes;
 
+  ulint buf_lru_flush_page_count;
+
   static void copy(buf_pool_stat_t &dst, const buf_pool_stat_t &src) noexcept {
     Counter::copy(dst.m_n_page_gets, src.m_n_page_gets);
 
@@ -2145,6 +2148,8 @@ struct buf_pool_stat_t {
     dst.LRU_bytes = src.LRU_bytes;
 
     dst.flush_list_bytes = src.flush_list_bytes;
+
+    dst.buf_lru_flush_page_count = src.buf_lru_flush_page_count;
   }
 
   void reset() {
@@ -2160,6 +2165,7 @@ struct buf_pool_stat_t {
     n_pages_not_made_young = 0;
     LRU_bytes = 0;
     flush_list_bytes = 0;
+    buf_lru_flush_page_count = 0;
   }
 };
 
