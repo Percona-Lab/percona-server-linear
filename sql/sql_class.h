@@ -554,6 +554,8 @@ typedef struct system_variables
     'COLUMN_TYPE' field.
   */
   my_bool show_old_temporals;
+
+  my_bool expand_fast_index_creation;
 } SV;
 
 
