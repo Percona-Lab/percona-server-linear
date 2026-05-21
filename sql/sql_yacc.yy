@@ -1236,8 +1236,13 @@ void warn_about_deprecated_national(THD *thd)
 /*
    Tokens from Percona Server 5.7 and older
 */
-%token<keyword> CHANGED_PAGE_BITMAPS_SYM
+%token<lexer.keyword> CHANGED_PAGE_BITMAPS_SYM
+%token<lexer.keyword> CLIENT_STATS_SYM
 %token CLUSTERING_SYM
+%token<keyword> INDEX_STATS_SYM
+%token<keyword> TABLE_STATS_SYM
+%token<keyword> THREAD_STATS_SYM
+%token<keyword> USER_STATS_SYM
 
 /*
   Resolve column attribute ambiguity -- force precedence of "UNIQUE KEY" against
@@ -12854,6 +12859,41 @@ show_param:
           {
             Lex->sql_command = SQLCOM_SHOW_SLAVE_STAT;
           }
+        | CLIENT_STATS_SYM opt_wild_or_where
+          {
+           LEX *lex= Lex;
+           Lex->sql_command= SQLCOM_SELECT;
+           if (prepare_schema_table(YYTHD, lex, 0, SCH_CLIENT_STATS))
+             MYSQL_YYABORT;
+          }
+        | USER_STATS_SYM opt_wild_or_where
+          {
+           LEX *lex= Lex;
+           lex->sql_command= SQLCOM_SELECT;
+           if (prepare_schema_table(YYTHD, lex, 0, SCH_USER_STATS))
+             MYSQL_YYABORT;
+          }
+        | THREAD_STATS_SYM opt_wild_or_where
+          {
+           LEX *lex= Lex;
+           Lex->sql_command= SQLCOM_SELECT;
+           if (prepare_schema_table(YYTHD, lex, 0, SCH_THREAD_STATS))
+             MYSQL_YYABORT;
+          }
+        | TABLE_STATS_SYM opt_wild_or_where
+          {
+           LEX *lex= Lex;
+           lex->sql_command= SQLCOM_SELECT;
+           if (prepare_schema_table(YYTHD, lex, 0, SCH_TABLE_STATS))
+             MYSQL_YYABORT;
+          }
+        | INDEX_STATS_SYM opt_wild_or_where
+          {
+           LEX *lex= Lex;
+           lex->sql_command= SQLCOM_SELECT;
+           if (prepare_schema_table(YYTHD, lex, 0, SCH_INDEX_STATS))
+             MYSQL_YYABORT;
+          }
         | CREATE PROCEDURE_SYM sp_name
           {
             LEX *lex= Lex;
@@ -13155,6 +13195,16 @@ flush_option:
           { Lex->type|= REFRESH_LOG; }
         | STATUS_SYM
           { Lex->type|= REFRESH_STATUS; }
+        | CLIENT_STATS_SYM
+          { Lex->type|= REFRESH_CLIENT_STATS; }
+        | USER_STATS_SYM
+          { Lex->type|= REFRESH_USER_STATS; }
+        | THREAD_STATS_SYM
+          { Lex->type|= REFRESH_THREAD_STATS; }
+        | TABLE_STATS_SYM
+          { Lex->type|= REFRESH_TABLE_STATS; }
+        | INDEX_STATS_SYM
+          { Lex->type|= REFRESH_INDEX_STATS; }
         | RESOURCES
           { Lex->type|= REFRESH_USER_RESOURCES; }
         | OPTIMIZER_COSTS_SYM
@@ -14160,6 +14210,7 @@ ident_keywords_unambiguous:
         | CIPHER_SYM
         | CLASS_ORIGIN_SYM
         | CLIENT_SYM
+        | CLIENT_STATS_SYM
         | CLOSE_SYM
         | COALESCE
         | CODE_SYM
@@ -14246,6 +14297,7 @@ ident_keywords_unambiguous:
         | IDENTIFIED_SYM
         | IGNORE_SERVER_IDS_SYM
         | INACTIVE_SYM
+        | INDEX_STATS_SYM
         | INDEXES
         | INITIAL_SIZE_SYM
         | INSERT_METHOD
@@ -14450,11 +14502,13 @@ ident_keywords_unambiguous:
         | TABLESPACE_SYM
         | TABLE_CHECKSUM_SYM
         | TABLE_NAME_SYM
+        | TABLE_STATS_SYM
         | TEMPORARY
         | TEMPTABLE_SYM
         | TEXT_SYM
         | THAN_SYM
         | THREAD_PRIORITY_SYM
+        | THREAD_STATS_SYM
         | TIES_SYM
         | TIMESTAMP_ADD
         | TIMESTAMP_DIFF
@@ -14473,6 +14527,7 @@ ident_keywords_unambiguous:
         | UNTIL_SYM
         | UPGRADE_SYM
         | USER
+        | USER_STATS_SYM
         | USE_FRM
         | VALIDATION_SYM
         | VALUE_SYM
