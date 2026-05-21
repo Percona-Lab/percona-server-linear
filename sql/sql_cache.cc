@@ -710,7 +710,12 @@ bool Query_cache::try_lock(bool use_timeout)
   Query_cache_wait_state wait_state(thd, __func__, __FILE__, __LINE__);
   DBUG_ENTER("Query_cache::try_lock");
 
+  const char* old_proc_info= thd->proc_info;
+  thd_proc_info(thd,"Waiting on query cache mutex");
+  DEBUG_SYNC(thd, "before_query_cache_mutex");
   mysql_mutex_lock(&structure_guard_mutex);
+  DEBUG_SYNC(thd, "after_query_cache_mutex");
+  thd->proc_info = old_proc_info;
   while (1)
   {
     if (m_cache_lock_status == Query_cache::UNLOCKED)
@@ -2232,6 +2237,7 @@ def_week_frmt: %lu, in_trans: %d, autocommit: %d",
     response, we can't handle it anyway.
   */
   (void) trans_commit_stmt(thd);
+  thd->query_plan_flags|= QPLAN_QC;
   if (!thd->get_stmt_da()->is_set())
     thd->get_stmt_da()->disable_status();
 
@@ -2243,6 +2249,7 @@ def_week_frmt: %lu, in_trans: %d, autocommit: %d",
 err_unlock:
   unlock();
 err:
+  thd->query_plan_flags|= QPLAN_QC_NO;
   MYSQL_QUERY_CACHE_MISS(const_cast<char*>(thd->query().str));
   DBUG_RETURN(0);				// Query was not cached
 }
