@@ -5098,6 +5098,8 @@ template <typename Table>
     }
   }
 
+  DBUG_EXECUTE_IF("crash_innodb_add_index_after", DBUG_SUICIDE(););
+
 error_handling:
 
   if (build_fts_common || fts_index) {
@@ -7078,6 +7080,8 @@ inline void commit_cache_rebuild(ha_innobase_inplace_ctx *ctx) {
   so this must succeed. */
   error = dict_table_rename_in_cache(ctx->old_table, ctx->tmp_name, false);
   ut_a(error == DB_SUCCESS);
+
+  DEBUG_SYNC_C("commit_cache_rebuild_middle");
 
   error = dict_table_rename_in_cache(ctx->new_table, old_name, false);
   ut_a(error == DB_SUCCESS);
