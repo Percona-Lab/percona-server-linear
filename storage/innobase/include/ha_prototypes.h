@@ -310,6 +310,13 @@ ulint
 innobase_get_table_cache_size(void);
 /*===============================*/
 
+/******************************************************************//**
+								     */
+ulong
+thd_flush_log_at_trx_commit(
+/*================================*/
+	void*	thd);
+
 /**********************************************************************//**
 Get the current setting of the lower_case_table_names global parameter from
 mysqld.cc. We do a dirty read because for one there is no synchronization
@@ -542,8 +549,8 @@ buffer pool size.
 void
 innodb_set_buf_pool_size(ulonglong buf_pool_size);
 
-/** Get the transaction of the current connection handle.
-@return transaction object, or NULL. */
+/** Get the transaction of the current connection handle, if either exists.
+@return transaction of the current connection handle or NULL. */
 trx_t*
 innobase_get_trx(void);
 
