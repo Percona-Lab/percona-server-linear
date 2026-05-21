@@ -570,6 +570,7 @@ void buf_get_total_stat(
     tot_stat->n_pages_made_young += buf_stat->n_pages_made_young;
 
     tot_stat->n_pages_not_made_young += buf_stat->n_pages_not_made_young;
+    tot_stat->buf_lru_flush_page_count += buf_stat->buf_lru_flush_page_count;
   }
 }
 
@@ -6534,7 +6535,6 @@ ulint buf_get_latched_pages_number(void) {
 
   return (total_latched_pages);
 }
-
 #endif /* UNIV_DEBUG */
 
 /** Returns the number of pending buf pool read ios.
@@ -6637,6 +6637,8 @@ void buf_stats_get_pool_info(
   pool_info->pool_unique_id = pool_id;
 
   pool_info->pool_size = buf_pool->curr_size;
+
+  pool_info->pool_size_bytes = buf_pool->curr_pool_size;
 
   pool_info->lru_len = UT_LIST_GET_LEN(buf_pool->LRU);
 
