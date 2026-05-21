@@ -388,8 +388,6 @@ my_bool opt_log_slow_admin_statements= 0;
 my_bool opt_log_slow_slave_statements= 0;
 my_bool opt_log_slow_sp_statements= 0;
 my_bool opt_slow_query_log_timestamp_always= 0;
-my_bool opt_query_cache_strip_comments= FALSE;
-my_bool opt_userstat= 0;
 ulong opt_slow_query_log_timestamp_precision= 0;
 ulong opt_slow_query_log_rate_type= 0;
 ulonglong opt_slow_query_log_use_global_control= 0;
@@ -408,6 +406,7 @@ mysql_mutex_t LOCK_default_password_lifetime;
 MYSQL_PLUGIN_IMPORT uint    opt_debug_sync_timeout= 0;
 #endif /* defined(ENABLED_DEBUG_SYNC) */
 my_bool opt_old_style_user_limits= 0, trust_function_creators= 0;
+my_bool opt_userstat= 0, opt_thread_statistics= 0;
 my_bool check_proxy_users= 0, mysql_native_password_proxy_users= 0, sha256_password_proxy_users= 0;
 /*
   True if there is at least one per-hour limit for some user, so we should
@@ -864,6 +863,7 @@ static my_bool plugins_are_initialized= FALSE;
 static const char* default_dbug_option;
 #endif
 ulong query_cache_min_res_unit= QUERY_CACHE_MIN_RESULT_DATA_SIZE;
+my_bool opt_query_cache_strip_comments= FALSE;
 Query_cache query_cache;
 
 my_bool opt_use_ssl= 1;
