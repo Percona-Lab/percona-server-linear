@@ -126,6 +126,9 @@ using std::max;
 static bool execute_sqlcom_select(THD *thd, TABLE_LIST *all_tables);
 static void sql_kill(THD *thd, my_thread_id id, bool only_kill_query);
 
+// Uses the THD to update the global stats by user name and client IP
+void update_global_user_stats(THD* thd, bool create_user, time_t now);
+
 const LEX_STRING command_name[]={
   { C_STRING_WITH_LEN("Sleep") },
   { C_STRING_WITH_LEN("Quit") },
@@ -5324,12 +5327,10 @@ void mysql_parse(THD *thd, Parser_state *parser_state)
     Warning.
     The purpose of query_cache_send_result_to_client() is to lookup the
     query in the query cache first, to avoid parsing and executing it.
-    So, the natural implementation would be to:
+  double start_usecs=     0;
     - first, call query_cache_send_result_to_client,
-    - second, if caching failed, initialise the lexical and syntactic parser.
     The problem is that the query cache depends on a clean initialization
     of (among others) lex->safe_to_cache_query and thd->server_status,
-    which are reset respectively in
     - lex_start()
     - mysql_reset_thd_for_next_command()
     So, initializing the lexical analyser *before* using the query cache
@@ -5569,8 +5570,15 @@ void mysql_parse(THD *thd, Parser_state *parser_state)
     else
       thd->cpu_time = 0;
   }
-  // Updates THD stats.
-  thd->update_stats(true);
+
+  // Updates THD stats and the global user stats.
+  if (unlikely(opt_userstat))
+  {
+    thd->update_stats(true);
+#ifndef EMBEDDED_LIBRARY
+    update_global_user_stats(thd, true, time(NULL));
+#endif
+  }
 
   DBUG_VOID_RETURN;
 }

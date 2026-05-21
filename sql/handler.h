@@ -974,6 +974,21 @@ typedef struct {
   ulonglong check_sum;
 } PARTITION_STATS;
 
+typedef struct st_table_stats {
+  char table[NAME_LEN * 2 + 2];  // [db] + '.' + [table] + '\0'
+  size_t table_len;
+  ulonglong rows_read, rows_changed;
+  ulonglong rows_changed_x_indexes;
+  /* Stores enum db_type, but forward declarations cannot be done */
+  int engine_type;
+} TABLE_STATS;
+
+typedef struct st_index_stats {
+  char index[NAME_LEN * 3 + 3];  // [db] + '.' + [table] + '.' + [index] + '\0'
+  size_t index_len;
+  ulonglong rows_read;
+} INDEX_STATS;
+
 #define UNDEF_NODEGROUP 65535
 class Item;
 struct st_table_log_memory_entry;
@@ -2239,7 +2254,7 @@ public:
     ft_handler(0), inited(NONE),
     implicit_emptied(0),
     pushed_cond(0), pushed_idx_cond(NULL),
-    pushed_idx_cond_keyno(MAX_KEY), rows_changed(0),
+    pushed_idx_cond_keyno(MAX_KEY), rows_read(0), rows_changed(0),
     next_insert_id(0), insert_id_for_cur_row(0),
     auto_inc_intervals_count(0),
     m_psi(NULL),
