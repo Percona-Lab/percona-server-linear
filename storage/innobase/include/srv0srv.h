@@ -298,6 +298,14 @@ extern bool srv_buffer_pool_load_at_startup;
 /* Whether to disable file system cache if it is defined */
 extern bool srv_disable_sort_file_cache;
 
+/* This event is set on checkpoint completion to wake the redo log parser
+thread */
+extern os_event_t srv_checkpoint_completed_event;
+
+/* This event is set on the online redo log following thread after a successful
+log tracking iteration */
+extern os_event_t srv_redo_log_tracked_event;
+
 /* If the last data file is auto-extended, we add this many pages to it
 at a time */
 #define SRV_AUTO_EXTEND_INCREMENT (srv_sys_space.get_autoextend_increment())
@@ -578,6 +586,9 @@ extern long long srv_buf_pool_curr_size;
 /** Dump this % of each buffer pool during BP dump */
 extern ulong srv_buf_pool_dump_pct;
 /** Lock table size in bytes */
+
+extern ulint srv_show_locks_held;
+
 extern ulint srv_lock_table_size;
 
 extern ulint srv_n_file_io_threads;
@@ -961,6 +972,8 @@ void srv_active_wake_master_thread_low(void);
   } while (0)
 /** Wakes up the master thread if it is suspended or being suspended. */
 void srv_wake_master_thread(void);
+/** A thread which follows the redo log and outputs the changed page bitmap. */
+void srv_redo_log_follow_thread();
 #ifndef UNIV_HOTBACKUP
 /** Outputs to a file the output of the InnoDB Monitor.
  @return false if not all information printed
@@ -1090,6 +1103,9 @@ void srv_master_thread_disabled_debug_update(THD *thd, SYS_VAR *var,
 
 /** Status variables to be passed to MySQL */
 struct export_var_t {
+  ulint innodb_adaptive_hash_hash_searches;
+  ulint innodb_adaptive_hash_non_hash_searches;
+  ulint innodb_background_log_sync;
   ulint innodb_data_pending_reads;  /*!< Pending reads */
   ulint innodb_data_pending_writes; /*!< Pending writes */
   ulint innodb_data_pending_fsyncs; /*!< Pending fsyncs */
@@ -1111,12 +1127,16 @@ struct export_var_t {
   ulint innodb_buffer_pool_pages_misc;        /*!< Miscellanous pages */
   ulint innodb_buffer_pool_pages_free;        /*!< Free pages */
 #ifdef UNIV_DEBUG
-  ulint innodb_buffer_pool_pages_latched;  /*!< Latched pages */
-#endif                                     /* UNIV_DEBUG */
-  ulint innodb_buffer_pool_read_requests;  /*!< buf_pool->stat.n_page_gets */
-  ulint innodb_buffer_pool_reads;          /*!< srv_buf_pool_reads */
-  ulint innodb_buffer_pool_wait_free;      /*!< srv_buf_pool_wait_free */
-  ulint innodb_buffer_pool_pages_flushed;  /*!< srv_buf_pool_flushed */
+  ulint innodb_buffer_pool_pages_latched; /*!< Latched pages */
+#endif                                    /* UNIV_DEBUG */
+  ulint innodb_buffer_pool_pages_made_not_young;
+  ulint innodb_buffer_pool_pages_made_young;
+  ulint innodb_buffer_pool_pages_old;
+  ulint innodb_buffer_pool_read_requests;     /*!< buf_pool->stat.n_page_gets */
+  ulint innodb_buffer_pool_reads;             /*!< srv_buf_pool_reads */
+  ulint innodb_buffer_pool_wait_free;         /*!< srv_buf_pool_wait_free */
+  ulint innodb_buffer_pool_pages_flushed;     /*!< srv_buf_pool_flushed */
+  ulint innodb_buffer_pool_pages_LRU_flushed; /*!< buf_lru_flush_page_count */
   ulint innodb_buffer_pool_write_requests; /*!< srv_buf_pool_write_requests */
   ulint innodb_buffer_pool_read_ahead_rnd; /*!< srv_read_ahead_rnd */
   ulint innodb_buffer_pool_read_ahead;     /*!< srv_read_ahead */
@@ -1165,6 +1185,19 @@ struct export_var_t {
                                       index lookups when freeing
                                       file pages */
 #endif                                /* UNIV_DEBUG */
+  // Percona-added status variables
+  ulint innodb_checkpoint_age;
+  ulint innodb_ibuf_free_list;
+  ulint innodb_ibuf_segment_size;
+  lsn_t innodb_lsn_current;
+  lsn_t innodb_lsn_flushed;
+  lsn_t innodb_lsn_last_checkpoint;
+  ulint innodb_master_thread_active_loops; /*!< srv_main_active_loops */
+  ulint innodb_master_thread_idle_loops;   /*!< srv_main_idle_loops */
+  trx_id_t innodb_max_trx_id;
+  trx_id_t innodb_oldest_view_low_limit_trx_id;
+  trx_id_t innodb_purge_trx_id;
+  undo_no_t innodb_purge_undo_no;
 };
 
 #ifndef UNIV_HOTBACKUP
