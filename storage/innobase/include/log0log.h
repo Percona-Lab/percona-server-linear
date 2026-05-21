@@ -61,6 +61,10 @@ typedef ulint (*log_checksum_func_t)(const byte* log_block);
 log_sys->mutex. */
 extern log_checksum_func_t log_checksum_algorithm_ptr;
 
+#define IB_ARCHIVED_LOGS_PREFIX		"ib_log_archive_"
+#define IB_ARCHIVED_LOGS_PREFIX_LEN	(sizeof(IB_ARCHIVED_LOGS_PREFIX) - 1)
+#define IB_ARCHIVED_LOGS_SERIAL_LEN	20
+
 /*******************************************************************//**
 Calculates where in log files we find a specified lsn.
 @return log file number */
@@ -172,9 +176,44 @@ log_group_init(
 	ulint	id,			/*!< in: group id */
 	ulint	n_files,		/*!< in: number of log files */
 	lsn_t	file_size,		/*!< in: log file size in bytes */
-	ulint	space_id);		/*!< in: space id of the file space
+	ulint	space_id,		/*!< in: space id of the file space
 					which contains the log files of this
 					group */
+	ulint	archive_space_id);
+					/*!< in: space id of the file space
+					which contains some archived log
+					files for this group; currently, only
+					for the first log group this is
+					used */
+
+/******************************************************//**
+Completes an i/o to a log file. */
+void
+log_io_complete(
+/*============*/
+	log_group_t*	group);	/*!< in: log group */
+
+/******************************************************//**
+Writes a buffer to a log file group. */
+
+void
+log_group_write_buf(
+/*================*/
+	log_group_t*	group,		/*!< in: log group */
+	byte*		buf,		/*!< in: buffer */
+	ulint		len,		/*!< in: buffer len; must be divisible
+					by OS_FILE_LOG_BLOCK_SIZE */
+#ifdef UNIV_DEBUG
+	ulint		pad_len,	/*!< in: pad len in the buffer len */
+#endif /* UNIV_DEBUG */
+	lsn_t		start_lsn,	/*!< in: start lsn of the buffer; must
+					be divisible by
+					OS_FILE_LOG_BLOCK_SIZE */
+	ulint		new_data_offset);/*!< in: start offset of new data in
+					buf: this parameter is used to decide
+					if we have to write a new log file
+					header */
+
 /******************************************************//**
 Completes an i/o to a log file. */
 void
@@ -259,6 +298,7 @@ log_write_checkpoint_info(
 mtr_buf_t*
 log_append_on_checkpoint(
 	mtr_buf_t*	buf);
+
 #else /* !UNIV_HOTBACKUP */
 /******************************************************//**
 Writes info to a buffer of a log group when log files are created in
@@ -285,10 +325,14 @@ Reads a specified log segment to a buffer. */
 void
 log_group_read_log_seg(
 /*===================*/
+	ulint		type,		/*!< in: LOG_ARCHIVE or LOG_RECOVER */
 	byte*		buf,		/*!< in: buffer where to read */
 	log_group_t*	group,		/*!< in: log group */
 	lsn_t		start_lsn,	/*!< in: read area start */
-	lsn_t		end_lsn);	/*!< in: read area end */
+	lsn_t		end_lsn,	/*!< in: read area end */
+	bool		release_mutex);	/*!< in: whether the log_sys->mutex
+				        should be released before the read */
+
 /********************************************************//**
 Sets the field values in group to correspond to a given lsn. For this function
 to work, the values must already be correctly initialized to correspond to
@@ -460,6 +504,16 @@ Shutdown the log system but do not release all the memory. */
 void
 log_shutdown(void);
 /*==============*/
+
+/****************************************************************//**
+Safely reads the log_sys->tracked_lsn value. The writer counterpart function is
+log_set_tracked_lsn() in log0online.cc.
+@return log_sys->tracked_lsn value. */
+UNIV_INLINE
+lsn_t
+log_get_tracked_lsn(void);
+/*=====================*/
+
 /********************************************************//**
 Free the log system data structures. */
 void
@@ -609,6 +663,23 @@ struct log_group_t{
 	byte*				checkpoint_buf;
 	/** list of log groups */
 	UT_LIST_NODE_T(log_group_t)	log_groups;
+	/** unaligned buffers */
+	byte**		archive_file_header_bufs_ptr;
+	/** buffers for each file header in the group */
+	byte**		archive_file_header_bufs;
+	/** file space which implements the log group archive */
+	ulint		archive_space_id;
+	/** file number corresponding to log_sys->archived_lsn */
+	lsn_t		archived_file_no;
+	/** file offset corresponding to log_sys->archived_lsn, 0 if we have
+	not yet written to the archive file number archived_file_no */
+	lsn_t		archived_offset;
+	/** during an archive write, until the write is completed, we store the
+	next value for archived_file_no here: the write completion function
+	then sets the new value to ..._file_no */
+	lsn_t		next_archived_file_no;
+	/** like the preceding field */
+	lsn_t		next_archived_offset;
 };
 
 /** Redo log buffer */
@@ -737,13 +808,47 @@ struct log_t{
 					/*!< number of currently pending
 					checkpoint writes */
 	rw_lock_t	checkpoint_lock;/*!< this latch is x-locked when a
-					checkpoint write is running; a thread
 					should wait for this without owning
 					the log mutex */
 #endif /* !UNIV_HOTBACKUP */
 	byte*		checkpoint_buf_ptr;/* unaligned checkpoint header */
 	byte*		checkpoint_buf;	/*!< checkpoint header is read to this
 					buffer */
+	/* @} */
+	/** Fields involved in archiving @{ */
+	ulint		archiving_state;/*!< LOG_ARCH_ON, LOG_ARCH_STOPPING
+					LOG_ARCH_STOPPED, LOG_ARCH_OFF */
+	lsn_t		archived_lsn;	/*!< archiving has advanced to this
+					lsn */
+	lsn_t		max_archived_lsn_age_async;
+					/*!< recommended maximum age of
+					archived_lsn, before we start
+					asynchronous copying to the archive */
+	lsn_t		max_archived_lsn_age;
+					/*!< maximum allowed age for
+					archived_lsn */
+	lsn_t		next_archived_lsn;/*!< during an archive write,
+					until the write is completed, we
+					store the next value for
+					archived_lsn here: the write
+					completion function then sets the new
+					value to archived_lsn */
+	ulint		archiving_phase;/*!< LOG_ARCHIVE_READ or
+					LOG_ARCHIVE_WRITE */
+	ulint		n_pending_archive_ios;
+					/*!< number of currently pending reads
+					or writes in archiving */
+	rw_lock_t	archive_lock;	/*!< this latch is x-locked when an
+					archive write is running; a thread
+					should wait for this without owning
+					the log mutex */
+	ulint		archive_buf_size;/*!< size of archive_buf */
+	byte*		archive_buf_ptr;/*!< unaligned archived_buf */
+	byte*		archive_buf;	/*!< log segment is written to the
+					archive from this buffer */
+	os_event_t	archiving_on;	/*!< if archiving has been stopped,
+					a thread can wait for this event to
+					become signaled */
 	/* @} */
 	lsn_t		tracked_lsn;	/*!< log tracking has advanced to this
 					lsn.  Field accessed atomically where

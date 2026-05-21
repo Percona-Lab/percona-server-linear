@@ -162,7 +162,6 @@ recv_recovery_rollback_active(void);
 
 ulint
 recv_parse_log_rec(
-/*===============*/
 	mlog_id_t*	type,
 	byte*		ptr,
 	byte*		end_ptr,
@@ -176,6 +175,8 @@ Resets the logs. The contents of log files will be lost! */
 void
 recv_reset_logs(
 /*============*/
+	lsn_t		arch_log_no,	/*!< in: next archived log file
+					number */
 	lsn_t		lsn);		/*!< in: reset to this lsn
 					rounded up to be divisible by
 					OS_FILE_LOG_BLOCK_SIZE, after
@@ -239,6 +240,18 @@ recv_apply_hashed_log_recs(
 				disk and invalidated in buffer pool: this
 				alternative means that no new log records
 				can be generated during the application */
+
+/*********************************************************************//**
+Gets the hashed file address struct for a page.
+@return file address struct, NULL if not found from the hash table */
+
+recv_addr_t*
+recv_get_fil_addr_struct(
+/*=====================*/
+	ulint	space,	/*!< in: space id */
+	ulint	page_no)/*!< in: page number */
+	__attribute__((warn_unused_result));
+
 #ifdef UNIV_HOTBACKUP
 /*******************************************************************//**
 Applies log records in the hash table to a backup. */
@@ -298,15 +311,6 @@ struct recv_addr_t{
 			rec_list;/*!< list of log records for this page */
 	hash_node_t	addr_hash;/*!< hash node in the hash bucket chain */
 };
-
-/** Gets the hashed file address struct for a page.
-@param[in]	space	space id
-@param[in]	page_no	page number
-@return file address struct, NULL if not found from the hash table */
-recv_addr_t*
-recv_get_fil_addr_struct(
-	ulint	space,
-	ulint	page_no);
 
 struct recv_dblwr_t {
 	/** Add a page frame to the doublewrite recovery buffer. */

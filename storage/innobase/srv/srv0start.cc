@@ -60,6 +60,7 @@ Created 2/16/1996 Heikki Tuuri
 #include "fsp0fsp.h"
 #include "rem0rec.h"
 #include "mtr0mtr.h"
+#include "log0archive.h"
 #include "log0log.h"
 #include "log0online.h"
 #include "log0recv.h"
@@ -457,9 +458,16 @@ create_log_files(
 		}
 	}
 
+#if 0 // TODO laurynas: log archiving broken by WL#8845
+	/* Create the file space object for archived logs. */
+	ut_a(fil_space_create("arch_log_space", SRV_LOG_SPACE_FIRST_ID + 1,
+			      0, FIL_TYPE_LOG));
+#endif
+
 	if (!log_group_init(0, srv_n_log_files,
 			    srv_log_file_size * UNIV_PAGE_SIZE,
-			    SRV_LOG_SPACE_FIRST_ID)) {
+			    SRV_LOG_SPACE_FIRST_ID,
+			    SRV_LOG_SPACE_FIRST_ID + 1)) {
 		return(DB_ERROR);
 	}
 
@@ -468,7 +476,8 @@ create_log_files(
 	/* Create a log checkpoint. */
 	log_mutex_enter();
 	ut_d(recv_no_log_write = false);
-	recv_reset_logs(lsn);
+	recv_reset_logs(UT_LIST_GET_FIRST(log_sys->log_groups)
+			->archived_file_no, lsn);
 	log_mutex_exit();
 
 	return(DB_SUCCESS);
@@ -1936,6 +1945,8 @@ innobase_start_or_create_for_mysql(void)
 		return(srv_init_abort(err));
 	}
 
+	os_normalize_path_for_win(srv_arch_dir);
+
 	dirnamelen = strlen(srv_log_group_home_dir);
 	ut_a(dirnamelen < (sizeof logfilename) - 10 - sizeof "ib_logfile");
 	memcpy(logfilename, srv_log_group_home_dir, dirnamelen);
@@ -2083,7 +2094,8 @@ innobase_start_or_create_for_mysql(void)
 		}
 
 		if (!log_group_init(0, i, srv_log_file_size * UNIV_PAGE_SIZE,
-				    SRV_LOG_SPACE_FIRST_ID)) {
+				    SRV_LOG_SPACE_FIRST_ID,
+				    SRV_LOG_SPACE_FIRST_ID + 1)) {
 			return(srv_init_abort(DB_ERROR));
 		}
 	}
@@ -2425,7 +2437,29 @@ files_checked:
 		log_buffer_flush_to_disk();
 	}
 
-	/* Open temp-tablespace and keep it open until shutdown. */
+	if (!srv_read_only_mode) {
+		if (!srv_log_archive_on) {
+			ut_a(DB_SUCCESS == log_archive_noarchivelog());
+		} else {
+			bool	start_archive;
+
+			log_mutex_enter();
+
+			start_archive = false;
+
+			if (log_sys->archiving_state == LOG_ARCH_OFF) {
+
+				start_archive = true;
+			}
+
+			log_mutex_exit();
+
+			if (start_archive) {
+
+				ut_a(DB_SUCCESS == log_archive_archivelog());
+			}
+		}
+	}
 
 	err = srv_open_tmp_tablespace(create_new_db, &srv_tmp_space);
 
@@ -2441,7 +2475,6 @@ files_checked:
 	/* Here the double write buffer has already been created and so
 	any new rollback segments will be allocated after the double
 	write buffer. The default segment should already exist.
-	We create the new segments only if it's a new database or
 	the database was shutdown cleanly. */
 
 	/* Note: When creating the extra rollback segments during an upgrade

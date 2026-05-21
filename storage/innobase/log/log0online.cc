@@ -1009,9 +1009,9 @@ log_online_follow_log_seg(
 	      >= ut_uint64_align_down(srv_start_lsn, OS_FILE_LOG_BLOCK_SIZE));
 #endif
 	log_mutex_enter();
-	log_group_read_log_seg(log_bmp_sys->read_buf, group, block_start_lsn,
-			       block_end_lsn);
-	log_mutex_exit();
+	log_group_read_log_seg(LOG_RECOVER, log_bmp_sys->read_buf,
+			       group, block_start_lsn, block_end_lsn, true);
+	/* log_group_read_log_seg will release the log_sys->mutex for us */
 
 	while (log_block < log_block_end
 	       && log_bmp_sys->next_parse_lsn < log_bmp_sys->end_lsn) {

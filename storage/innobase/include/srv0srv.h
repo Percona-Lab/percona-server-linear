@@ -193,6 +193,7 @@ extern FILE*	srv_misc_tmpfile;
 /* Server parameters which are read from the initfile */
 
 extern char*	srv_data_home;
+extern char*	srv_arch_dir;
 
 /** Set if InnoDB must operate in read-only mode. We don't do any
 recovery and open all tables in RO mode instead of RW mode. We don't
@@ -392,6 +393,8 @@ extern ulong	srv_doublewrite_batch_size;
 extern ulong	srv_checksum_algorithm;
 
 extern double	srv_max_buf_pool_modified_pct;
+extern ulong	srv_log_arch_expire_sec;
+extern bool	srv_log_archive_on;
 extern ulong	srv_max_purge_lag;
 extern ulong	srv_max_purge_lag_delay;
 
@@ -460,6 +463,8 @@ extern ulint	srv_dml_needed_delay;
 extern lint	srv_kill_idle_transaction;
 
 #define SRV_MAX_N_IO_THREADS	130
+
+#define SRV_MAX_N_PURGE_THREADS 32
 
 /* Array of English strings describing the current state of an
 i/o handler thread */
@@ -726,6 +731,17 @@ srv_printf_innodb_monitor(
 Function to pass InnoDB status variables to MySQL */
 void
 srv_export_innodb_status(void);
+/*==========================*/
+/*************************************************************//**
+Removes old archived transaction log files.
+Both parameters couldn't be provided at the same time.
+@return DB_SUCCESS on success, otherwise DB_ERROR */
+dberr_t
+purge_archived_logs(
+	time_t	before_date,		/*!< in: all files modified
+					before timestamp should be removed */
+	lsn_t	before_lsn);		/*!< in: files with this lsn in name
+					and earler should be removed */
 /*==========================*/
 /*******************************************************************//**
 Get current server activity count. We don't hold srv_sys::mutex while

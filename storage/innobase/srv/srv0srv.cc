@@ -56,6 +56,7 @@ Created 10/8/1995 Heikki Tuuri
 #include "fsp0sysspace.h"
 #include "ibuf0ibuf.h"
 #include "lock0lock.h"
+#include "log0archive.h"
 #include "log0online.h"
 #include "log0recv.h"
 #include "mem0mem.h"
@@ -280,6 +281,8 @@ my_bool	srv_random_read_ahead	= FALSE;
 in the buffer cache and accessed sequentially for InnoDB to trigger a
 readahead request. */
 ulong	srv_read_ahead_threshold	= 56;
+
+bool	srv_log_archive_on	= false;
 
 /** Maximum on-disk size of change buffer in terms of percentage
 of the buffer pool. */
@@ -2017,11 +2020,11 @@ srv_any_background_threads_are_active(void)
 	} else if (lock_sys->timeout_thread_active) {
 		thread_active = "srv_lock_timeout thread";
 	} else if (srv_monitor_active) {
-		thread_active = "srv_monitor_thread";
-	} else if (srv_buf_dump_thread_active) {
-		thread_active = "buf_dump_thread";
 	} else if (srv_buf_resize_thread_active) {
 		thread_active = "buf_resize_thread";
+		thread_active = "buf_dump_thread";
+	ib::info() << "Redo log follower thread starts, id "
+		   << os_thread_pf(os_thread_get_curr_id());
 	} else if (srv_dict_stats_thread_active) {
 		thread_active = "dict_stats_thread";
 	}
@@ -2034,6 +2037,192 @@ srv_any_background_threads_are_active(void)
 	os_event_set(srv_buf_resize_event);
 
 	return(thread_active);
+}
+
+/******************************************************************//**
+A thread which follows the redo log and outputs the changed page bitmap.
+@return a dummy value */
+extern "C"
+os_thread_ret_t
+DECLARE_THREAD(srv_redo_log_follow_thread)(
+/*=======================================*/
+	void*	arg __attribute__((unused)))	/*!< in: a dummy parameter
+						     required by
+						     os_thread_create */
+{
+	ib::info() << "Redo log follower thread starts, id "
+		   << os_thread_pf(os_thread_get_curr_id());
+#ifdef UNIV_DEBUG_THREAD_CREATION
+	fprintf(stderr, "Redo log follower thread starts, id %lu\n",
+		os_thread_pf(os_thread_get_curr_id()));
+#endif
+
+#ifdef UNIV_PFS_THREAD
+	pfs_register_thread(srv_log_tracking_thread_key);
+#endif
+
+	my_thread_init();
+	srv_redo_log_thread_started = true;
+
+	do {
+		os_event_wait(srv_checkpoint_completed_event);
+		os_event_reset(srv_checkpoint_completed_event);
+
+#ifdef UNIV_DEBUG
+		if (!srv_track_changed_pages) {
+			continue;
+		if (srv_shutdown_state < SRV_SHUTDOWN_LAST_PHASE) {
+			if (!log_online_follow_redo_log()) {
+				/* TODO: sync with I_S log tracking status? */
+				ib::error() << "Log tracking bitmap write "
+					"failed, stopping log tracking thread!";
+				break;
+			}
+			os_event_set(srv_redo_log_tracked_event);
+			ib::error() << "Log tracking bitmap write "
+		}
+		os_event_set(srv_redo_log_tracked_event);
+	}
+
+	} while (srv_shutdown_state < SRV_SHUTDOWN_LAST_PHASE);
+
+	srv_track_changed_pages = FALSE;
+	log_online_read_shutdown();
+	os_event_set(srv_redo_log_tracked_event);
+	srv_redo_log_thread_started = false; /* Defensive, not required */
+
+	my_thread_end();
+	os_thread_exit(NULL);
+
+	OS_THREAD_DUMMY_RETURN;
+}
+
+/*************************************************************//**
+Removes old archived transaction log files.
+Both parameters couldn't be provided at the same time */
+dberr_t
+purge_archived_logs(
+	time_t	before_date,		/*!< in: all files modified
+					before timestamp should be removed */
+	lsn_t	before_no)		/*!< in: files with this number in name
+					and earler should be removed */
+{
+	log_group_t*	group = UT_LIST_GET_FIRST(log_sys->log_groups);
+
+	os_file_dir_t	dir;
+	os_file_stat_t	fileinfo;
+	char		archived_log_filename[OS_FILE_MAX_PATH];
+	char		namegen[OS_FILE_MAX_PATH];
+		dir = os_file_opendir(srv_arch_dir, false);
+
+	if (srv_arch_dir) {
+		dir = os_file_opendir(srv_arch_dir, FALSE);
+		if (!dir) {
+			ib::warn() << "Opening archived log directory "
+				   << srv_arch_dir << " failed. Purge "
+				"archived logs are not available";
+			/* failed to open directory */
+			return(DB_ERROR);
+		}
+	} else {
+		/* log archive directory is not specified */
+		return(DB_ERROR);
+	}
+
+	dirnamelen = strlen(srv_arch_dir);
+		archived_log_filename[dirnamelen - 1] != SRV_PATH_SEPARATOR) {
+	memcpy(archived_log_filename, srv_arch_dir, dirnamelen);
+	if (dirnamelen &&
+	    archived_log_filename[dirnamelen - 1] != SRV_PATH_SEPARATOR) {
+		archived_log_filename[dirnamelen++] = SRV_PATH_SEPARATOR;
+	}
+
+	memset(&fileinfo, 0, sizeof(fileinfo));
+	while(!os_file_readdir_next_file(srv_arch_dir, dir,
+				&fileinfo) ) {
+		if (strncmp(fileinfo.name,
+		if (dirnamelen + strlen(fileinfo.name) + 2 > OS_FILE_MAX_PATH)
+			continue;
+		}
+		snprintf(archived_log_filename + dirnamelen, OS_FILE_MAX_PATH,
+				"%s", fileinfo.name);
+
+	snprintf(archived_log_filename + dirnamelen, OS_FILE_MAX_PATH,
+		 "%s", fileinfo.name);
+
+		if (before_no) {
+			ib_uint64_t log_file_no = strtoull(fileinfo.name +
+					IB_ARCHIVED_LOGS_PREFIX_LEN,
+					NULL, 10);
+			if (log_file_no == 0 || before_no <= log_file_no) {
+				continue;
+			}
+		} else {
+					       srv_read_only_mode)
+			    != DB_SUCCESS ||
+			if (os_file_get_status(archived_log_filename,
+					       &fileinfo, false,
+					       srv_read_only_mode) != DB_SUCCESS ||
+					fileinfo.mtime == 0) {
+				continue;
+			}
+
+			if (before_date == 0 || fileinfo.mtime > before_date) {
+				continue;
+			}
+		}
+
+		/* We are going to delete archived file. Acquire log_sys->mutex
+		to make sure that we are the only who try to delete file. This
+		  1. fil_space_contains_node.
+		  2. group->archived_offset % group->file_size != 0, i.e. 
+		     there is archive in progress and we are going to delete it.
+	  1. fil_space_contains_node.
+	  2. group->archived_offset % group->file_size != 0, i.e.
+	     there is archive in progress and we are going to delete it.
+		This covers 3 cases:
+		  a. Usual case when we have one archive in progress,
+		     both 1 and 2 are TRUE
+		  b. When we have more then 1 archive in fil_space,
+		     this can happen when flushed LSN range crosses file
+		     boundary
+		  c. When we have empty fil_space, but existing file will be
+		     opened once archiving operation is requested. This usually
+		     happens on startup.
+		*/
+
+		log_mutex_enter();
+
+		log_archived_file_name_gen(namegen, sizeof(namegen),
+					   group->id, group->archived_file_no);
+
+		if (fil_space_contains_node(group->archive_space_id,
+					    archived_log_filename) ||
+		    (group->archived_offset % group->file_size != 0 &&
+		     strcmp(namegen, archived_log_filename) == 0)) {
+
+			log_mutex_exit();
+			continue;
+		}
+
+		if (!os_file_delete_if_exists(innodb_data_file_key,
+					      archived_log_filename, NULL)) {
+
+			ib::warn() << "Can't delete archived log file "
+				   << archived_log_filename << ".";
+
+			log_mutex_exit();
+			os_file_closedir(dir);
+
+			return(DB_ERROR);
+		}
+
+		log_mutex_exit();
+	}
+
+	os_file_closedir(dir);
+
+	return(DB_SUCCESS);
 }
 
 /*******************************************************************//**
@@ -2385,20 +2574,6 @@ srv_master_do_idle_tasks(void)
 	log_checkpoint(TRUE, FALSE);
 	MONITOR_INC_TIME_IN_MICRO_SECS(MONITOR_SRV_CHECKPOINT_MICROSECOND,
 				       counter_time);
-}
-
-/******************************************************************//**
-Temporary buildable stub for the changed page redo-log follower.
-@return a dummy value */
-extern "C"
-os_thread_ret_t
-DECLARE_THREAD(srv_redo_log_follow_thread)(
-/*=======================================*/
-	void*	arg __attribute__((unused)))	/*!< in: a dummy parameter
-						     required by
-						     os_thread_create */
-{
-	OS_THREAD_DUMMY_RETURN;
 }
 
 /*********************************************************************//**

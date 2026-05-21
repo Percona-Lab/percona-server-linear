@@ -156,6 +156,35 @@ log_buf_pool_get_oldest_modification(void)
 	return(lsn);
 }
 
+/****************************************************************//**
+Checks if the log groups have a big enough margin of free space in
+so that a new log entry can be written without overwriting log data
+that is not read by the changed page bitmap thread.
+@return true if there is not enough free space. */
+static
+bool
+log_check_tracking_margin(
+	ulint	lsn_advance)	/*!< in: an upper limit on how much log data we
+				plan to write.  If zero, the margin will be
+				checked for the already-written log. */
+{
+	lsn_t	tracked_lsn;
+	lsn_t	tracked_lsn_age;
+
+	if (!srv_track_changed_pages) {
+		return false;
+	}
+
+	ut_ad(mutex_own(&(log_sys->mutex)));
+
+	tracked_lsn = log_get_tracked_lsn();
+	tracked_lsn_age = log_sys->lsn - tracked_lsn;
+
+	/* The overwrite would happen when log_sys->log_group_capacity is
+	exceeded, but we use max_checkpoint_age for an extra safety margin. */
+	return tracked_lsn_age + lsn_advance > log_sys->max_checkpoint_age;
+}
+
 /** Extends the log buffer.
 @param[in]	len	requested minimum size in bytes */
 void
@@ -792,6 +821,32 @@ log_init(void)
 
 	/*----------------------------*/
 
+	/* Under MySQL, log archiving is always off */
+	log_sys->archiving_state = LOG_ARCH_OFF;
+	log_sys->archived_lsn = log_sys->lsn;
+	log_sys->next_archived_lsn = 0;
+
+	log_sys->n_pending_archive_ios = 0;
+
+	rw_lock_create(archive_lock_key, &log_sys->archive_lock,
+		       SYNC_NO_ORDER_CHECK);
+
+	log_sys->archive_buf_ptr = static_cast<byte*>(
+		ut_zalloc(LOG_ARCHIVE_BUF_SIZE
+			  + OS_FILE_LOG_BLOCK_SIZE,
+			  mem_key_log_sys_archive_buf));
+
+	log_sys->archive_buf = static_cast<byte*>(
+		ut_align(log_sys->archive_buf_ptr, OS_FILE_LOG_BLOCK_SIZE));
+
+	log_sys->archive_buf_size = LOG_ARCHIVE_BUF_SIZE;
+
+	log_sys->archiving_on = os_event_create("log_archiving_on");
+
+	log_sys->tracked_lsn = 0;
+
+	/*----------------------------*/
+
 	log_block_init(log_sys->buf, log_sys->lsn);
 	log_block_set_first_rec_group(log_sys->buf, LOG_BLOCK_HDR_SIZE);
 
@@ -812,9 +867,15 @@ log_group_init(
 	ulint	id,			/*!< in: group id */
 	ulint	n_files,		/*!< in: number of log files */
 	lsn_t	file_size,		/*!< in: log file size in bytes */
-	ulint	space_id)		/*!< in: space id of the file space
+	ulint	space_id,		/*!< in: space id of the file space
 					which contains the log files of this
 					group */
+	ulint	archive_space_id)
+					/*!< in: space id of the file space
+					which contains some archived log
+					files for this group; currently, only
+					for the first log group this is
+					used */
 {
 	ulint	i;
 	log_group_t*	group;
@@ -836,6 +897,14 @@ log_group_init(
 	group->file_header_bufs = static_cast<byte**>(
 		ut_zalloc_nokey(sizeof(byte**) * n_files));
 
+	group->archive_file_header_bufs_ptr = static_cast<byte**>(
+		ut_zalloc(sizeof(byte*) * n_files,
+			  mem_key_log_sys_group_archive_file_header_bufs_ptr));
+
+	group->archive_file_header_bufs = static_cast<byte**>(
+		ut_zalloc(sizeof(byte*) * n_files,
+			  mem_key_log_sys_group_archive_file_header_bufs));
+
 	for (i = 0; i < n_files; i++) {
 		group->file_header_bufs_ptr[i] = static_cast<byte*>(
 			ut_zalloc_nokey(LOG_FILE_HDR_SIZE
@@ -844,7 +913,22 @@ log_group_init(
 		group->file_header_bufs[i] = static_cast<byte*>(
 			ut_align(group->file_header_bufs_ptr[i],
 				 OS_FILE_LOG_BLOCK_SIZE));
+
+		group->archive_file_header_bufs_ptr[i] = static_cast<byte*>(
+			ut_zalloc(LOG_FILE_HDR_SIZE
+				  + OS_FILE_LOG_BLOCK_SIZE,
+			mem_key_log_sys_group_archive_file_header_buf_ptr));
+
+		group->archive_file_header_bufs[i] = static_cast<byte*>(
+			ut_align(group->archive_file_header_bufs_ptr[i],
+				 OS_FILE_LOG_BLOCK_SIZE));
+
 	}
+
+	group->archive_space_id = archive_space_id;
+
+	group->archived_file_no = LOG_START_LSN;
+	group->archived_offset = 0;
 
 	group->checkpoint_buf_ptr = static_cast<byte*>(
 		ut_zalloc_nokey(2 * OS_FILE_LOG_BLOCK_SIZE));
@@ -998,7 +1082,6 @@ log_block_store_checksum(
 
 /******************************************************//**
 Writes a buffer to a log file group. */
-static
 void
 log_group_write_buf(
 /*================*/
@@ -1510,7 +1593,44 @@ log_io_complete_checkpoint(void)
 	}
 
 	log_mutex_exit();
+
+	/* Wake the redo log watching thread to parse the log up to this
+	checkpoint. */
+	if (srv_track_changed_pages) {
+		os_event_reset(srv_redo_log_tracked_event);
+		os_event_set(srv_checkpoint_completed_event);
+	}
 }
+
+#if 0 // TODO laurynas: log archiving broken by WL#8845
+/*******************************************************************//**
+Writes info to a checkpoint about a log group. */
+static
+void
+log_checkpoint_set_nth_group_info(
+/*==============================*/
+	byte*	buf,	/*!< in: buffer for checkpoint info */
+	ulint	n,	/*!< in: nth slot */
+	lsn_t	file_no)/*!< in: archived file number */
+{
+	mach_write_to_8(buf + LOG_CHECKPOINT_GROUP_ARRAY +
+			8 * n + LOG_CHECKPOINT_ARCHIVED_FILE_NO,
+			file_no);
+}
+
+/*******************************************************************//**
+Gets info from a checkpoint about a log group. */
+void
+log_checkpoint_get_nth_group_info(
+/*==============================*/
+	const byte*	buf,	/*!< in: buffer containing checkpoint info */
+	ulint		n,	/*!< in: nth slot */
+	lsn_t*		file_no)/*!< out: archived file number */
+{
+	*file_no = mach_read_from_8(buf + LOG_CHECKPOINT_GROUP_ARRAY +
+				8 * n + LOG_CHECKPOINT_ARCHIVED_FILE_NO);
+}
+#endif
 
 /******************************************************//**
 Writes the checkpoint info to a log group header. */
@@ -1913,20 +2033,25 @@ loop:
 }
 
 /******************************************************//**
-Reads a specified log segment to a buffer. */
+Reads a specified log segment to a buffer. Optionally releases the log mutex
+before the I/O.*/
 void
 log_group_read_log_seg(
 /*===================*/
+	ulint		type,		/*!< in: LOG_ARCHIVE or LOG_RECOVER */
 	byte*		buf,		/*!< in: buffer where to read */
 	log_group_t*	group,		/*!< in: log group */
 	lsn_t		start_lsn,	/*!< in: read area start */
-	lsn_t		end_lsn)	/*!< in: read area end */
+	lsn_t		end_lsn,	/*!< in: read area end */
+	bool		release_mutex)	/*!< in: whether the log_sys->mutex
+					should be released before the read */
 {
 	ulint	len;
 	lsn_t	source_offset;
 
 	ut_ad(log_mutex_own());
 
+	const bool	sync = (type == LOG_RECOVER);
 loop:
 	source_offset = log_group_calc_lsn_offset(start_lsn, group);
 
@@ -1943,26 +2068,38 @@ loop:
 			(source_offset % group->file_size));
 	}
 
+	if (type == LOG_ARCHIVE) {
+
+		log_sys->n_pending_archive_ios++;
+	}
+
 	log_sys->n_log_ios++;
 
 	MONITOR_INC(MONITOR_LOG_IO);
 
 	ut_a(source_offset / UNIV_PAGE_SIZE <= ULINT_MAX);
 
+	if (release_mutex) {
+		log_mutex_exit();
+	}
+
 	const ulint	page_no
 		= (ulint) (source_offset / univ_page_size.physical());
 
-	fil_io(IORequestLogRead, true,
+	fil_io(IORequestLogRead, sync,
 	       page_id_t(group->space_id, page_no),
 	       univ_page_size,
 	       (ulint) (source_offset % univ_page_size.physical()),
-	       len, buf, NULL);
+	       len, buf, (type == LOG_ARCHIVE) ? &log_archive_io : NULL);
 
 	start_lsn += len;
 	buf += len;
 
 	if (start_lsn != end_lsn) {
 
+		if (release_mutex) {
+			log_mutex_enter();
+		}
 		goto loop;
 	}
 }
@@ -1975,11 +2112,19 @@ objects! */
 void
 log_check_margins(void)
 {
-	bool	check;
+	bool	check = true;
 
 	do {
 		log_flush_margin();
 		log_checkpoint_margin();
+		log_mutex_enter();
+		if (log_check_tracking_margin(0)) {
+			log_mutex_exit();
+			os_thread_sleep(10000);
+			continue;
+		}
+		log_mutex_exit();
+		log_archive_margin();
 		log_mutex_enter();
 		ut_ad(!recv_no_log_write);
 		check = log_sys->check_flush_or_checkpoint;
@@ -2201,6 +2346,10 @@ loop:
 		goto loop;
 	}
 
+	log_mutex_enter();
+	log_archive_close_groups(true);
+	log_mutex_exit();
+
 	/* Check that the background threads stay suspended */
 	thread_name = srv_any_background_threads_are_active();
 	if (thread_name != NULL) {
@@ -2398,6 +2547,9 @@ log_shutdown(void)
 	ut_free(log_sys->checkpoint_buf_ptr);
 	log_sys->checkpoint_buf_ptr = NULL;
 	log_sys->checkpoint_buf = NULL;
+	ut_free(log_sys->archive_buf_ptr);
+	log_sys->archive_buf_ptr = NULL;
+	log_sys->archive_buf = NULL;
 
 	os_event_destroy(log_sys->flush_event);
 
@@ -2405,6 +2557,9 @@ log_shutdown(void)
 
 	mutex_free(&log_sys->mutex);
 	mutex_free(&log_sys->log_flush_order_mutex);
+
+	rw_lock_free(&log_sys->archive_lock);
+	os_event_destroy(log_sys->archiving_on);
 
 	recv_sys_close();
 }

@@ -77,6 +77,7 @@ SET(INNOBASE_SOURCES
 	lock/lock0prdt.cc
 	lock/lock0lock.cc
 	lock/lock0wait.cc
+	log/log0archive.cc
 	log/log0log.cc
 	log/log0online.cc
 	log/log0recv.cc

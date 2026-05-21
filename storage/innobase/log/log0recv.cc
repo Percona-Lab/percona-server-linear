@@ -764,9 +764,9 @@ recv_synchronize_groups(void)
 
 	ut_a(start_lsn != end_lsn);
 
-	log_group_read_log_seg(recv_sys->last_block,
+	log_group_read_log_seg(LOG_RECOVER, recv_sys->last_block,
 			       UT_LIST_GET_FIRST(log_sys->log_groups),
-			       start_lsn, end_lsn);
+			       start_lsn, end_lsn, false);
 
 	for (log_group_t* group = UT_LIST_GET_FIRST(log_sys->log_groups);
 	     group;
@@ -3223,11 +3223,6 @@ recv_scan_log_recs(
 			return(true);
 		}
 
-		if (*store_to_hash != STORE_NO
-		    && mem_heap_get_size(recv_sys->heap) > available_memory) {
-			*store_to_hash = STORE_NO;
-		}
-
 		if (recv_sys->recovered_offset > RECV_PARSING_BUF_SIZE / 4) {
 			/* Move parsing buffer data to the buffer start */
 
@@ -3299,8 +3294,8 @@ recv_group_scan_log_recs(
 		start_lsn = end_lsn;
 		end_lsn += RECV_SCAN_SIZE;
 
-		log_group_read_log_seg(
-			log_sys->buf, group, start_lsn, end_lsn);
+		log_group_read_log_seg(LOG_RECOVER,
+			log_sys->buf, group, start_lsn, end_lsn, false);
 	} while (!recv_scan_log_recs(
 			 available_mem, &store_to_hash, log_sys->buf,
 			 RECV_SCAN_SIZE,
@@ -3560,10 +3555,6 @@ recv_recovery_from_checkpoint_start(
 		       univ_page_size, 0, OS_FILE_LOG_BLOCK_SIZE, log_hdr_buf,
 		       max_cp_group);
 	}
-
-	/* Start reading the log groups from the checkpoint lsn up. The
-	variable contiguous_lsn contains an lsn up to which the log is
-	known to be contiguously written to all log groups. */
 
 	recv_sys->mlog_checkpoint_lsn = 0;
 
@@ -3871,6 +3862,8 @@ Resets the logs. The contents of log files will be lost! */
 void
 recv_reset_logs(
 /*============*/
+	lsn_t		arch_log_no,	/*!< in: next archived log file
+					number */
 	lsn_t		lsn)		/*!< in: reset to this lsn
 					rounded up to be divisible by
 					OS_FILE_LOG_BLOCK_SIZE, after
@@ -3888,6 +3881,8 @@ recv_reset_logs(
 	while (group) {
 		group->lsn = log_sys->lsn;
 		group->lsn_offset = LOG_FILE_HDR_SIZE;
+		group->archived_file_no = arch_log_no;
+		group->archived_offset = 0;
 		group = UT_LIST_GET_NEXT(log_groups, group);
 	}
 
@@ -3896,6 +3891,10 @@ recv_reset_logs(
 
 	log_sys->next_checkpoint_no = 0;
 	log_sys->last_checkpoint_lsn = 0;
+
+	log_sys->archived_lsn = log_sys->lsn;
+
+	log_sys->tracked_lsn = log_sys->lsn;
 
 	log_block_init(log_sys->buf, log_sys->lsn);
 	log_block_set_first_rec_group(log_sys->buf, LOG_BLOCK_HDR_SIZE);

@@ -76,6 +76,8 @@ the OS actually supports it: Win 95 does not, NT does. */
 /** Use unbuffered I/O */
 # define UNIV_NON_BUFFERED_IO
 
+# define SRV_PATH_SEPARATOR	'\\'
+
 /** File handle */
 # define os_file_t	HANDLE
 
@@ -87,6 +89,8 @@ the OS actually supports it: Win 95 does not, NT does. */
 # define OS_FILE_FROM_FD(fd) (HANDLE) _get_osfhandle(fd)
 
 #else /* _WIN32 */
+
+#define SRV_PATH_SEPARATOR	'/'
 
 typedef DIR*	os_file_dir_t;	/*!< directory stream */
 
