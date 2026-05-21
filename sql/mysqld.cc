@@ -662,6 +662,9 @@ mysql_mutex_t
   LOCK_error_messages;
 mysql_mutex_t LOCK_sql_rand;
 
+mysql_mutex_t
+  LOCK_global_user_client_stats,
+  LOCK_global_table_stats, LOCK_global_index_stats;
 /**
   The below lock protects access to two global server variables:
   max_prepared_stmt_count and prepared_stmt_count. These variables
@@ -860,6 +863,7 @@ static my_bool plugins_are_initialized= FALSE;
 static const char* default_dbug_option;
 #endif
 ulong query_cache_min_res_unit= QUERY_CACHE_MIN_RESULT_DATA_SIZE;
+my_bool opt_query_cache_strip_comments= FALSE;
 Query_cache query_cache;
 
 my_bool opt_use_ssl= 1;
@@ -1331,6 +1335,13 @@ void clean_up(bool print_message)
   my_free(opt_bin_logname);
   bitmap_free(&temp_pool);
   free_max_user_conn();
+#ifndef EMBEDDED_LIBRARY
+  free_global_user_stats();
+  free_global_client_stats();
+  free_global_thread_stats();
+  free_global_table_stats();
+  free_global_index_stats();
+#endif
 #ifdef HAVE_REPLICATION
   end_slave_list();
 #endif
@@ -1436,6 +1447,9 @@ static void clean_up_mutexes()
   mysql_cond_destroy(&COND_start_signal_handler);
   mysql_mutex_destroy(&LOCK_start_signal_handler);
 #endif
+  mysql_mutex_destroy(&LOCK_global_user_client_stats);
+  mysql_mutex_destroy(&LOCK_global_table_stats);
+  mysql_mutex_destroy(&LOCK_global_index_stats);
 }
 
 
@@ -3176,6 +3190,14 @@ static int init_thread_environment()
                    &LOCK_compress_gtid_table, MY_MUTEX_INIT_FAST);
   mysql_cond_init(key_COND_compress_gtid_table,
                   &COND_compress_gtid_table);
+
+  mysql_mutex_init(key_LOCK_global_user_client_stats,
+                   &LOCK_global_user_client_stats, MY_MUTEX_INIT_FAST);
+  mysql_mutex_init(key_LOCK_global_table_stats,
+                   &LOCK_global_table_stats, MY_MUTEX_INIT_FAST);
+  mysql_mutex_init(key_LOCK_global_index_stats,
+                   &LOCK_global_index_stats, MY_MUTEX_INIT_FAST);
+
 #ifndef EMBEDDED_LIBRARY
   Events::init_mutexes();
 #if defined(_WIN32)
@@ -3720,6 +3742,11 @@ static int init_server_components()
   setup_fpu();
 #ifdef HAVE_REPLICATION
   init_slave_list();
+#endif
+
+#ifndef EMBEDDED_LIBRARY
+  init_global_table_stats();
+  init_global_index_stats();
 #endif
 
   /* Setup logs */
@@ -4269,6 +4296,11 @@ a file name for --log-bin-index option", opt_binlog_index_name);
 
   init_max_user_conn();
   init_update_queries();
+#ifndef EMBEDDED_LIBRARY
+  init_global_user_stats();
+  init_global_client_stats();
+  init_global_thread_stats();
+#endif
   DBUG_RETURN(0);
 }
 
@@ -8422,6 +8454,8 @@ PSI_mutex_key
   key_hash_filo_lock,
   Gtid_set::key_gtid_executed_free_intervals_mutex,
   key_LOCK_crypt, key_LOCK_error_log,
+  key_LOCK_global_user_client_stats,
+  key_LOCK_global_table_stats, key_LOCK_global_index_stats,
   key_LOCK_gdl, key_LOCK_global_system_variables,
   key_LOCK_manager,
   key_LOCK_prepared_stmt_count,
@@ -8498,6 +8532,12 @@ static PSI_mutex_info all_server_mutexes[]=
   { &Gtid_set::key_gtid_executed_free_intervals_mutex, "Gtid_set::gtid_executed::free_intervals_mutex", 0 },
   { &key_LOCK_crypt, "LOCK_crypt", PSI_FLAG_GLOBAL},
   { &key_LOCK_error_log, "LOCK_error_log", PSI_FLAG_GLOBAL},
+  { &key_LOCK_global_user_client_stats,
+    "LOCK_global_user_client_stats", PSI_FLAG_GLOBAL},
+  { &key_LOCK_global_table_stats,
+     "LOCK_global_table_stats", PSI_FLAG_GLOBAL},
+  { &key_LOCK_global_index_stats,
+    "LOCK_global_index_stats", PSI_FLAG_GLOBAL},
   { &key_LOCK_gdl, "LOCK_gdl", PSI_FLAG_GLOBAL},
   { &key_LOCK_global_system_variables, "LOCK_global_system_variables", PSI_FLAG_GLOBAL},
 #if defined(_WIN32) && !defined(EMBEDDED_LIBRARY)
@@ -9098,6 +9138,12 @@ PSI_memory_key key_memory_native_functions;
 PSI_memory_key key_memory_JSON;
 PSI_memory_key key_memory_thread_pool_connection;
 
+PSI_memory_key key_memory_userstat_table_stats;
+PSI_memory_key key_memory_userstat_index_stats;
+PSI_memory_key key_memory_userstat_user_stats;
+PSI_memory_key key_memory_userstat_thread_stats;
+PSI_memory_key key_memory_userstat_client_stats;
+
 #ifdef HAVE_PSI_INTERFACE
 static PSI_memory_info all_server_memory[]=
 {
@@ -9214,6 +9260,11 @@ static PSI_memory_info all_server_memory[]=
   { &key_memory_ignored_db, "ignored_db", 0},
   { &key_memory_PROFILE, "PROFILE", 0},
   { &key_memory_thread_pool_connection, "thread_pool_connection", 0},
+  { &key_memory_userstat_table_stats, "userstat_table_stats", 0},
+  { &key_memory_userstat_index_stats, "userstat_index_stats", 0},
+  { &key_memory_userstat_user_stats, "userstat_user_stats", 0},
+  { &key_memory_userstat_thread_stats, "userstat_thread_stats", 0},
+  { &key_memory_userstat_client_stats, "userstat_client_stats", 0},
   { &key_memory_global_system_variables, "global_system_variables", 0},
   { &key_memory_THD_variables, "THD::variables", 0},
   { &key_memory_Security_context, "Security_context", 0},
