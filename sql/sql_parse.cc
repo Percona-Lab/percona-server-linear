@@ -1441,6 +1441,7 @@ bool dispatch_command(THD *thd, const COM_DATA *com_data,
     the slow log only if opt_log_slow_admin_statements is set.
   */
   thd->enable_slow_log = true;
+  thd->clear_slow_extended();
   thd->lex->sql_command = SQLCOM_END; /* to avoid confusing VIEW detectors */
   thd->set_time();
   if (IS_TIME_T_VALID_FOR_TIMESTAMP(thd->query_start_in_secs()) == false) {
@@ -4835,7 +4836,8 @@ void THD::reset_for_next_command() {
   thd->get_stmt_da()->reset_statement_cond_count();
 
   thd->rand_used = 0;
-  thd->m_sent_row_count = thd->m_examined_row_count = 0;
+
+  thd->clear_slow_extended();
 
   thd->reset_current_stmt_binlog_format_row();
   thd->binlog_unsafe_warning_flags = 0;
