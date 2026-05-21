@@ -268,6 +268,8 @@ class sp_lex_instr : public sp_instr {
     return &m_trig_field_list;
   }
 
+  int get_command() const { return m_lex ? m_lex->sql_command : -1; }
+
  private:
   /**
     Prepare LEX and thread for execution of instruction, if requested open
