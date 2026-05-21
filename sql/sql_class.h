@@ -511,6 +511,8 @@ typedef struct system_variables
   my_bool query_cache_wlock_invalidate;
   my_bool keep_files_on_create;
 
+  my_bool online_alter_index;
+
   my_bool old_alter_table;
   uint old_passwords;
   my_bool big_tables;
@@ -566,6 +568,8 @@ typedef struct system_variables
     'COLUMN_TYPE' field.
   */
   my_bool show_old_temporals;
+
+  my_bool expand_fast_index_creation;
 } SV;
 
 
