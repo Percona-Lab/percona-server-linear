@@ -210,6 +210,9 @@ extern mysql_rwlock_t LOCK_named_pipe_full_access_group;
 extern bool opt_allow_suspicious_udfs;
 extern char *opt_secure_file_priv;
 extern bool opt_log_slow_admin_statements, opt_log_slow_slave_statements;
+extern ulong opt_log_slow_sp_statements;
+extern ulonglong opt_slow_query_log_use_global_control;
+extern ulong opt_slow_query_log_rate_type;
 extern bool sp_automatic_privileges, opt_noacl;
 extern bool opt_old_style_user_limits, trust_function_creators;
 extern bool check_proxy_users, mysql_native_password_proxy_users,
