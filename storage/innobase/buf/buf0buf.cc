@@ -4063,17 +4063,19 @@ buf_debug_execute_is_force_flush()
 	if (srv_ibuf_disable_background_merge) {
 		return(true);
 	}
-
 	return(false);
 }
 #endif /* UNIV_DEBUG || UNIV_IBUF_DEBUG */
 
+
 /** Wait for the block to be read in.
-@param[in]	block	The block to check */
+@param[in]	block	The block to check
+@param[in]	trx	Transaction to account the I/Os to */
 static
 void
 buf_wait_for_read(
-	buf_block_t*	block)
+	buf_block_t*	block,
+	trx_t*		trx)
 {
 	/* Note:
 
@@ -4676,7 +4678,7 @@ got_block:
 	/* We have to wait here because the IO_READ state was set
 	under the protection of the hash_lock and not the block->mutex
 	and block->lock. */
-	buf_wait_for_read(fix_block);
+	buf_wait_for_read(fix_block, NULL);
 
 	/* Mark block as dirty if requested by caller. If not requested (false)
 	then we avoid updating the dirty state of the block and retain the

@@ -46,6 +46,7 @@ Created 10/21/1995 Heikki Tuuri
 #include "srv0srv.h"
 #include "srv0start.h"
 #include "fil0fil.h"
+#include "trx0trx.h"
 #ifndef UNIV_HOTBACKUP
 # include "os0event.h"
 # include "os0thread.h"
@@ -210,6 +211,8 @@ struct Slot {
 	to the caller of os_aio_simulated_handle */
 	bool			io_already_done;
 
+	ulint			space_id;
+
 	/** The file node for which the IO is requested. */
 	fil_node_t*		m1;
 
@@ -305,7 +308,8 @@ public:
 		const char*	name,
 		void*		buf,
 		os_offset_t	offset,
-		ulint		len)
+		ulint		len,
+		ulint		space_id)
 		__attribute__((warn_unused_result));
 
 	/** @return number of reserved slots */
@@ -5449,9 +5453,25 @@ os_file_pread(
 	void*		buf,
 	ulint		n,
 	os_offset_t	offset,
+	trx_t*		trx,
 	dberr_t*	err)
 {
+	ulint		sec;
+	ulint		ms;
+	ib_uint64_t	start_time;
+	ib_uint64_t	finish_time;
+
 	++os_n_file_reads;
+
+	if (UNIV_UNLIKELY(trx && trx->take_stats))
+	{
+		trx->io_reads++;
+		trx->io_read += n;
+		ut_usectime(&sec, &ms);
+		start_time = (ib_uint64_t)sec * 1000000 + ms;
+	} else {
+		start_time = 0;
+	}
 
 	(void) os_atomic_increment_ulint(&os_n_pending_reads, 1);
 	MONITOR_ATOMIC_INC(MONITOR_OS_PENDING_READS);
@@ -5483,7 +5503,8 @@ os_file_read_page(
 	os_offset_t	offset,
 	ulint		n,
 	ulint*		o,
-	bool		exit_on_err)
+	bool		exit_on_err,
+	trx_t*		trx)
 {
 	dberr_t		err;
 
@@ -5494,7 +5515,7 @@ os_file_read_page(
 	for (;;) {
 		ssize_t	n_bytes;
 
-		n_bytes = os_file_pread(type, file, buf, n, offset, &err);
+		n_bytes = os_file_pread(type, file, buf, n, offset, trx, &err);
 
 		if (o != NULL) {
 			*o = n_bytes;
@@ -5804,11 +5825,12 @@ os_file_set_size(
 		fall back to os_file_write/read. On Windows it will use
 		special mechanism to wait before it returns back. */
 
+		// TODO laurynas: space_id, trx
 		err = os_aio(
 			request,
 			OS_AIO_SYNC, name,
 			file, buf, current_size, n_bytes,
-			read_only, NULL, NULL);
+			read_only, NULL, NULL, 0, NULL);
 #endif /* UNIV_HOTBACKUP */
 
 		if (err != DB_SUCCESS) {
@@ -5883,11 +5905,12 @@ os_file_read_func(
 	os_file_t	file,
 	void*		buf,
 	os_offset_t	offset,
-	ulint		n)
+	ulint		n,
+	trx_t*		trx)
 {
 	ut_ad(type.is_read());
 
-	return(os_file_read_page(type, file, buf, offset, n, NULL, true));
+	return(os_file_read_page(type, file, buf, offset, n, NULL, true, trx));
 }
 
 /** NOTE! Use the corresponding macro os_file_read_no_error_handling(),
@@ -5912,7 +5935,7 @@ os_file_read_no_error_handling_func(
 {
 	ut_ad(type.is_read());
 
-	return(os_file_read_page(type, file, buf, offset, n, o, false));
+	return(os_file_read_page(type, file, buf, offset, n, o, false, NULL));
 }
 
 /** NOTE! Use the corresponding macro os_file_write(), not directly
@@ -6608,7 +6631,8 @@ AIO::reserve_slot(
 	const char*	name,
 	void*		buf,
 	os_offset_t	offset,
-	ulint		len)
+	ulint		len,
+	ulint		space_id)
 {
 #ifdef WIN_ASYNC_IO
 	ut_a((len & 0xFFFFFFFFUL) == len);
@@ -6700,6 +6724,7 @@ AIO::reserve_slot(
 	slot->err      = DB_SUCCESS;
 	slot->original_len = static_cast<uint32>(len);
 	slot->io_already_done = false;
+	slot->space_id = space_id;
 
 	if (srv_use_native_aio
 	    && offset > 0
@@ -7135,7 +7160,9 @@ os_aio_func(
 	ulint		n,
 	bool		read_only,
 	fil_node_t*	m1,
-	void*		m2)
+	void*		m2,
+	ulint		space_id,
+	trx_t*		trx)
 {
 #ifdef WIN_ASYNC_IO
 	BOOL		ret = TRUE;
@@ -7169,7 +7196,8 @@ os_aio_func(
 		and os_file_write_func() */
 
 		if (type.is_read()) {
-			return(os_file_read_func(type, file, buf, offset, n));
+			return(os_file_read_func(type, file, buf, offset, n,
+						 trx));
 		}
 
 		ut_ad(type.is_write());
@@ -7185,9 +7213,16 @@ try_again:
 
 	Slot*	slot;
 
-	slot = array->reserve_slot(type, m1, m2, file, name, buf, offset, n);
+	slot = array->reserve_slot(type, m1, m2, file, name, buf, offset, n,
+				   space_id);
 
 	if (type.is_read()) {
+
+		if (trx)
+		{
+			trx->io_reads++;
+			trx->io_read += n;
+		}
 
 		if (srv_use_native_aio) {
 

@@ -1775,11 +1775,12 @@ static
 void
 trx_flush_log_if_needed_low(
 /*========================*/
-	lsn_t	lsn)	/*!< in: lsn up to which logs are to be
+	lsn_t	lsn,	/*!< in: lsn up to which logs are to be
 			flushed. */
+	trx_t*	trx __attribute__((unused)))	/*!< in: transaction */
 {
 #ifdef _WIN32
-	bool	flush = true;
+	trx_t*	trx)	/*!< in: transaction */
 #else
 	bool	flush = srv_unix_file_flush_method != SRV_UNIX_NOSYNC;
 #endif /* _WIN32 */
@@ -1813,7 +1814,7 @@ trx_flush_log_if_needed(
 	trx_t*	trx)	/*!< in/out: transaction */
 {
 	trx->op_info = "flushing log";
-	trx_flush_log_if_needed_low(lsn);
+	trx_flush_log_if_needed_low(lsn, trx);
 	trx->op_info = "";
 }
 
