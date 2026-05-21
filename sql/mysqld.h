@@ -608,6 +608,7 @@ extern PSI_stage_info stage_waiting_for_no_channel_reference;
 extern PSI_stage_info stage_hook_begin_trans;
 extern PSI_stage_info stage_binlog_transaction_compress;
 extern PSI_stage_info stage_binlog_transaction_decompress;
+extern PSI_stage_info stage_restoring_secondary_keys;
 #ifdef HAVE_PSI_STATEMENT_INTERFACE
 /**
   Statement instrumentation keys (sql).
