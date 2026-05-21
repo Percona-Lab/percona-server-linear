@@ -373,6 +373,10 @@ The following options may be given as the first argument:
  and DISABLED (keep the event scheduler completely
  deactivated, it cannot be activated run-time)
  -T, --exit-info[=#] Used for debugging. Use at your own risk.
+ --expand-fast-index-creation 
+ Enable/disable improvements to the InnoDB fast index
+ creation functionality. Has no effect when fast index
+ creation is disabled with the fast-index-creation option
  --explain-format[=name] 
  The default format in which the EXPLAIN statement
  displays information. Valid values are TRADITIONAL
@@ -1711,6 +1715,7 @@ end-markers-in-json FALSE
 enforce-gtid-consistency FALSE
 eq-range-index-dive-limit 200
 event-scheduler ON
+expand-fast-index-creation FALSE
 explain-format TRADITIONAL
 explain-json-format-version 1
 explicit-defaults-for-timestamp TRUE
