@@ -11271,6 +11271,7 @@ PSI_stage_info stage_waiting_for_no_channel_reference= { 0, "Waiting for no chan
 PSI_stage_info stage_hook_begin_trans= { 0, "Executing hook on transaction begin.", 0, PSI_DOCUMENT_ME};
 PSI_stage_info stage_binlog_transaction_compress= { 0, "Compressing transaction changes.", 0, PSI_DOCUMENT_ME};
 PSI_stage_info stage_binlog_transaction_decompress= { 0, "Decompressing transaction changes.", 0, PSI_DOCUMENT_ME};
+PSI_stage_info stage_restoring_secondary_keys= { 0, "restoring secondary keys", 0, PSI_DOCUMENT_ME};
 /* clang-format on */
 
 extern PSI_stage_info stage_waiting_for_disk_space;
@@ -11364,7 +11365,8 @@ PSI_stage_info *all_server_stages[] = {
     &stage_hook_begin_trans,
     &stage_waiting_for_disk_space,
     &stage_binlog_transaction_compress,
-    &stage_binlog_transaction_decompress};
+    &stage_binlog_transaction_decompress,
+    &stage_restoring_secondary_keys};
 
 PSI_socket_key key_socket_tcpip;
 PSI_socket_key key_socket_unix;
