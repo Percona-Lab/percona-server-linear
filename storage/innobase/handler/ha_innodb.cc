@@ -2908,7 +2908,7 @@ ha_innobase::update_thd(
 }
 
 /*********************************************************************//**
-	update_thd(thd);
+Updates the user_thd field in a handle and also allocates a new InnoDB
 transaction handle if needed, and updates the transaction fields in the
 m_prebuilt struct. */
 
@@ -2919,7 +2919,7 @@ ha_innobase::update_thd()
 	THD*	thd = ha_thd();
 
 	ut_ad(EQ_CURRENT_THD(thd));
-	return(false);
+	update_thd(thd);
 }
 
 /*********************************************************************//**
