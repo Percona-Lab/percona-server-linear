@@ -32,7 +32,6 @@
 #include "opt_costconstantcache.h"     // reload_optimizer_cost_constants
 #include "log.h"         // query_logger
 
-
 /**
   Reload/resets privileges and the different caches.
 
