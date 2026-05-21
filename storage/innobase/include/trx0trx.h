@@ -651,6 +651,7 @@ Check transaction state */
 	ut_ad((t)->lock.wait_thr == NULL);				\
 	ut_ad(UT_LIST_GET_LEN((t)->lock.trx_locks) == 0);		\
 	ut_ad((t)->dict_operation == TRX_DICT_OP_NONE);			\
+	ut_ad(!(t)->distinct_page_access_hash);				\
 } while(0)
 
 /** Check if transaction is in-active so that it can be freed and put back to
@@ -1277,6 +1278,8 @@ struct trx_t {
 	ulint		lock_que_wait_timer;
 	ulint		innodb_que_wait_timer;
 	ulint		distinct_page_access;
+#define	DPAH_SIZE	8192
+	byte*		distinct_page_access_hash;
 	bool		take_stats;
 	ulint		magic_n;
 };

@@ -185,6 +185,15 @@ trx_init(
 
 	trx->lock.table_cached = 0;
 
+	trx->io_reads = 0;
+	trx->io_read = 0;
+	trx->io_reads_wait_timer = 0;
+	trx->lock_que_wait_timer = 0;
+	trx->innodb_que_wait_timer = 0;
+	trx->distinct_page_access = 0;
+	trx->distinct_page_access_hash = NULL;
+	trx->take_stats = false;
+
 	os_thread_id_t	thread_id = trx->killed_by;
 
 	os_compare_and_swap_thread_id(&trx->killed_by, thread_id, 0);
@@ -308,6 +317,8 @@ struct TrxFactory {
 		trx->lock.table_pool.~lock_pool_t();
 
 		trx->lock.table_locks.~lock_pool_t();
+
+		ut_ad(!trx->distinct_page_access_hash);
 
 		trx->hit_list.~hit_list_t();
 	}
@@ -540,6 +551,12 @@ trx_allocate_for_mysql(void)
 
 	trx_sys_mutex_exit();
 
+	if (UNIV_UNLIKELY(trx->take_stats)) {
+		trx->distinct_page_access_hash
+			= static_cast<byte *>(ut_zalloc(DPAH_SIZE,
+				mem_key_trx_distinct_page_access_hash));
+	}
+
 	return(trx);
 }
 
@@ -598,6 +615,12 @@ trx_free_resurrected(trx_t* trx)
 void
 trx_free_for_background(trx_t* trx)
 {
+	if (trx->distinct_page_access_hash)
+	{
+		ut_free(trx->distinct_page_access_hash);
+		trx->distinct_page_access_hash= NULL;
+	}
+
 	trx_validate_state_before_free(trx);
 
 	trx_free(trx);
@@ -649,6 +672,12 @@ trx_disconnect_from_mysql(
 	trx_t*	trx,
 	bool	prepared)
 {
+	if (trx->distinct_page_access_hash)
+	{
+		ut_free(trx->distinct_page_access_hash);
+		trx->distinct_page_access_hash= NULL;
+	}
+
 	trx_sys_mutex_enter();
 
 	ut_ad(trx->in_mysql_trx_list);
@@ -2081,6 +2110,12 @@ trx_commit_in_memory(
 
 	} else {
 		trx->state = TRX_STATE_NOT_STARTED;
+	}
+
+	if (UNIV_LIKELY_NULL(trx->distinct_page_access_hash)) {
+		ut_free(trx->distinct_page_access_hash);
+		trx->distinct_page_access_hash= NULL;
+		ut_free(trx->distinct_page_access_hash);
 	}
 
 	/* trx->in_mysql_trx_list would hold between

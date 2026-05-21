@@ -5478,6 +5478,13 @@ os_file_pread(
 
 	ssize_t	n_bytes = os_file_io(type, file, buf, n, offset, err);
 
+	if (UNIV_UNLIKELY(start_time != 0))
+	{
+		ut_usectime(&sec, &ms);
+		finish_time = (ib_uint64_t)sec * 1000000 + ms;
+		trx->io_reads_wait_timer += (ulint)(finish_time - start_time);
+	}
+
 	(void) os_atomic_decrement_ulint(&os_n_pending_reads, 1);
 	MONITOR_ATOMIC_DEC(MONITOR_OS_PENDING_READS);
 

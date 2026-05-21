@@ -192,8 +192,8 @@ log_buffer_extend(
 	ulint	len)
 {
 	ulint	move_start;
-	ulint	move_end;
-	byte	tmp_buf[OS_FILE_LOG_BLOCK_SIZE];
+	byte*	tmp_buf[OS_FILE_LOG_BLOCK_SIZE];
+	byte*	tmp_buf = static_cast<byte *>(alloca(OS_FILE_LOG_BLOCK_SIZE));
 
 	log_mutex_enter();
 
@@ -338,9 +338,8 @@ log_reserve_and_open(
 	ulint	len)
 {
 	ulint	len_upper_limit;
-#ifdef UNIV_DEBUG
 	ulint	count			= 0;
-#endif /* UNIV_DEBUG */
+	ulint	tcount			= 0;
 
 loop:
 	ut_ad(log_mutex_own());
@@ -376,6 +375,21 @@ loop:
 		srv_stats.log_waits.inc();
 
 		ut_ad(++count < 50);
+
+		log_mutex_enter();
+		goto loop;
+	}
+
+	if (log_check_tracking_margin(len_upper_limit)
+	    && (++tcount + count < 50)) {
+
+		/* This log write would violate the untracked LSN free space
+		margin.  Limit this to 50 retries as there might be situations
+		where we have no choice but to proceed anyway, i.e. if the log
+		is about to be overflown, log tracking or not. */
+		log_mutex_exit();
+
+		os_thread_sleep(10000);
 
 		log_mutex_enter();
 		goto loop;
@@ -466,6 +480,8 @@ log_close(void)
 	ulint		first_rec_group;
 	lsn_t		oldest_lsn;
 	lsn_t		lsn;
+	lsn_t		tracked_lsn;
+	lsn_t		tracked_lsn_age;
 	log_t*		log	= log_sys;
 	lsn_t		checkpoint_age;
 
@@ -492,6 +508,19 @@ log_close(void)
 	if (log->buf_free > log->max_buf_free) {
 
 		log->check_flush_or_checkpoint = true;
+	}
+
+	if (srv_track_changed_pages) {
+
+		tracked_lsn = log_get_tracked_lsn();
+		tracked_lsn_age = lsn - tracked_lsn;
+
+		if (tracked_lsn_age >= log->log_group_capacity) {
+
+			fprintf(stderr, " InnoDB: Error: the age of the "
+				"oldest untracked record exceeds the log "
+				"group capacity!\n");
+		}
 	}
 
 	checkpoint_age = lsn - log->last_checkpoint_lsn;
@@ -993,12 +1022,13 @@ log_io_complete(
 		case SRV_UNIX_NOSYNC:
 			break;
 		case SRV_UNIX_FSYNC:
-		case SRV_UNIX_LITTLESYNC:
+			if (thd_flush_log_at_trx_commit(NULL) != 2)
 		case SRV_UNIX_O_DIRECT:
+		case SRV_UNIX_LITTLESYNC:
+				fil_flush(group->space_id);
 		case SRV_UNIX_O_DIRECT_NO_FSYNC:
-			fil_flush(group->space_id);
+			if (thd_flush_log_at_trx_commit(NULL) != 2)
 		}
-#endif /* _WIN32 */
 
 		DBUG_PRINT("ib_log", ("checkpoint info written to group %u",
 				      unsigned(group->id)));
@@ -2126,9 +2156,7 @@ log_check_margins(void)
 		log_mutex_exit();
 		log_archive_margin();
 		log_mutex_enter();
-		ut_ad(!recv_no_log_write);
 		check = log_sys->check_flush_or_checkpoint;
-		log_mutex_exit();
 	} while (check);
 }
 
@@ -2142,6 +2170,7 @@ logs_empty_and_mark_files_at_shutdown(void)
 /*=======================================*/
 {
 	lsn_t			lsn;
+	lsn_t			tracked_lsn;
 	ulint			count = 0;
 	ulint			total_trx;
 	ulint			pending_io;
@@ -2321,6 +2350,13 @@ loop:
 
 		srv_shutdown_state = SRV_SHUTDOWN_LAST_PHASE;
 
+		/* Wake the log tracking thread which will then immediatelly
+		quit because of srv_shutdown_state value */
+	if (srv_track_changed_pages) {
+		os_event_reset(srv_redo_log_tracked_event);
+		os_event_set(srv_checkpoint_completed_event);
+	}
+
 		fil_close_all_files();
 
 		thread_name = srv_any_background_threads_are_active();
@@ -2336,13 +2372,21 @@ loop:
 
 	log_mutex_enter();
 
+	tracked_lsn = log_get_tracked_lsn();
+
 	lsn = log_sys->lsn;
+
+	const bool	is_last = (lsn == log_sys->last_checkpoint_lsn)
+		&& (!srv_track_changed_pages
+		    || tracked_lsn == log_sys->last_checkpoint_lsn)
+		&& (!srv_log_archive_on
+		    || lsn == log_sys->archived_lsn + LOG_BLOCK_HDR_SIZE);
 
 	ut_ad(lsn >= log_sys->last_checkpoint_lsn);
 
 	log_mutex_exit();
 
-	if (lsn != log_sys->last_checkpoint_lsn) {
+	if (!is_last) {
 		goto loop;
 	}
 
@@ -2381,6 +2425,12 @@ loop:
 	}
 
 	srv_shutdown_state = SRV_SHUTDOWN_LAST_PHASE;
+
+	/* Signal the log following thread to quit */
+	if (srv_track_changed_pages) {
+		os_event_reset(srv_redo_log_tracked_event);
+		os_event_set(srv_checkpoint_completed_event);
+	}
 
 	/* Make some checks that the server really is quiet */
 	srv_thread_type	type = srv_get_active_thread_type();
@@ -2456,6 +2506,16 @@ log_print(
 		log_buf_pool_get_oldest_modification(),
 		log_sys->last_checkpoint_lsn);
 
+	fprintf(file,
+		"Max checkpoint age    " LSN_PF "\n"
+		"Checkpoint age target " LSN_PF "\n"
+		"Modified age          " LSN_PF "\n"
+		"Checkpoint age        " LSN_PF "\n",
+		log_sys->max_checkpoint_age,
+		log_sys->max_checkpoint_age_async,
+		log_sys->lsn -log_buf_pool_get_oldest_modification(),
+		log_sys->lsn - log_sys->last_checkpoint_lsn);
+
 	current_time = time(NULL);
 
 	time_elapsed = difftime(current_time,
@@ -2475,6 +2535,18 @@ log_print(
 		static_cast<double>(
 			log_sys->n_log_ios - log_sys->n_log_ios_old)
 		/ time_elapsed);
+
+	if (srv_track_changed_pages) {
+
+		/* The maximum tracked LSN age is equal to the maximum
+		checkpoint age */
+		fprintf(file,
+			"Log tracking enabled\n"
+			"Log tracked up to   " LSN_PF "\n"
+			"Max tracked LSN age " LSN_PF "\n",
+			log_get_tracked_lsn(),
+			log_sys->max_checkpoint_age);
+	}
 
 	log_sys->n_log_ios_old = log_sys->n_log_ios;
 	log_sys->last_printout_time = current_time;

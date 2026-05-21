@@ -167,6 +167,17 @@ extern char		srv_buffer_pool_load_at_startup;
 /* Whether to disable file system cache if it is defined */
 extern char		srv_disable_sort_file_cache;
 
+/* This event is set on checkpoint completion to wake the redo log parser
+thread */
+extern os_event_t	srv_checkpoint_completed_event;
+
+/* This event is set on the online redo log following thread after a successful
+log tracking iteration */
+extern os_event_t	srv_redo_log_tracked_event;
+
+/** srv_redo_log_follow_thread spawn flag */
+extern bool		srv_redo_log_thread_started;
+
 /* If the last data file is auto-extended, we add this many pages to it
 at a time */
 #define SRV_AUTO_EXTEND_INCREMENT (srv_sys_space.get_autoextend_increment())
@@ -291,6 +302,7 @@ extern ulint	srv_log_buffer_size;
 extern ulong	srv_flush_log_at_trx_commit;
 extern uint	srv_flush_log_at_timeout;
 extern ulong	srv_log_write_ahead_size;
+extern char	srv_use_global_flush_log_at_trx_commit;
 extern char	srv_adaptive_flushing;
 extern my_bool	srv_flush_sync;
 
@@ -482,6 +494,8 @@ extern ulong srv_sync_array_size;
 
 /* print all user-level transactions deadlocks to mysqld stderr */
 extern my_bool srv_print_all_deadlocks;
+
+extern lint	srv_kill_idle_transaction;
 
 extern my_bool	srv_cmp_per_index_enabled;
 

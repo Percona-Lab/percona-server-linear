@@ -215,10 +215,12 @@ ulint		srv_log_buffer_size = ULINT_MAX;
 ulong		srv_flush_log_at_trx_commit = 1;
 uint		srv_flush_log_at_timeout = 1;
 ulong		srv_page_size = UNIV_PAGE_SIZE_DEF;
-ulong		srv_page_size_shift = UNIV_PAGE_SIZE_SHIFT_DEF;
+char	srv_use_global_flush_log_at_trx_commit	= TRUE;
 ulong		srv_log_write_ahead_size = 0;
 
 page_size_t	univ_page_size(0, 0, false);
+
+char		srv_use_global_flush_log_at_trx_commit = TRUE;
 
 /* Try to flush dirty pages so as to avoid IO bursts at
 the checkpoints. */
