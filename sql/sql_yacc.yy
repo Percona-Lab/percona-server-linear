@@ -542,6 +542,7 @@ bool my_yyoverflow(short **a, YYSTYPE **b, YYLTYPE **c, ulong *yystacksize);
 %token  CIPHER_SYM
 %token  CLASS_ORIGIN_SYM              /* SQL-2003-N */
 %token  CLIENT_SYM
+%token  CLIENT_STATS_SYM
 %token  CLOSE_SYM                     /* SQL-2003-R */
 %token  CLUSTERING_SYM
 %token  COALESCE                      /* SQL-2003-N */
@@ -711,6 +712,7 @@ bool my_yyoverflow(short **a, YYSTYPE **b, YYLTYPE **c, ulong *yystacksize);
 %token  IMPORT
 %token  INDEXES
 %token  INDEX_SYM
+%token  INDEX_STATS_SYM
 %token  INFILE
 %token  INITIAL_SIZE_SYM
 %token  INNER_SYM                     /* SQL-2003-R */
@@ -1043,6 +1045,7 @@ bool my_yyoverflow(short **a, YYSTYPE **b, YYLTYPE **c, ulong *yystacksize);
 %token  TABLESPACE_SYM
 %token  TABLE_REF_PRIORITY
 %token  TABLE_SYM                     /* SQL-2003-R */
+%token  TABLE_STATS_SYM
 %token  TABLE_CHECKSUM_SYM
 %token  TABLE_NAME_SYM                /* SQL-2003-N */
 %token  TEMPORARY                     /* SQL-2003-N */
@@ -1052,6 +1055,7 @@ bool my_yyoverflow(short **a, YYSTYPE **b, YYLTYPE **c, ulong *yystacksize);
 %token  TEXT_SYM
 %token  THAN_SYM
 %token  THEN_SYM                      /* SQL-2003-R */
+%token  THREAD_STATS_SYM
 %token  TIMESTAMP                     /* SQL-2003-R */
 %token  TIMESTAMP_ADD
 %token  TIMESTAMP_DIFF
@@ -1097,6 +1101,7 @@ bool my_yyoverflow(short **a, YYSTYPE **b, YYLTYPE **c, ulong *yystacksize);
 %token  UPGRADE_SYM
 %token  USAGE                         /* SQL-2003-N */
 %token  USER                          /* SQL-2003-R */
+%token  USER_STATS_SYM
 %token  USE_FRM
 %token  USE_SYM
 %token  USING                         /* SQL-2003-R */
@@ -12154,6 +12159,41 @@ show_param:
           {
             Lex->sql_command = SQLCOM_SHOW_SLAVE_STAT;
           }
+        | CLIENT_STATS_SYM opt_wild_or_where
+          {
+           LEX *lex= Lex;
+           Lex->sql_command= SQLCOM_SELECT;
+           if (prepare_schema_table(YYTHD, lex, 0, SCH_CLIENT_STATS))
+             MYSQL_YYABORT;
+          }
+        | USER_STATS_SYM opt_wild_or_where
+          {
+           LEX *lex= Lex;
+           lex->sql_command= SQLCOM_SELECT;
+           if (prepare_schema_table(YYTHD, lex, 0, SCH_USER_STATS))
+             MYSQL_YYABORT;
+          }
+        | THREAD_STATS_SYM opt_wild_or_where
+          {
+           LEX *lex= Lex;
+           Lex->sql_command= SQLCOM_SELECT;
+           if (prepare_schema_table(YYTHD, lex, 0, SCH_THREAD_STATS))
+             MYSQL_YYABORT;
+          }
+        | TABLE_STATS_SYM opt_wild_or_where
+          {
+           LEX *lex= Lex;
+           lex->sql_command= SQLCOM_SELECT;
+           if (prepare_schema_table(YYTHD, lex, 0, SCH_TABLE_STATS))
+             MYSQL_YYABORT;
+          }
+        | INDEX_STATS_SYM opt_wild_or_where
+          {
+           LEX *lex= Lex;
+           lex->sql_command= SQLCOM_SELECT;
+           if (prepare_schema_table(YYTHD, lex, 0, SCH_INDEX_STATS))
+             MYSQL_YYABORT;
+          }
         | CREATE PROCEDURE_SYM sp_name
           {
             LEX *lex= Lex;
@@ -12505,6 +12545,16 @@ flush_option:
           { Lex->type|= REFRESH_LOG; }
         | STATUS_SYM
           { Lex->type|= REFRESH_STATUS; }
+        | CLIENT_STATS_SYM
+          { Lex->type|= REFRESH_CLIENT_STATS; }
+        | USER_STATS_SYM
+          { Lex->type|= REFRESH_USER_STATS; }
+        | THREAD_STATS_SYM
+          { Lex->type|= REFRESH_THREAD_STATS; }
+        | TABLE_STATS_SYM
+          { Lex->type|= REFRESH_TABLE_STATS; }
+        | INDEX_STATS_SYM
+          { Lex->type|= REFRESH_INDEX_STATS; }
         | DES_KEY_FILE
           { Lex->type|= REFRESH_DES_KEY_FILE; }
         | RESOURCES
@@ -13450,6 +13500,7 @@ keyword_sp:
         | CHANGED_PAGE_BITMAPS_SYM {}
         | CHANNEL_SYM              {}
         | CIPHER_SYM               {}
+        | CLIENT_STATS_SYM         {}
         | CLIENT_SYM               {}
         | CLASS_ORIGIN_SYM         {}
         | COALESCE                 {}
@@ -13532,6 +13583,7 @@ keyword_sp:
         | HOSTS_SYM                {}
         | HOUR_SYM                 {}
         | IDENTIFIED_SYM           {}
+        | INDEX_STATS_SYM          {}
         | IGNORE_SERVER_IDS_SYM    {}
         | INVOKER_SYM              {}
         | IMPORT                   {}
@@ -13709,6 +13761,7 @@ keyword_sp:
         | SUSPEND_SYM              {}
         | SWAPS_SYM                {}
         | SWITCHES_SYM             {}
+        | TABLE_STATS_SYM          {}
         | TABLE_NAME_SYM           {}
         | TABLES                   {}
         | TABLE_CHECKSUM_SYM       {}
@@ -13717,6 +13770,7 @@ keyword_sp:
         | TEMPTABLE_SYM            {}
         | TEXT_SYM                 {}
         | THAN_SYM                 {}
+        | THREAD_STATS_SYM         {} 
         | TRANSACTION_SYM          {}
         | TRIGGERS_SYM             {}
         | TIMESTAMP                {}
@@ -13742,6 +13796,7 @@ keyword_sp:
         | UNKNOWN_SYM              {}
         | UNTIL_SYM                {}
         | USER                     {}
+        | USER_STATS_SYM           {}
         | USE_FRM                  {}
         | VALIDATION_SYM           {}
         | VARIABLES                {}
