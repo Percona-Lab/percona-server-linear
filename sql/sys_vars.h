@@ -2407,4 +2407,8 @@ class Sys_var_enforce_gtid_consistency : public Sys_var_multi_enum {
   bool global_update(THD *thd, set_var *var);
 };
 
+extern void init_log_slow_verbosity() noexcept;
+extern void init_slow_query_log_use_global_control() noexcept;
+extern void init_log_slow_sp_statements() noexcept;
+
 #endif /* SYS_VARS_H_INCLUDED */

@@ -894,6 +894,7 @@ bool relay_log_recovery;
 bool opt_allow_suspicious_udfs;
 char *opt_secure_file_priv;
 bool opt_log_slow_admin_statements = 0;
+ulong opt_log_slow_sp_statements = 0;
 bool opt_log_slow_slave_statements = 0;
 bool lower_case_file_system = 0;
 bool opt_large_pages = 0;
@@ -902,6 +903,8 @@ bool opt_myisam_use_mmap = 0;
 bool offline_mode = 0;
 uint opt_large_page_size = 0;
 uint default_password_lifetime = 0;
+ulonglong opt_slow_query_log_use_global_control = 0;
+ulong opt_slow_query_log_rate_type = 0;
 
 mysql_mutex_t LOCK_default_password_lifetime;
 mysql_mutex_t LOCK_mandatory_roles;
@@ -9261,6 +9264,10 @@ static int get_options(int *argc_ptr, char ***argv_ptr) {
 
   global_system_variables.long_query_time =
       (ulonglong)(global_system_variables.long_query_time_double * 1e6);
+
+  init_log_slow_verbosity();
+  init_slow_query_log_use_global_control();
+  init_log_slow_sp_statements();
 
   if (opt_short_log_format) opt_specialflag |= SPECIAL_SHORT_LOG_FORMAT;
 
