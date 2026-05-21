@@ -4313,15 +4313,15 @@ ST_SCHEMA_TABLE schema_tables[] = {
      fill_schema_table_privileges, nullptr, nullptr, -1, -1, false, 0},
     {"USER_PRIVILEGES", user_privileges_fields_info, create_schema_table,
      fill_schema_user_privileges, nullptr, nullptr, -1, -1, false, 0},
-    {"TEMPORARY_TABLES", temporary_table_fields_info, create_schema_table,
-     fill_temporary_tables, make_temporary_tables_old_format, nullptr, 2, 3,
-     false, 0},
     {"TMP_TABLE_COLUMNS", tmp_table_columns_fields_info, create_schema_table,
      show_temporary_tables, make_tmp_table_columns_format,
      get_schema_tmp_table_columns_record, -1, -1, true, 0},
     {"TMP_TABLE_KEYS", tmp_table_keys_fields_info, create_schema_table,
      show_temporary_tables, make_old_format, get_schema_tmp_table_keys_record,
      -1, -1, true, 0},
+    {"TEMPORARY_TABLES", temporary_table_fields_info, create_schema_table,
+     fill_temporary_tables, make_temporary_tables_old_format, nullptr, 2, 3,
+     false, 0},
     {nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, 0, 0, false, 0}};
 
 
