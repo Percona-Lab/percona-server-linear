@@ -116,7 +116,7 @@ static my_bool  verbose= 0, opt_no_create_info= 0, opt_no_data= 0,
                 opt_complete_insert= 0, opt_drop_database= 0,
                 opt_replace_into= 0,
                 opt_dump_triggers= 0, opt_routines=0, opt_tz_utc=1,
-                opt_slave_apply= 0, 
+                opt_slave_apply= 0,
                 opt_include_master_host_port= 0,
                 opt_events= 0, opt_comments_used= 0,
                 opt_alltspcs=0, opt_notspcs= 0, opt_drop_trigger= 0,
@@ -3840,6 +3840,38 @@ static void restore_secondary_keys(char *table)
 
 
 /*
+  Dump delayed secondary index definitions when --innodb-optimize-keys is used.
+*/
+
+static void dump_skipped_keys(const char *table)
+{
+  uint keys;
+
+  if (!skipped_keys_list)
+    return;
+
+  verbose_msg("-- Dumping delayed secondary index definitions for table %s\n",
+              table);
+
+  skipped_keys_list= list_reverse(skipped_keys_list);
+  fprintf(md_result_file, "ALTER TABLE %s ", table);
+  for (keys= list_length(skipped_keys_list); keys > 0; keys--)
+  {
+    LIST *node= skipped_keys_list;
+    char *def= node->data;
+
+    fprintf(md_result_file, "ADD %s%s", def, (keys > 1) ? ", " : ";\n");
+
+    skipped_keys_list= list_delete(skipped_keys_list, node);
+    my_free(def);
+    my_free(node);
+  }
+
+  DBUG_ASSERT(skipped_keys_list == NULL);
+}
+
+
+/*
 
  SYNOPSIS
   dump_table()
@@ -3892,6 +3924,8 @@ static void dump_table(char *table, char *db)
   /* Check --no-data flag */
   if (opt_no_data)
   {
+    dump_skipped_keys(opt_quoted_table);
+
     verbose_msg("-- Skipping dump data for table '%s', --no-data was used\n",
                 table);
     restore_secondary_keys(opt_quoted_table);
@@ -3918,9 +3952,6 @@ static void dump_table(char *table, char *db)
                 table);
     DBUG_VOID_RETURN;
   }
-
-  result_table= quote_name(table,table_buff, 1);
-  opt_quoted_table= quote_name(table, table_buff2, 0);
 
   verbose_msg("-- Sending SELECT query...\n");
 
@@ -4332,7 +4363,7 @@ static void dump_table(char *table, char *db)
       goto err;
     }
 
-    restore_secondary_keys(opt_quoted_table);
+    dump_skipped_keys(opt_quoted_table);
 
     /* Moved enable keys to before unlock per bug 15977 */
     if (opt_disable_keys)
