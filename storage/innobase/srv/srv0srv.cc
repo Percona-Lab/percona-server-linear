@@ -2477,6 +2477,10 @@ DECLARE_THREAD(srv_redo_log_follow_thread)(
 						     required by
 						     os_thread_create */
 {
+#ifdef UNIV_PFS_THREAD
+	pfs_register_thread(srv_log_tracking_thread_key);
+#endif
+
 	OS_THREAD_DUMMY_RETURN;
 }
 
