@@ -6516,7 +6516,6 @@ buf_get_latched_pages_number(void)
 
 	return(total_latched_pages);
 }
-
 #endif /* UNIV_DEBUG */
 
 /*********************************************************************//**
@@ -6578,6 +6577,7 @@ buf_stats_aggregate_pool_info(
 	}
 
 	total_info->pool_size += pool_info->pool_size;
+	total_info->pool_size_bytes += pool_info->pool_size_bytes;
 	total_info->lru_len += pool_info->lru_len;
 	total_info->old_lru_len += pool_info->old_lru_len;
 	total_info->free_list_len += pool_info->free_list_len;
@@ -6639,6 +6639,8 @@ buf_stats_get_pool_info(
 	pool_info->pool_unique_id = pool_id;
 
 	pool_info->pool_size = buf_pool->curr_size;
+
+	pool_info->pool_size_bytes = buf_pool->curr_pool_size;
 
 	pool_info->lru_len = UT_LIST_GET_LEN(buf_pool->LRU);
 
@@ -6762,6 +6764,7 @@ buf_print_io_instance(
 
 	fprintf(file,
 		"Buffer pool size   " ULINTPF "\n"
+		"Buffer pool size, bytes " ULINTPF "\n"
 		"Free buffers       " ULINTPF "\n"
 		"Database pages     " ULINTPF "\n"
 		"Old database pages " ULINTPF "\n"
@@ -6771,6 +6774,7 @@ buf_print_io_instance(
 		", flush list " ULINTPF
 		", single page " ULINTPF "\n",
 		pool_info->pool_size,
+		pool_info->pool_size_bytes,
 		pool_info->free_list_len,
 		pool_info->lru_len,
 		pool_info->old_lru_len,
