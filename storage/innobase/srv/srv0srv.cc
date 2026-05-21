@@ -56,6 +56,7 @@ Created 10/8/1995 Heikki Tuuri
 #include "fsp0sysspace.h"
 #include "ibuf0ibuf.h"
 #include "lock0lock.h"
+#include "log0online.h"
 #include "log0recv.h"
 #include "mem0mem.h"
 #include "os0proc.h"
@@ -656,6 +657,12 @@ PSI_stage_info	srv_stage_buffer_pool_load
 	= {0, "buffer pool load", PSI_FLAG_STAGE_PROGRESS};
 #endif /* HAVE_PSI_STAGE_INTERFACE */
 
+os_event_t	srv_checkpoint_completed_event;
+
+os_event_t	srv_redo_log_tracked_event;
+
+bool	srv_redo_log_thread_started = false;
+
 /*********************************************************************//**
 Prints counters for work done by srv_master_thread. */
 static
@@ -1001,6 +1008,11 @@ srv_init(void)
 		buf_flush_event = os_event_create("buf_flush_event");
 
 		UT_LIST_INIT(srv_sys->tasks, &que_thr_t::queue);
+
+		srv_checkpoint_completed_event = os_event_create(0);
+
+		srv_redo_log_tracked_event = os_event_create(0);
+		os_event_set(srv_redo_log_tracked_event);
 	}
 
 	srv_buf_resize_event = os_event_create(0);
@@ -1050,6 +1062,8 @@ srv_free(void)
 		os_event_destroy(srv_monitor_event);
 		os_event_destroy(srv_buf_dump_event);
 		os_event_destroy(buf_flush_event);
+		os_event_destroy(srv_checkpoint_completed_event);
+		os_event_destroy(srv_redo_log_tracked_event);
 	}
 
 	os_event_destroy(srv_buf_resize_event);
