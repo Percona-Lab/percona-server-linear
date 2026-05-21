@@ -6684,7 +6684,7 @@ buf_stats_get_pool_info(
 
 	pool_info->pool_size = buf_pool->curr_size;
 
-	pool_info->lru_len = UT_LIST_GET_LEN(buf_pool->LRU);
+	pool_info->pool_size_bytes = buf_pool->curr_pool_size;
 
 	pool_info->old_lru_len = buf_pool->LRU_old_len;
 
@@ -6805,14 +6805,16 @@ buf_print_io_instance(
 	ut_ad(pool_info);
 
 	fprintf(file,
-		"Buffer pool size   %lu\n"
-		"Free buffers       %lu\n"
-		"Database pages     %lu\n"
-		"Old database pages %lu\n"
-		"Modified db pages  %lu\n"
+		"Buffer pool size        %lu\n"
+		"Buffer pool size, bytes %lu\n"
+		"Free buffers            %lu\n"
+		"Database pages          %lu\n"
+		"Old database pages      %lu\n"
+		"Modified db pages       %lu\n"
 		"Pending reads %lu\n"
 		"Pending writes: LRU %lu, flush list %lu, single page %lu\n",
 		pool_info->pool_size,
+		pool_info->pool_size_bytes,
 		pool_info->free_list_len,
 		pool_info->lru_len,
 		pool_info->old_lru_len,

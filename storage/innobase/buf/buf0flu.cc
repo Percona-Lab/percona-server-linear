@@ -65,7 +65,7 @@ modification lsn */
 static const ulint buf_flush_wait_flushed_sleep_time = 10000;
 
 /** Number of pages flushed through non flush_list flushes. */
-static ulint buf_lru_flush_page_count = 0;
+// static ulint buf_lru_flush_page_count = 0;
 
 /** Flag indicating if the page_cleaner is in active state. This flag
 is set to TRUE by the page_cleaner thread when it is spawned and is set
@@ -1665,7 +1665,7 @@ buf_flush_LRU_list_batch(
 	/* We keep track of all flushes happening as part of LRU
 	flush. When estimating the desired rate at which flush_list
 	should be flushed, we factor in this value. */
-	buf_lru_flush_page_count += count;
+	buf_pool->stat.buf_lru_flush_page_count += count;
 
 	ut_ad(buf_pool_mutex_own(buf_pool));
 

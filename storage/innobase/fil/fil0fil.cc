@@ -5548,7 +5548,6 @@ fil_io(
 		fsp_is_system_temporary(page_id.space())
 		? false : srv_read_only_mode,
 		node, message);
-
 #endif /* UNIV_HOTBACKUP */
 
 	if (err == DB_IO_NO_PUNCH_HOLE) {
