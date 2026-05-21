@@ -620,6 +620,12 @@ static const ulint	SRV_PURGE_SLOT	= 1;
 /** Slot index in the srv_sys->sys_threads array for the master thread. */
 static const ulint	SRV_MASTER_SLOT = 0;
 
+os_event_t	srv_checkpoint_completed_event;
+
+os_event_t	srv_redo_log_tracked_event;
+
+bool	srv_redo_log_thread_started = false;
+
 #ifdef HAVE_PSI_STAGE_INTERFACE
 /** Performance schema stage event for monitoring ALTER TABLE progress
 everything after flush log_make_checkpoint_at(). */
@@ -1006,6 +1012,11 @@ srv_init(void)
 		buf_flush_event = os_event_create("buf_flush_event");
 
 		UT_LIST_INIT(srv_sys->tasks, &que_thr_t::queue);
+
+		srv_checkpoint_completed_event = os_event_create(0);
+
+		srv_redo_log_tracked_event = os_event_create(0);
+		os_event_set(srv_redo_log_tracked_event);
 	}
 
 	srv_buf_resize_event = os_event_create(0);
@@ -3142,7 +3153,6 @@ srv_purge_wakeup(void)
 		}
 	}
 }
-
 /** Check if tablespace is being truncated.
 (Ignore system-tablespace as we don't re-create the tablespace
 and so some of the action that are suppressed by this function
