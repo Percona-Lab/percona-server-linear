@@ -3831,6 +3831,7 @@ TEST_F(MDLHtonNotifyTest, NotifyNamespaces) {
       false,  // LOCKING_SERVICE
       false,  // SRID
       false,  // ACL_CACHE
+      false,  //
       false,  // COLUMN_STATISTICS
       false,  // RESOURCE_GROUPS
       false,  // FOREIGN_KEY
