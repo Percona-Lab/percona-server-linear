@@ -3665,6 +3665,8 @@ dberr_t recv_recovery_from_checkpoint_start(log_t &log, lsn_t flush_lsn) {
     ut_a(log.sn == 0);
     ut_a(srv_read_only_mode);
 
+    srv_init_log_online();
+
     return (DB_SUCCESS);
   }
 
@@ -3913,6 +3915,8 @@ dberr_t recv_recovery_from_checkpoint_start(log_t &log, lsn_t flush_lsn) {
   ut_d(log.first_block_is_correct_for_lsn = recovered_lsn);
 
   log_start(log, checkpoint_no + 1, checkpoint_lsn, recovered_lsn);
+
+  srv_init_log_online();
 
   /* Copy the checkpoint info to the log; remember that we have
   incremented checkpoint_no by one, and the info will not be written
