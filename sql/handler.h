@@ -2032,14 +2032,9 @@ struct handlerton {
 
 #define HTON_SUPPORTS_EXTENDED_KEYS (1 << 10)
 
-
-/**
-  Engine supports secondary clustered keys.
-*/
-#define HTON_SUPPORTS_CLUSTERED_KEYS (1 << 12)
 // Engine support foreign key constraint.
 
-#define HTON_SUPPORTS_FOREIGN_KEYS (1 << 13)
+#define HTON_SUPPORTS_FOREIGN_KEYS (1 << 11)
 
 /**
   Engine supports atomic DDL. That is rollback of transaction for DDL
