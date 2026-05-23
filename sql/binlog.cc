@@ -7897,6 +7897,7 @@ TC_LOG::enum_result MYSQL_BIN_LOG::commit(THD *thd, bool all)
   Transaction_ctx *trn_ctx= thd->get_transaction();
   my_xid xid= trn_ctx->xid_state()->get_xid()->get_my_xid();
   bool stuff_logged= false;
+  bool binlog_prot_acquired= false;
   bool skip_commit= is_loggable_xa_prepare(thd);
 
   DBUG_PRINT("enter", ("thd: 0x%llx, all: %s, xid: %llu, cache_mngr: 0x%llx",
@@ -8090,7 +8091,40 @@ TC_LOG::enum_result MYSQL_BIN_LOG::commit(THD *thd, bool all)
       DBUG_RETURN(RESULT_ABORTED);
     }
 
-    if (ordered_commit(thd, all, skip_commit))
+    /*
+      Block binlog updates if there's an active BINLOG lock.
+
+      We allow binlog lock owner to commit, assuming it knows what it does. We
+      also check if protection has not been acquired earlier, which is possible
+      in slave threads to protect master binlog coordinates.
+    */
+    if (!thd->backup_binlog_lock.is_acquired() &&
+        !thd->backup_binlog_lock.is_protection_acquired())
+    {
+      const ulong timeout= thd->variables.lock_wait_timeout;
+
+      DBUG_PRINT("debug", ("Acquiring binlog protection lock"));
+      if (thd->backup_binlog_lock.acquire_protection(thd, MDL_EXPLICIT,
+                                                     timeout))
+      {
+        cache_mngr->stmt_cache.reset();
+        cache_mngr->trx_cache.reset();
+
+        DBUG_RETURN(RESULT_ABORTED);
+      }
+
+      binlog_prot_acquired= true;
+    }
+
+    int rc= ordered_commit(thd, all, skip_commit);
+
+    if (binlog_prot_acquired)
+    {
+      DBUG_PRINT("debug", ("Releasing binlog protection lock"));
+      thd->backup_binlog_lock.release_protection(thd);
+    }
+
+    if (rc)
       DBUG_RETURN(RESULT_INCONSISTENT);
   }
   else if (!skip_commit)

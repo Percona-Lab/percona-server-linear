@@ -638,6 +638,7 @@ SHOW_COMP_OPTION have_geometry, have_rtree_keys;
 SHOW_COMP_OPTION have_crypt, have_compress;
 SHOW_COMP_OPTION have_profiling;
 SHOW_COMP_OPTION have_statement_timeout= SHOW_OPTION_DISABLED;
+SHOW_COMP_OPTION have_backup_locks;
 
 ulonglong opt_log_warnings_suppress= 0;
 
@@ -2420,6 +2421,8 @@ SHOW_VAR com_status_vars[]= {
   {"kill",                 (char*) offsetof(STATUS_VAR, com_stat[(uint) SQLCOM_KILL]),                       SHOW_LONG_STATUS, SHOW_SCOPE_ALL},
   {"load",                 (char*) offsetof(STATUS_VAR, com_stat[(uint) SQLCOM_LOAD]),                       SHOW_LONG_STATUS, SHOW_SCOPE_ALL},
   {"lock_tables",          (char*) offsetof(STATUS_VAR, com_stat[(uint) SQLCOM_LOCK_TABLES]),                SHOW_LONG_STATUS, SHOW_SCOPE_ALL},
+  {"lock_tables_for_backup",(char*) offsetof(STATUS_VAR, com_stat[(uint) SQLCOM_LOCK_TABLES_FOR_BACKUP]),    SHOW_LONG_STATUS, SHOW_SCOPE_ALL},
+  {"lock_binlog_for_backup",(char*) offsetof(STATUS_VAR, com_stat[(uint) SQLCOM_LOCK_BINLOG_FOR_BACKUP]),    SHOW_LONG_STATUS, SHOW_SCOPE_ALL},
   {"optimize",             (char*) offsetof(STATUS_VAR, com_stat[(uint) SQLCOM_OPTIMIZE]),                   SHOW_LONG_STATUS, SHOW_SCOPE_ALL},
   {"preload_keys",         (char*) offsetof(STATUS_VAR, com_stat[(uint) SQLCOM_PRELOAD_KEYS]),               SHOW_LONG_STATUS, SHOW_SCOPE_ALL},
   {"prepare_sql",          (char*) offsetof(STATUS_VAR, com_stat[(uint) SQLCOM_PREPARE]),                    SHOW_LONG_STATUS, SHOW_SCOPE_ALL},
@@ -2502,6 +2505,7 @@ SHOW_VAR com_status_vars[]= {
   {"stmt_send_long_data",  (char*) offsetof(STATUS_VAR, com_stmt_send_long_data),                            SHOW_LONG_STATUS, SHOW_SCOPE_ALL},
   {"truncate",             (char*) offsetof(STATUS_VAR, com_stat[(uint) SQLCOM_TRUNCATE]),                   SHOW_LONG_STATUS, SHOW_SCOPE_ALL},
   {"uninstall_plugin",     (char*) offsetof(STATUS_VAR, com_stat[(uint) SQLCOM_UNINSTALL_PLUGIN]),           SHOW_LONG_STATUS, SHOW_SCOPE_ALL},
+  {"unlock_binlog",        (char*) offsetof(STATUS_VAR, com_stat[(uint) SQLCOM_UNLOCK_BINLOG]),              SHOW_LONG_STATUS, SHOW_SCOPE_ALL},
   {"unlock_tables",        (char*) offsetof(STATUS_VAR, com_stat[(uint) SQLCOM_UNLOCK_TABLES]),              SHOW_LONG_STATUS, SHOW_SCOPE_ALL},
   {"update",               (char*) offsetof(STATUS_VAR, com_stat[(uint) SQLCOM_UPDATE]),                     SHOW_LONG_STATUS, SHOW_SCOPE_ALL},
   {"update_multi",         (char*) offsetof(STATUS_VAR, com_stat[(uint) SQLCOM_UPDATE_MULTI]),               SHOW_LONG_STATUS, SHOW_SCOPE_ALL},
@@ -7084,6 +7088,8 @@ static int mysql_init_variables(void)
 #if defined (_WIN32) && !defined (EMBEDDED_LIBRARY)
   shared_memory_base_name= default_shared_memory_base_name;
 #endif
+
+  have_backup_locks= SHOW_OPTION_YES;
 
 #if defined(_WIN32)
   /* Allow Win32 users to move MySQL anywhere */

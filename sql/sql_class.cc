@@ -1190,6 +1190,7 @@ THD::THD(bool enable_plugins)
    in_sub_stmt(0),
    fill_status_recursion_level(0),
    fill_variables_recursion_level(0),
+   order_deterministic(false),
    binlog_row_event_extra_data(NULL),
    binlog_unsafe_warning_flags(0),
    binlog_table_maps(0),
@@ -1199,6 +1200,8 @@ THD::THD(bool enable_plugins)
    m_trans_end_pos(0),
    m_transaction(new Transaction_ctx()),
    m_attachable_trx(NULL),
+   backup_tables_lock(MDL_key::BACKUP),
+   backup_binlog_lock(MDL_key::BINLOG),
    table_map_for_update(0),
    m_examined_row_count(0),
    m_stage_progress_psi(NULL),
@@ -1367,8 +1370,6 @@ THD::THD(bool enable_plugins)
 
   m_internal_handler= NULL;
   m_binlog_invoker= FALSE;
-  memset(&m_invoker_user, 0, sizeof(m_invoker_user));
-  memset(&m_invoker_host, 0, sizeof(m_invoker_host));
 
   binlog_next_event_pos.file_name= NULL;
   binlog_next_event_pos.pos= 0;
@@ -1948,6 +1949,12 @@ void THD::cleanup(void)
     metadata locks. Release them.
   */
   mdl_context.release_transactional_locks();
+
+  /* Release backup locks, if acquired */
+  if (backup_binlog_lock.is_acquired())
+    backup_binlog_lock.release(this);
+  if (backup_tables_lock.is_acquired())
+    backup_tables_lock.release(this);
 
   /* Release the global read lock, if acquired. */
   if (global_read_lock.is_acquired())
@@ -4661,6 +4668,11 @@ void THD::leave_locked_tables_mode()
       when leaving LTM.
     */
     global_read_lock.set_explicit_lock_duration(this);
+
+    /* Make sure backup locks are not released when leaving LTM */
+    DBUG_ASSERT(!backup_tables_lock.is_acquired());
+    backup_binlog_lock.set_explicit_locks_duration(this);
+
     /*
       Also ensure that we don't release metadata locks for open HANDLERs
       and user-level locks.
