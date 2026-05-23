@@ -2766,6 +2766,7 @@ bool open_table(THD *thd, TABLE_LIST *table_list, Open_table_context *ot_ctx) {
   MDL_ticket *mdl_ticket = nullptr;
   int error = 0;
   TABLE_SHARE *share;
+  bool backup_protection_acquired = false;
 
   DBUG_ENTER("open_table");
 
@@ -3294,6 +3295,18 @@ share_found:
 
   DEBUG_SYNC(thd, "open_table_found_share");
 
+  if (table_list->mdl_request.type >= MDL_SHARED_WRITE &&
+      !(flags & (MYSQL_LOCK_LOG_TABLE | MYSQL_OPEN_HAS_MDL_LOCK)) &&
+      share->db_type() &&
+      !(share->db_type()->flags & HTON_SUPPORTS_ONLINE_BACKUPS)) {
+    if (thd->backup_tables_lock.abort_if_acquired() ||
+        thd->backup_tables_lock.acquire_protection(thd, MDL_STATEMENT,
+                                                   ot_ctx->get_timeout()))
+      goto err_lock;
+
+    backup_protection_acquired = true;
+  }
+
   {
     dd::cache::Dictionary_client::Auto_releaser releaser(thd->dd_client());
     const dd::Table *table_def = nullptr;
@@ -3375,6 +3388,29 @@ share_found:
   thd->status_var.table_open_cache_misses++;
 
 table_found:
+
+  if (!backup_protection_acquired &&
+      table_list->mdl_request.type >= MDL_SHARED_WRITE &&
+      !(flags & (MYSQL_LOCK_LOG_TABLE | MYSQL_OPEN_HAS_MDL_LOCK)) &&
+      share->db_type() &&
+      !(share->db_type()->flags & HTON_SUPPORTS_ONLINE_BACKUPS)) {
+    if (thd->backup_tables_lock.abort_if_acquired() ||
+        thd->backup_tables_lock.acquire_protection(thd, MDL_STATEMENT,
+                                                   ot_ctx->get_timeout())) {
+      Table_cache *tc = table_cache_manager.get_cache(thd);
+
+      tc->lock();
+
+      tc->release_table(thd, table);
+
+      tc->unlock();
+
+      table->file->unbind_psi();
+
+      DBUG_RETURN(true);
+    }
+  }
+
   table->mdl_ticket = mdl_ticket;
 
   table->next = thd->open_tables; /* Link into simple list */
@@ -5292,6 +5328,7 @@ bool lock_table_names(THD *thd, TABLE_LIST *tables_start,
       PSI_INSTRUMENT_ME);
   bool need_global_read_lock_protection = false;
   bool acquire_backup_lock = false;
+  MDL_request percona_backup_request;
 
   DBUG_ASSERT(!thd->locked_tables_mode);
 
@@ -5364,6 +5401,11 @@ bool lock_table_names(THD *thd, TABLE_LIST *tables_start,
       MDL_REQUEST_INIT(&global_request, MDL_key::GLOBAL, "", "",
                        MDL_INTENTION_EXCLUSIVE, MDL_STATEMENT);
       mdl_requests.push_front(&global_request);
+
+      if (thd->backup_tables_lock.abort_if_acquired()) return true;
+      thd->backup_tables_lock.init_protection_request(&percona_backup_request,
+                                                      MDL_STATEMENT);
+      mdl_requests.push_front(&percona_backup_request);
     }
   }
 
