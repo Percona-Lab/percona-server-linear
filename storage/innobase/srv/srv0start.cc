@@ -1091,6 +1091,26 @@ srv_start_wait_for_purge_to_start()
 	}
 }
 
+/** Initializes the log tracking subsystem and starts its thread.  */
+void
+srv_init_log_online(void)
+{
+	if (UNIV_UNLIKELY(srv_force_recovery > 0 || srv_read_only_mode)) {
+		srv_track_changed_pages = FALSE;
+		return;
+	}
+
+	if (srv_track_changed_pages) {
+
+		log_online_read_init();
+
+		/* Create the thread that follows the redo log to output the
+		   changed page bitmap */
+		os_thread_create(&srv_redo_log_follow_thread, NULL,
+				 thread_ids + 5 + SRV_MAX_N_IO_THREADS);
+	}
+}
+
 /** Create the temporary file tablespace.
 @param[in]	create_new_db	whether we are creating a new database
 @param[in,out]	tmp_space	Shared Temporary SysTablespace
@@ -2100,6 +2120,7 @@ files_checked:
 	if (create_new_db) {
 
 		ut_a(!srv_read_only_mode);
+		srv_init_log_online();
 
 		mtr_start(&mtr);
 
@@ -2202,6 +2223,10 @@ files_checked:
 
 			return(srv_init_abort(DB_ERROR));
 		}
+
+		err = buf_parallel_dblwr_create();
+		if (err != DB_SUCCESS)
+			return(srv_init_abort(err));
 
 		purge_queue = trx_sys_init_at_db_start();
 
