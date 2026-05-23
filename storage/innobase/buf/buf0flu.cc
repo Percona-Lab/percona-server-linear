@@ -2667,10 +2667,13 @@ page_cleaner_flush_pages_recommendation(
 
 	/* Cap the maximum IO capacity that we are going to use by
 	max_io_capacity. Limit the value to avoid too quick increase */
-	ulint	pages_for_lsn =
-		std::min<ulint>(sum_pages_for_lsn, srv_max_io_capacity * 2);
-
-	n_pages = (PCT_IO(pct_total) + avg_page_rate + pages_for_lsn) / 3;
+	n_pages = PCT_IO(pct_total);
+	if (age < log_get_max_modified_age_async()) {
+		ulint	pages_for_lsn =
+			std::min<ulint>(sum_pages_for_lsn,
+					srv_max_io_capacity * 2);
+		n_pages = (n_pages + avg_page_rate + pages_for_lsn) / 3;
+	}
 
 	if (n_pages > srv_max_io_capacity) {
 		n_pages = srv_max_io_capacity;

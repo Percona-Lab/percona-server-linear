@@ -229,23 +229,6 @@ get_row_format(
 
 static ulong	innodb_default_row_format = DEFAULT_ROW_FORMAT_DYNAMIC;
 
-/** Possible values for system variable "innodb_default_row_format". */
-static const char* innodb_default_row_format_names[] = {
-	"redundant",
-	"compact",
-	"dynamic",
-	NullS
-};
-
-/** Used to define an enumerate type of the system variable
-innodb_default_row_format. */
-static TYPELIB innodb_default_row_format_typelib = {
-	array_elements(innodb_default_row_format_names) - 1,
-	"innodb_default_row_format_typelib",
-	innodb_default_row_format_names,
-	NULL
-};
-
 #ifdef UNIV_DEBUG
 /** Values for --innodb-debug-compress names. */
 static const char* innodb_debug_compress_names[] = {
@@ -316,6 +299,53 @@ static TYPELIB innodb_cleaner_lsn_age_factor_typelib = {
 	array_elements(innodb_cleaner_lsn_age_factor_names) - 1,
 	"innodb_cleaner_lsn_age_factor_typelib",
 	innodb_cleaner_lsn_age_factor_names,
+	NULL
+};
+
+/** Possible values for system variable "innodb_foreground_preflush".  */
+static const char* innodb_foreground_preflush_names[] = {
+	"sync_preflush",
+	"exponential_backoff",
+	NullS
+};
+
+/* Enumeration for innodb_foreground_preflush.  */
+static TYPELIB innodb_foreground_preflush_typelib = {
+	array_elements(innodb_foreground_preflush_names) - 1,
+	"innodb_foreground_preflush_typelib",
+	innodb_foreground_preflush_names,
+	NULL
+};
+
+/** Possible values for system variable "innodb_empty_free_list_algorithm".  */
+static const char* innodb_empty_free_list_algorithm_names[] = {
+	"legacy",
+	"backoff",
+	NullS
+};
+
+/** Enumeration for innodb_empty_free_list_algorithm.  */
+static TYPELIB innodb_empty_free_list_algorithm_typelib = {
+	array_elements(innodb_empty_free_list_algorithm_names) - 1,
+	"innodb_empty_free_list_algorithm_typelib",
+	innodb_empty_free_list_algorithm_names,
+	NULL
+};
+
+/** Possible values for system variable "innodb_default_row_format". */
+static const char* innodb_default_row_format_names[] = {
+	"redundant",
+	"compact",
+	"dynamic",
+	NullS
+};
+
+/** Used to define an enumerate type of the system variable
+innodb_default_row_format. */
+static TYPELIB innodb_default_row_format_typelib = {
+	array_elements(innodb_default_row_format_names) - 1,
+	"innodb_default_row_format_typelib",
+	innodb_default_row_format_names,
 	NULL
 };
 
@@ -19548,6 +19578,15 @@ static MYSQL_SYSVAR_ULONG(buffer_pool_chunk_size, srv_buf_pool_chunk_unit,
   NULL, NULL,
   128 * 1024 * 1024, 1024 * 1024, LONG_MAX, 1024 * 1024);
 
+static MYSQL_SYSVAR_ENUM(foreground_preflush, srv_foreground_preflush,
+  PLUGIN_VAR_OPCMDARG,
+  "The algorithm InnoDB uses for the query threads at sync preflush.  "
+  "Possible values are "
+  "SYNC_PREFLUSH: perform a sync preflush as Oracle MySQL; "
+  "EXPONENTIAL_BACKOFF: (default) wait for the page cleaner flush.",
+  NULL, NULL, SRV_FOREGROUND_PREFLUSH_EXP_BACKOFF,
+  &innodb_foreground_preflush_typelib);
+
 #if defined UNIV_DEBUG || defined UNIV_PERF_DEBUG
 static MYSQL_SYSVAR_ULONG(page_hash_locks, srv_n_page_hash_locks,
   PLUGIN_VAR_OPCMDARG | PLUGIN_VAR_READONLY,
@@ -19610,6 +19649,19 @@ static MYSQL_SYSVAR_ENUM(cleaner_lsn_age_factor,
   "HIGH_CHECKPOINT: (the default) Percona Server 5.6 formula.",
   NULL, NULL, SRV_CLEANER_LSN_AGE_FACTOR_HIGH_CHECKPOINT,
   &innodb_cleaner_lsn_age_factor_typelib);
+
+static MYSQL_SYSVAR_ENUM(empty_free_list_algorithm,
+  srv_empty_free_list_algorithm,
+  PLUGIN_VAR_OPCMDARG,
+  "The algorithm to use for empty free list handling.  Allowed values: "
+  "LEGACY: (default) Original Oracle MySQL 5.6 handling with single page flushes; "
+  "BACKOFF: Wait until cleaner produces a free page.",
+  NULL, NULL, SRV_EMPTY_FREE_LIST_LEGACY,
+  // TODO laurynas: default changed until separate LRU flusher is merged. With
+  // a single page cleaner otherwise it is possible to loop forever in a query
+  // thread while the cleaner is waiting for the page latch held by that
+  // thread. See sys_vars.log_slow_admin_statements_func in 5.7.5.
+  &innodb_empty_free_list_algorithm_typelib);
 
 static MYSQL_SYSVAR_ULONG(buffer_pool_instances, srv_buf_pool_instances,
   PLUGIN_VAR_RQCMDARG | PLUGIN_VAR_READONLY,
@@ -20346,10 +20398,12 @@ static struct st_mysql_sys_var* innobase_system_variables[]= {
 #endif /* UNIV_LINUX */
   MYSQL_SYSVAR(cleaner_max_lru_time),
   MYSQL_SYSVAR(cleaner_max_flush_time),
-  MYSQL_SYSVAR(cleaner_lsn_age_factor),
 #endif /* defined UNIV_DEBUG || defined UNIV_PERF_DEBUG */
   MYSQL_SYSVAR(status_output),
   MYSQL_SYSVAR(status_output_locks),
+  MYSQL_SYSVAR(cleaner_lsn_age_factor),
+  MYSQL_SYSVAR(foreground_preflush),
+  MYSQL_SYSVAR(empty_free_list_algorithm),
   MYSQL_SYSVAR(print_all_deadlocks),
   MYSQL_SYSVAR(cmp_per_index_enabled),
   MYSQL_SYSVAR(undo_logs),

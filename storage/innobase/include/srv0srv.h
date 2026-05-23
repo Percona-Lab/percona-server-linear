@@ -343,6 +343,8 @@ extern ulint	srv_show_verbose_locks;
 /** Lock table size in bytes */
 extern ulint	srv_lock_table_size;
 
+extern ulint	srv_foreground_preflush;/*!< Query thread preflush algorithm */
+
 extern ulint	srv_cleaner_max_lru_time;/*!< the maximum time limit for a
 					single LRU tail flush iteration by the
 					page cleaner thread */
@@ -354,6 +356,10 @@ extern ulint	srv_cleaner_max_flush_time;/*!< the maximum time limit for a
 extern ulong	srv_cleaner_lsn_age_factor;
 					/*!< page cleaner LSN age factor
 					formula option */
+
+extern ulong	srv_empty_free_list_algorithm;
+					/*!< Empty free list for a query thread
+					handling algorithm option */
 
 extern ulint	srv_n_file_io_threads;
 extern my_bool	srv_random_read_ahead;

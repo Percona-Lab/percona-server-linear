@@ -262,15 +262,18 @@ ulong	srv_LRU_scan_depth	= 1024;
 /** Whether or not to flush neighbors of a block */
 ulong	srv_flush_neighbors	= 1;
 /** Previously requested size */
+/** Dump this % of each buffer pool during BP dump */
 ulint	srv_buf_pool_old_size	= 0;
 /** Current size as scaling factor for the other components */
 ulint	srv_buf_pool_base_size	= 0;
 /** Current size in bytes */
 ulint	srv_buf_pool_curr_size	= 0;
-/** Dump this % of each buffer pool during BP dump */
-ulong	srv_buf_pool_dump_pct;
-/** Lock table size in bytes */
+ulint	srv_foreground_preflush	= SRV_FOREGROUND_PREFLUSH_EXP_BACKOFF;
 ulint	srv_lock_table_size	= ULINT_MAX;
+
+/** Query thread preflush algorithm */
+ulint	srv_foreground_preflush
+	= SRV_FOREGROUND_PREFLUSH_EXP_BACKOFF;
 
 /** The maximum time limit for a single LRU tail flush iteration by the page
 cleaner thread */
@@ -283,6 +286,9 @@ ulint	srv_cleaner_max_flush_time = 1000;
 /** Page cleaner LSN age factor formula option */
 ulong	srv_cleaner_lsn_age_factor
 	= SRV_CLEANER_LSN_AGE_FACTOR_HIGH_CHECKPOINT;
+
+/** Empty free list for a query thread handling algorithm option  */
+ulong	srv_empty_free_list_algorithm = SRV_EMPTY_FREE_LIST_BACKOFF;
 
 /* This parameter is deprecated. Use srv_n_io_[read|write]_threads
 instead. */
