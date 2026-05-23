@@ -62,6 +62,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "dict0dict.h"
 #include "fil0fil.h"
 #include "fsp0fsp.h"
+#include "log0online.h"
 #include "fsp0sysspace.h"
 #include "ha_prototypes.h"
 #include "ibuf0ibuf.h"

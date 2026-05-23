@@ -20239,6 +20239,37 @@ static void innodb_enable_monitor_at_startup(
   }
 }
 
+#ifdef UNIV_DEBUG
+/** Check if it is a valid value of innodb_track_changed_pages. Changed pages
+tracking is not working correctly without initialization procedure on server
+startup. The function allows to temporary disable tracking, but only if the
+feature was enabled on startup. This function is registered as a callback
+with MySQL.
+@param[in]	thd	thread handle
+@param[in]	var	pointer to system variable
+@param[out]	save	immediate result for update function
+@param[in]	value	incoming bool
+@return 0 for valid innodb_track_changed_pages */
+static int innodb_track_changed_pages_validate(THD *thd, SYS_VAR *var,
+                                               void *save,
+                                               struct st_mysql_value *value) {
+  long long intbuf = 0;
+  if (value->val_int(value, &intbuf)) {
+    /* The value is NULL. That is invalid. */
+    return 1;
+  }
+
+  if (srv_redo_log_thread_started) {
+    *reinterpret_cast<ulong *>(save) = static_cast<ulong>(intbuf);
+    return 0;
+  }
+
+  if (intbuf == srv_track_changed_pages) return 0;
+
+  return 1;
+}
+#endif
+
 /** Callback function for accessing the InnoDB variables from MySQL:
  SHOW VARIABLES. */
 static int show_innodb_vars(THD *thd, SHOW_VAR *var, char *buff) {
