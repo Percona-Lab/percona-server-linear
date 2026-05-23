@@ -639,11 +639,11 @@ log_online_read_init(void)
 	strcpy(log_bmp_sys->bmp_file_home, srv_data_home);
 	if (srv_data_home_len
 	    && log_bmp_sys->bmp_file_home[srv_data_home_len - 1]
-	    != OS_PATH_SEPARATOR) {
+	    != SRV_PATH_SEPARATOR) {
 
 		ut_a (srv_data_home_len < FN_REFLEN - 1);
 		log_bmp_sys->bmp_file_home[srv_data_home_len]
-			= OS_PATH_SEPARATOR;
+			= SRV_PATH_SEPARATOR;
 		log_bmp_sys->bmp_file_home[srv_data_home_len + 1] = '\0';
 	}
 
@@ -1506,9 +1506,9 @@ log_online_open_bitmap_file_read_only(
 	srv_data_home_len = strlen(srv_data_home);
 	if (srv_data_home_len
 			&& srv_data_home[srv_data_home_len-1]
-			!= OS_PATH_SEPARATOR) {
+			!= SRV_PATH_SEPARATOR) {
 		ut_snprintf(bitmap_file->name, FN_REFLEN, "%s%c%s",
-				srv_data_home, OS_PATH_SEPARATOR, name);
+				srv_data_home, SRV_PATH_SEPARATOR, name);
 	} else {
 		ut_snprintf(bitmap_file->name, FN_REFLEN, "%s%s",
 				srv_data_home, name);
