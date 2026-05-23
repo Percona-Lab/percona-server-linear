@@ -19733,6 +19733,20 @@ ER_IB_MSG_SKIP_HIDDEN_DIR
 #
 
 #
+# Start of Percona Server error messages
+#
+
+start-error-number 49000
+
+ER_CANT_EXECUTE_WITH_BACKUP_LOCK
+  eng "Can't execute the query because you have a conflicting backup lock"
+  rus "Запрос не может быть выполнен из-за конфликтующей блокировки резервного копирования"
+
+#
+# End of Percona Server error messages
+#
+
+#
 # Start of MyRocks specific messages
 #
 
