@@ -132,8 +132,6 @@ Database: information_schema
 | INNODB_FT_DEFAULT_STOPWORD            |
 | INNODB_FT_INDEX_TABLE                 |
 | INNODB_FT_INDEX_CACHE                 |
-| INNODB_SYS_TABLESPACES                |
-| INNODB_METRICS                        |
 | INNODB_SYS_FOREIGN_COLS               |
 | INNODB_CMPMEM                         |
 | INNODB_BUFFER_POOL_STATS              |
@@ -198,8 +196,6 @@ Database: INFORMATION_SCHEMA
 | INNODB_FT_DEFAULT_STOPWORD            |
 | INNODB_FT_INDEX_TABLE                 |
 | INNODB_FT_INDEX_CACHE                 |
-| INNODB_SYS_TABLESPACES                |
-| INNODB_METRICS                        |
 | INNODB_SYS_FOREIGN_COLS               |
 | INNODB_CMPMEM                         |
 | INNODB_BUFFER_POOL_STATS              |
