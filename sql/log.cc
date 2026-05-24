@@ -931,7 +931,6 @@ err:
   return true;
 }
 
-
 bool Log_to_csv_event_handler::log_general(THD *thd, ulonglong event_utime,
                                            const char *user_host,
                                            size_t user_host_len,
@@ -1362,8 +1361,11 @@ bool Query_logger::slow_log_write(THD *thd, const char *query,
   LEX_CSTRING sctx_host= sctx->host();
   LEX_CSTRING sctx_ip= sctx->ip();
   size_t user_host_len= (strxnmov(user_host_buff, MAX_USER_HOST_SIZE,
-                                  sctx->priv_user().str, "[",
-                                  sctx_user.length ? sctx_user.str : "", "] @ ",
+                                  sctx->priv_user().str
+                                  ? sctx->priv_user().str : "",
+                                  "[", sctx_user.length ? sctx_user.str :
+                                  (thd->slave_thread ? "SQL_SLAVE" : ""),
+                                  "] @ ",
                                   sctx_host.length ? sctx_host.str : "", " [",
                                   sctx_ip.length ? sctx_ip.str : "", "]",
                                   NullS) - user_host_buff);
@@ -1371,8 +1373,10 @@ bool Query_logger::slow_log_write(THD *thd, const char *query,
   ulonglong query_utime, lock_utime;
   if (thd->start_utime)
   {
-    query_utime= (current_utime - thd->start_utime);
-    lock_utime=  (thd->utime_after_lock - thd->start_utime);
+    query_utime= (current_utime > thd->start_utime) ?
+      (current_utime - thd->start_utime) : 0;
+    lock_utime=  (thd->utime_after_lock > thd->start_utime) ?
+      (thd->utime_after_lock - thd->start_utime) : 0;
   }
   else
   {
@@ -1637,11 +1641,11 @@ Query_logger::check_if_log_table(TABLE_LIST *table_list,
     {
       if (!check_if_opened || is_log_table_enabled(QUERY_LOG_SLOW))
         return QUERY_LOG_SLOW;
+      return QUERY_LOG_NONE;
     }
   }
   return QUERY_LOG_NONE;
 }
-
 
 Query_logger query_logger;
 
@@ -2103,6 +2107,7 @@ bool Error_log_throttle::log()
                   end_utime_of_query+=Log_throttle::LOG_THROTTLE_WINDOW_SIZE;);
 
   /*
+    If the window has expired, we'll try to write a summary line.
     The subroutine will know whether we actually need to.
   */
   if (!in_window(end_utime_of_query))

@@ -971,8 +971,8 @@ public:
     }
     mysql_mutex_lock(&killing_thd->LOCK_thd_data);
     killing_thd->killed= THD::KILL_CONNECTION;
-    MYSQL_CALLBACK(Connection_handler_manager::event_functions,
-                   post_kill_notification, (killing_thd));
+    MYSQL_CALLBACK(killing_thd->scheduler, post_kill_notification,
+                   (killing_thd));
     if (killing_thd->is_killable)
     {
       mysql_mutex_lock(&killing_thd->LOCK_current_cond);
@@ -6993,6 +6993,9 @@ SHOW_VAR status_vars[]= {
   {"Table_locks_immediate",    (char*) &locks_immediate,                               SHOW_LONG,              SHOW_SCOPE_GLOBAL},
   {"Table_locks_waited",       (char*) &locks_waited,                                  SHOW_LONG,              SHOW_SCOPE_GLOBAL},
   {"Table_open_cache_hits",    (char*) offsetof(STATUS_VAR, table_open_cache_hits),    SHOW_LONGLONG_STATUS,   SHOW_SCOPE_ALL},
+  {"Table_open_cache_misses",  (char*) offsetof(STATUS_VAR, table_open_cache_misses),  SHOW_LONGLONG_STATUS,   SHOW_SCOPE_ALL},
+  {"Table_open_cache_overflows",(char*) offsetof(STATUS_VAR, table_open_cache_overflows), SHOW_LONGLONG_STATUS,SHOW_SCOPE_ALL},
+  {"Tc_log_max_pages_used",    (char*) &tc_log_max_pages_used,                         SHOW_LONG,              SHOW_SCOPE_GLOBAL},
   {"Tc_log_page_size",         (char*) &tc_log_page_size,                              SHOW_LONG_NOFLUSH,      SHOW_SCOPE_GLOBAL},
   {"Tc_log_page_waits",        (char*) &tc_log_page_waits,                             SHOW_LONG,              SHOW_SCOPE_GLOBAL},
 #ifdef HAVE_POOL_OF_THREADS
@@ -7774,6 +7777,11 @@ extern void init_log_slow_sp_statements();
 */
 bool check_ghost_options()
 {
+  if (global_system_variables.old_passwords == 1)
+  {
+    sql_print_error("Invalid old_passwords mode: 1. Valid values are 2 and 0\n");
+    return true;
+  }
   if (!opt_secure_auth)
   {
     sql_print_error("Invalid secure_auth mode: 0. Valid value is 1\n");
@@ -8804,7 +8812,7 @@ static PSI_rwlock_info all_server_rwlocks[]=
   { &key_rwlock_Trans_delegate_lock, "Trans_delegate::lock", PSI_FLAG_GLOBAL},
   { &key_rwlock_LOCK_consistent_snapshot, "LOCK_consistent_snapshot", PSI_FLAG_GLOBAL},
   { &key_rwlock_Server_state_delegate_lock, "Server_state_delegate::lock", PSI_FLAG_GLOBAL},
-  { &key_rwlock_Binlog_storage_delegate_lock, "Binlog_storage_delegate::lock", PSI_FLAG_GLOBAL}
+  { &key_rwlock_Binlog_storage_delegate_lock, "Binlog_storage_delegate::lock", PSI_FLAG_GLOBAL},
 };
 
 PSI_cond_key key_PAGE_cond, key_COND_active, key_COND_pool;
@@ -9577,3 +9585,4 @@ void init_server_psi_keys(void)
 }
 
 #endif /* HAVE_PSI_INTERFACE */
+

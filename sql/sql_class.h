@@ -833,7 +833,6 @@ class Prepared_statement;
 
 /**
   Container for all prepared statements created/used in a connection.
-
   Prepared statements in Prepared_statement_map have unique id
   (guaranteed by id assignment in Prepared_statement::Prepared_statement).
 
@@ -2733,6 +2732,7 @@ public:
   */
   void set_new_thread_id();
   my_thread_id thread_id() const { return m_thread_id; }
+
   uint	     tmp_table;
   uint	     server_status,open_options;
   enum enum_thread_type system_thread;
@@ -4378,6 +4378,13 @@ public:
   void set_query_id(query_id_t new_query_id)
   {
     mysql_mutex_lock(&LOCK_thd_data);
+#ifndef DBUG_OFF
+    if (variables.query_exec_id != 0 &&
+        lex->sql_command != SQLCOM_SET_OPTION)
+    {
+      new_query_id= variables.query_exec_id;
+    }
+#endif
     query_id= new_query_id;
     mysql_mutex_unlock(&LOCK_thd_data);
   }
@@ -5019,6 +5026,7 @@ public:
   ~Query_result_export()
   {
     thd->set_sent_row_count(row_count);
+    thd->sent_row_count_2= row_count;
   }
   int prepare(List<Item> &list, SELECT_LEX_UNIT *u);
   bool send_data(List<Item> &items);

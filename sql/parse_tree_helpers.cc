@@ -436,3 +436,4 @@ bool sp_create_assignment_instr(THD *thd, const char *expr_end_ptr)
   return false;
 }
 
+

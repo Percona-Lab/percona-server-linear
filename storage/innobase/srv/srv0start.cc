@@ -327,6 +327,7 @@ DECLARE_THREAD(io_handler_thread)(
 	while (srv_shutdown_state != SRV_SHUTDOWN_EXIT_THREADS
 	       || buf_page_cleaner_is_active
 	       || !os_aio_all_slots_free()) {
+
 		fil_aio_wait(segment);
 	}
 
@@ -2103,6 +2104,12 @@ innobase_start_or_create_for_mysql(void)
 		ut_a(fil_validate());
 		ut_a(log_space);
 
+#if 0 // TODO laurynas: log archiving broken by WL#8845
+		/* Create the file space object for archived logs. */
+		ut_a(fil_space_create("arch_log_space", SRV_LOG_SPACE_FIRST_ID + 1,
+				      0, FIL_TYPE_LOG));
+#endif
+
 		/* srv_log_file_size is measured in pages; if page size is 16KB,
 		then we have a limit of 64TB on 32 bit systems */
 		ut_a(srv_log_file_size <= ULINT_MAX);
@@ -2383,6 +2390,24 @@ files_checked:
 
 			RECOVERY_CRASH(4);
 
+			/* If log tracking is enabled, make it catch up with
+			the old logs synchronously. */
+			bool saved_srv_track_changed_pages
+				= srv_track_changed_pages;
+			if (srv_track_changed_pages) {
+				log_mutex_enter();
+				lsn_t checkpoint_lsn
+					= log_sys->last_checkpoint_lsn;
+				log_mutex_exit();
+				ib::info()
+					<< "Tracking redo log synchronously "
+					"until " << checkpoint_lsn;
+				if (!log_online_follow_redo_log()) {
+					return(srv_init_abort(DB_ERROR));
+				}
+				srv_track_changed_pages = false;
+			}
+
 			/* Close and free the redo log files, so that
 			we can replace them. */
 			fil_close_log_files(true);
@@ -2499,6 +2524,7 @@ files_checked:
 	/* Here the double write buffer has already been created and so
 	any new rollback segments will be allocated after the double
 	write buffer. The default segment should already exist.
+	We create the new segments only if it's a new database or
 	the database was shutdown cleanly. */
 
 	/* Note: When creating the extra rollback segments during an upgrade
@@ -2551,6 +2577,9 @@ files_checked:
 
 		srv_start_state_set(SRV_START_STATE_MONITOR);
 	}
+
+	/* wake main loop of page cleaner up */
+	os_event_set(buf_flush_event);
 
 	/* Create the SYS_FOREIGN and SYS_FOREIGN_COLS system tables */
 	err = dict_create_or_check_foreign_constraint_tables();
@@ -2610,9 +2639,6 @@ files_checked:
 	} else {
 		purge_sys->state = PURGE_STATE_DISABLED;
 	}
-
-	/* wake main loop of page cleaner up */
-	os_event_set(buf_flush_event);
 
 	sum_of_data_file_sizes = srv_sys_space.get_sum_of_sizes();
 	ut_a(sum_of_new_sizes != ULINT_UNDEFINED);

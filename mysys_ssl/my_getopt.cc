@@ -845,8 +845,8 @@ void my_handle_options_end()
 }
 
 
-/*
-  function: check_struct_option
+/**
+   @brief Check for struct options
 
   @param[in]   cur_arg     Current argument under processing from argv
   @param[in]   key_name    variable where to store the possible key name 
@@ -1034,8 +1034,8 @@ static int setval(const struct my_option *opts, const void *value,
        var_type == GET_ULL ||
        var_type == GET_DOUBLE ||
        var_type == GET_ENUM
+       )
       )
-     )
   {
     my_getopt_error_reporter(ERROR_LEVEL,
                              "%s: Empty value for '%s' specified",

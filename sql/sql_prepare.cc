@@ -2683,8 +2683,8 @@ void mysqld_stmt_execute(THD *thd, ulong stmt_id, ulong flags, uchar *params,
   sp_cache_enforce_limit(thd->sp_func_cache, stored_program_cache_size);
 
   /* Close connection socket; for use with client testing (Bug#43560). */
-  DBUG_EXECUTE_IF(
-      "close_conn_after_stmt_execute", thd->get_protocol()->shutdown(););
+  DBUG_EXECUTE_IF("close_conn_after_stmt_execute",
+                  thd->get_protocol()->shutdown(););
 
 end:
   if (opt_userstat)

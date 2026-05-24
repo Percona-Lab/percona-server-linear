@@ -1309,6 +1309,7 @@ THD::THD(bool enable_plugins)
 #ifndef EMBEDDED_LIBRARY
   mysql_audit_init_thd(this);
 #endif
+  net.vio=0;
   system_thread= NON_SYSTEM_THREAD;
   cleanup_done= 0;
   m_release_resources_done= false;
@@ -1367,6 +1368,8 @@ THD::THD(bool enable_plugins)
 
   m_internal_handler= NULL;
   m_binlog_invoker= FALSE;
+  memset(&m_invoker_user, 0, sizeof(m_invoker_user));
+  memset(&m_invoker_host, 0, sizeof(m_invoker_host));
 
   binlog_next_event_pos.file_name= NULL;
   binlog_next_event_pos.pos= 0;
@@ -1721,6 +1724,8 @@ void THD::init(void)
   owned_gtid.clear();
   owned_sid.clear();
   owned_gtid.dbug_print(NULL, "set owned_gtid (clear) in THD::init");
+
+  clear_slow_extended();
 }
 
 // Resets stats in a THD.
@@ -2793,6 +2798,7 @@ char *THD::get_client_host_port(THD *client)
   return client_host;
 }
 
+
 /*
   Register an item tree tree transformation, performed by the query
   optimizer.
@@ -2946,6 +2952,9 @@ bool Query_result_send::send_data(List<Item> &items)
   }
 
   thd->inc_sent_row_count(1);
+  thd->sent_row_count_2++;
+  DEBUG_SYNC(thd, "sent_row");
+
   DBUG_RETURN(protocol->end_row());
 }
 
@@ -3947,7 +3956,10 @@ void thd_increment_bytes_received(size_t length)
 {
   THD *thd= current_thd;
   if (likely(thd != NULL))
+  {
     thd->status_var.bytes_received+= length;
+    thd->bytes_received+= length;
+  }
 }
 
 
@@ -4524,6 +4536,7 @@ void THD::inc_examined_row_count(ha_rows count)
 void THD::inc_status_created_tmp_disk_tables()
 {
   status_var.created_tmp_disk_tables++;
+  query_plan_flags|= QPLAN_TMP_DISK;
 #ifdef HAVE_PSI_STATEMENT_INTERFACE
   PSI_STATEMENT_CALL(inc_statement_created_tmp_disk_tables)(m_statement_psi, 1);
 #endif
@@ -5070,3 +5083,4 @@ void THD::claim_memory_ownership()
   stmt_map.claim_memory_ownership();
 #endif /* HAVE_PSI_MEMORY_INTERFACE */
 }
+

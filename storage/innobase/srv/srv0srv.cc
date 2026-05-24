@@ -60,6 +60,7 @@ Created 10/8/1995 Heikki Tuuri
 #include "log0online.h"
 #include "log0recv.h"
 #include "mem0mem.h"
+#include "os0file.h"
 #include "os0proc.h"
 #include "pars0pars.h"
 #include "que0que.h"
@@ -127,6 +128,9 @@ ulint	srv_undo_tablespaces_active = 0;
 
 /* The number of rollback segments to use */
 ulong	srv_undo_logs = 1;
+
+char*	srv_arch_dir	= NULL;
+ulong	srv_log_arch_expire_sec	= 0;
 
 /** Rate at which UNDO records should be purged. */
 ulong	srv_purge_rseg_truncate_frequency = 128;
@@ -215,12 +219,12 @@ ulint		srv_log_buffer_size = ULINT_MAX;
 ulong		srv_flush_log_at_trx_commit = 1;
 uint		srv_flush_log_at_timeout = 1;
 ulong		srv_page_size = UNIV_PAGE_SIZE_DEF;
-char	srv_use_global_flush_log_at_trx_commit	= TRUE;
+ulong		srv_page_size_shift = UNIV_PAGE_SIZE_SHIFT_DEF;
 ulong		srv_log_write_ahead_size = 0;
 
 page_size_t	univ_page_size(0, 0, false);
 
-char		srv_use_global_flush_log_at_trx_commit = TRUE;
+char	srv_use_global_flush_log_at_trx_commit	= TRUE;
 
 /* Try to flush dirty pages so as to avoid IO bursts at
 the checkpoints. */
@@ -257,23 +261,24 @@ ulong	srv_buf_pool_instances;
 const ulong	srv_buf_pool_instances_default = 0;
 /** Number of locks to protect buf_pool->page_hash */
 ulong	srv_n_page_hash_locks = 16;
+
 /** Scan depth for LRU flush batch i.e.: number of blocks scanned*/
 ulong	srv_LRU_scan_depth	= 1024;
 /** Whether or not to flush neighbors of a block */
 ulong	srv_flush_neighbors	= 1;
-/** Previously requested size */
-/** Dump this % of each buffer pool during BP dump */
+/** Previously requested size. Accesses protected by memory barriers. */
 ulint	srv_buf_pool_old_size	= 0;
 /** Current size as scaling factor for the other components */
 ulint	srv_buf_pool_base_size	= 0;
 /** Current size in bytes */
 ulint	srv_buf_pool_curr_size	= 0;
-ulint	srv_foreground_preflush	= SRV_FOREGROUND_PREFLUSH_EXP_BACKOFF;
+/** Dump this % of each buffer pool during BP dump */
+ulong	srv_buf_pool_dump_pct;
+/** Lock table size in bytes */
 ulint	srv_lock_table_size	= ULINT_MAX;
 
 /** Query thread preflush algorithm */
-ulint	srv_foreground_preflush
-	= SRV_FOREGROUND_PREFLUSH_EXP_BACKOFF;
+ulint	srv_foreground_preflush	= SRV_FOREGROUND_PREFLUSH_EXP_BACKOFF;
 
 /** The maximum time limit for a single LRU tail flush iteration by the page
 cleaner thread */
@@ -297,6 +302,7 @@ ulint	srv_n_write_io_threads	= ULINT_MAX;
 
 /* Switch to enable random read ahead. */
 my_bool	srv_random_read_ahead	= FALSE;
+
 /* User settable value of the number of pages that must be present
 in the buffer cache and accessed sequentially for InnoDB to trigger a
 readahead request. */
@@ -1386,14 +1392,14 @@ srv_printf_innodb_monitor(
 			lock_sys_subtotal
 				+= ((trx->lock.lock_heap)
 				    ? mem_heap_get_size(trx->lock.lock_heap)
-	recv_sys_subtotal = ((recv_sys && recv_sys->addr_hash)
-			? mem_heap_get_size(recv_sys->heap) : 0);
+				    : 0);
+			trx = UT_LIST_GET_NEXT(mysql_trx_list, trx);
 		}
 		mutex_exit(&trx_sys->mutex);
 	}
 
-	recv_sys_subtotal = (recv_sys && recv_sys->addr_hash)
-		? mem_heap_get_size(recv_sys->heap) : 0;
+	recv_sys_subtotal = ((recv_sys && recv_sys->addr_hash)
+			? mem_heap_get_size(recv_sys->heap) : 0);
 
 	fprintf(file,
 			"Internal hash tables (constant factor + variable factor)\n"
@@ -1445,7 +1451,6 @@ srv_printf_innodb_monitor(
 		(long) srv_conc_get_active_threads(),
 		srv_conc_get_waiting_threads());
 
-	/* This is a dirty read, without holding trx_sys->mutex. */
 	fprintf(file, "%lu read views open inside InnoDB\n",
 		trx_sys->mvcc->size());
 
@@ -1516,14 +1521,14 @@ srv_printf_innodb_monitor(
 Function to pass InnoDB status variables to MySQL */
 void
 srv_export_innodb_status(void)
+/*==========================*/
 {
-	ulint			mem_adaptive_hash, mem_dictionary;
 	buf_pool_stat_t		stat;
 	buf_pools_list_size_t	buf_pools_list_size;
 	ulint			LRU_len;
 	ulint			free_len;
-	ulint			mem_adaptive_hash, mem_dictionary;
 	ulint			flush_list_len;
+	ulint			mem_adaptive_hash, mem_dictionary;
 	ReadView*		oldest_view;
 	ulint			i;
 
@@ -1544,27 +1549,27 @@ srv_export_innodb_status(void)
 		hash index tables. */
 		ut_ad(!ht->n_sync_obj);
 		ut_ad(!ht->heaps);
-					+ dict_sys->table_id_hash->n_cells
-				      ) * sizeof(hash_cell_t)
-				+ dict_sys->size) : 0);
+
+		mem_adaptive_hash += mem_heap_get_size(ht->heap);
+		mem_adaptive_hash += ht->n_cells * sizeof(hash_cell_t);
 	}
 
 	mem_dictionary = (dict_sys ? ((dict_sys->table_hash->n_cells
-						+ dict_sys->table_id_hash->n_cells
-					      ) * sizeof(hash_cell_t)
-					+ dict_sys->size) : 0);
+					+ dict_sys->table_id_hash->n_cells
+				      ) * sizeof(hash_cell_t)
+				+ dict_sys->size) : 0);
 
 	mutex_enter(&srv_innodb_monitor_mutex);
 
 	export_vars.innodb_data_pending_reads =
 		os_n_pending_reads;
 
+	export_vars.innodb_data_pending_writes =
 		os_n_pending_writes;
 
 	export_vars.innodb_data_pending_fsyncs =
 		fil_n_pending_log_flushes
 		+ fil_n_pending_tablespace_flushes;
-
 	export_vars.innodb_adaptive_hash_hash_searches
 		= btr_cur_n_sea;
 	export_vars.innodb_adaptive_hash_non_hash_searches
@@ -1627,25 +1632,25 @@ srv_export_innodb_status(void)
 	export_vars.innodb_buffer_pool_pages_total = buf_pool_get_n_pages();
 
 	export_vars.innodb_buffer_pool_pages_misc =
+		buf_pool_get_n_pages() - LRU_len - free_len;
 
 	export_vars.innodb_buffer_pool_pages_made_young
 		= stat.n_pages_made_young;
 	export_vars.innodb_buffer_pool_pages_made_not_young
 		= stat.n_pages_not_made_young;
-
+	export_vars.innodb_buffer_pool_pages_old = 0;
 	for (i = 0; i < srv_buf_pool_instances; i++) {
 		buf_pool_t*	buf_pool = buf_pool_from_array(i);
 		export_vars.innodb_buffer_pool_pages_old
 			+= buf_pool->LRU_old_len;
-
+	}
 	export_vars.innodb_checkpoint_age
 		= (log_sys->lsn - log_sys->last_checkpoint_lsn);
+	export_vars.innodb_checkpoint_max_age
 		= log_sys->max_checkpoint_age;
-
 	ibuf_export_ibuf_status(
 			&export_vars.innodb_ibuf_free_list,
 			&export_vars.innodb_ibuf_segment_size);
-
 	export_vars.innodb_lsn_current
 		= log_sys->lsn;
 	export_vars.innodb_lsn_flushed
@@ -1660,16 +1665,16 @@ srv_export_innodb_status(void)
 		= trx_sys->max_trx_id;
 	export_vars.innodb_mem_adaptive_hash
 		= mem_adaptive_hash;
+	export_vars.innodb_mem_dictionary
 		= mem_dictionary;
 
 	mutex_enter(&trx_sys->mutex);
 	oldest_view = trx_sys->mvcc->get_oldest_view();
-
+	mutex_exit(&trx_sys->mutex);
 	export_vars.innodb_oldest_view_low_limit_trx_id
 		= oldest_view ? oldest_view->low_limit_id() : 0;
 
 	export_vars.innodb_purge_trx_id = purge_sys->limit.trx_no;
-
 	export_vars.innodb_purge_undo_no = purge_sys->limit.undo_no;
 
 	export_vars.innodb_page_size = UNIV_PAGE_SIZE;
@@ -1734,6 +1739,7 @@ srv_export_innodb_status(void)
 		srv_truncated_status_writes;
 
 	export_vars.innodb_available_undo_logs = srv_available_undo_logs;
+
 #ifdef UNIV_DEBUG
 	rw_lock_s_lock(&purge_sys->latch);
 	trx_id_t	up_limit_id;
@@ -2088,11 +2094,11 @@ srv_any_background_threads_are_active(void)
 	} else if (lock_sys->timeout_thread_active) {
 		thread_active = "srv_lock_timeout thread";
 	} else if (srv_monitor_active) {
+		thread_active = "srv_monitor_thread";
+	} else if (srv_buf_dump_thread_active) {
+		thread_active = "buf_dump_thread";
 	} else if (srv_buf_resize_thread_active) {
 		thread_active = "buf_resize_thread";
-		thread_active = "buf_dump_thread";
-	ib::info() << "Redo log follower thread starts, id "
-		   << os_thread_pf(os_thread_get_curr_id());
 	} else if (srv_dict_stats_thread_active) {
 		thread_active = "dict_stats_thread";
 	}
@@ -2118,11 +2124,11 @@ DECLARE_THREAD(srv_redo_log_follow_thread)(
 						     required by
 						     os_thread_create */
 {
+	ut_ad(!srv_read_only_mode);
+
+#ifdef UNIV_DEBUG_THREAD_CREATION
 	ib::info() << "Redo log follower thread starts, id "
 		   << os_thread_pf(os_thread_get_curr_id());
-#ifdef UNIV_DEBUG_THREAD_CREATION
-	fprintf(stderr, "Redo log follower thread starts, id %lu\n",
-		os_thread_pf(os_thread_get_curr_id()));
 #endif
 
 #ifdef UNIV_PFS_THREAD
@@ -2139,6 +2145,9 @@ DECLARE_THREAD(srv_redo_log_follow_thread)(
 #ifdef UNIV_DEBUG
 		if (!srv_track_changed_pages) {
 			continue;
+		}
+#endif
+
 		if (srv_shutdown_state < SRV_SHUTDOWN_LAST_PHASE) {
 			if (!log_online_follow_redo_log()) {
 				/* TODO: sync with I_S log tracking status? */
@@ -2147,10 +2156,7 @@ DECLARE_THREAD(srv_redo_log_follow_thread)(
 				break;
 			}
 			os_event_set(srv_redo_log_tracked_event);
-			ib::error() << "Log tracking bitmap write "
 		}
-		os_event_set(srv_redo_log_tracked_event);
-	}
 
 	} while (srv_shutdown_state < SRV_SHUTDOWN_LAST_PHASE);
 
@@ -2181,10 +2187,10 @@ purge_archived_logs(
 	os_file_stat_t	fileinfo;
 	char		archived_log_filename[OS_FILE_MAX_PATH];
 	char		namegen[OS_FILE_MAX_PATH];
-		dir = os_file_opendir(srv_arch_dir, false);
+	ulint		dirnamelen;
 
 	if (srv_arch_dir) {
-		dir = os_file_opendir(srv_arch_dir, FALSE);
+		dir = os_file_opendir(srv_arch_dir, false);
 		if (!dir) {
 			ib::warn() << "Opening archived log directory "
 				   << srv_arch_dir << " failed. Purge "
@@ -2198,10 +2204,10 @@ purge_archived_logs(
 	}
 
 	dirnamelen = strlen(srv_arch_dir);
-		archived_log_filename[dirnamelen - 1] != SRV_PATH_SEPARATOR) {
+
 	memcpy(archived_log_filename, srv_arch_dir, dirnamelen);
 	if (dirnamelen &&
-	    archived_log_filename[dirnamelen - 1] != SRV_PATH_SEPARATOR) {
+		archived_log_filename[dirnamelen - 1] != SRV_PATH_SEPARATOR) {
 		archived_log_filename[dirnamelen++] = SRV_PATH_SEPARATOR;
 	}
 
@@ -2209,14 +2215,14 @@ purge_archived_logs(
 	while(!os_file_readdir_next_file(srv_arch_dir, dir,
 				&fileinfo) ) {
 		if (strncmp(fileinfo.name,
-		if (dirnamelen + strlen(fileinfo.name) + 2 > OS_FILE_MAX_PATH)
+			IB_ARCHIVED_LOGS_PREFIX, IB_ARCHIVED_LOGS_PREFIX_LEN)) {
 			continue;
 		}
+		if (dirnamelen + strlen(fileinfo.name) + 2 > OS_FILE_MAX_PATH)
+			continue;
+
 		snprintf(archived_log_filename + dirnamelen, OS_FILE_MAX_PATH,
 				"%s", fileinfo.name);
-
-	snprintf(archived_log_filename + dirnamelen, OS_FILE_MAX_PATH,
-		 "%s", fileinfo.name);
 
 		if (before_no) {
 			ib_uint64_t log_file_no = strtoull(fileinfo.name +
@@ -2226,11 +2232,11 @@ purge_archived_logs(
 				continue;
 			}
 		} else {
-					       srv_read_only_mode)
-			    != DB_SUCCESS ||
+			fileinfo.mtime = 0;
 			if (os_file_get_status(archived_log_filename,
 					       &fileinfo, false,
-					       srv_read_only_mode) != DB_SUCCESS ||
+					       srv_read_only_mode)
+			    != DB_SUCCESS ||
 					fileinfo.mtime == 0) {
 				continue;
 			}
@@ -2242,12 +2248,12 @@ purge_archived_logs(
 
 		/* We are going to delete archived file. Acquire log_sys->mutex
 		to make sure that we are the only who try to delete file. This
+		also prevents log system from using this file. Do not delete
+		file if it is currently in progress of writting or have
+		pending IO. This is enforced by checking:
 		  1. fil_space_contains_node.
 		  2. group->archived_offset % group->file_size != 0, i.e. 
 		     there is archive in progress and we are going to delete it.
-	  1. fil_space_contains_node.
-	  2. group->archived_offset % group->file_size != 0, i.e.
-	     there is archive in progress and we are going to delete it.
 		This covers 3 cases:
 		  a. Usual case when we have one archive in progress,
 		     both 1 and 2 are TRUE
@@ -2628,6 +2634,10 @@ srv_master_do_idle_tasks(void)
 	}
 
 	/* Make a new checkpoint */
+	srv_main_thread_op_info = "making checkpoint";
+	log_checkpoint(TRUE, FALSE);
+	MONITOR_INC_TIME_IN_MICRO_SECS(MONITOR_SRV_CHECKPOINT_MICROSECOND,
+				       counter_time);
 
 	if (srv_shutdown_state > 0) {
 		return;
@@ -2638,10 +2648,6 @@ srv_master_do_idle_tasks(void)
 		purge_archived_logs(ut_time() - srv_log_arch_expire_sec,
 				0);
 	}
-	srv_main_thread_op_info = "making checkpoint";
-	log_checkpoint(TRUE, FALSE);
-	MONITOR_INC_TIME_IN_MICRO_SECS(MONITOR_SRV_CHECKPOINT_MICROSECOND,
-				       counter_time);
 }
 
 /*********************************************************************//**

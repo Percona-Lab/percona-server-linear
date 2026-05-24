@@ -3100,10 +3100,15 @@ os_file_create_simple_func(
 		if (file == -1) {
 			*success = false;
 
-			retry = os_file_handle_error(
-				name,
-				create_mode == OS_FILE_OPEN
-				? "open" : "create");
+			if (errno == EINTR) {
+				/* Handle signal interruptions correctly */
+				retry = true;
+			} else {
+				retry = os_file_handle_error(
+					name,
+					create_mode == OS_FILE_OPEN
+					? "open" : "create");
+			}
 		} else {
 			*success = true;
 			retry = false;

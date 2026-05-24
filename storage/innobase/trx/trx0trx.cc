@@ -32,6 +32,7 @@ Created 3/26/1996 Heikki Tuuri
 #endif
 
 #include "btr0sea.h"
+#include "btr0types.h"
 #include "lock0lock.h"
 #include "log0log.h"
 #include "os0proc.h"
@@ -146,6 +147,9 @@ trx_init(
 	trx->dict_operation = TRX_DICT_OP_NONE;
 
 	trx->table_id = 0;
+
+	trx->idle_start = 0;
+	trx->last_stmt_start = 0;
 
 	trx->error_state = DB_SUCCESS;
 
@@ -2147,9 +2151,9 @@ trx_commit_in_memory(
 	}
 
 	if (UNIV_LIKELY_NULL(trx->distinct_page_access_hash)) {
+
 		ut_free(trx->distinct_page_access_hash);
 		trx->distinct_page_access_hash= NULL;
-		ut_free(trx->distinct_page_access_hash);
 	}
 
 	/* trx->in_mysql_trx_list would hold between
@@ -2416,9 +2420,21 @@ trx_commit_or_rollback_prepare(
 
 		if (trx->lock.que_state == TRX_QUE_LOCK_WAIT) {
 
+			ulint		sec;
+			ulint		ms;
+			ib_uint64_t	now;
+
 			ut_a(trx->lock.wait_thr != NULL);
 			trx->lock.wait_thr->state = QUE_THR_SUSPENDED;
 			trx->lock.wait_thr = NULL;
+
+			if (UNIV_UNLIKELY(trx->take_stats)) {
+				ut_usectime(&sec, &ms);
+				now = (ib_uint64_t)sec * 1000000 + ms;
+				trx->lock_que_wait_timer
+					+= (ulint)
+					(now - trx->lock_que_wait_ustarted);
+			}
 
 			trx->lock.que_state = TRX_QUE_RUNNING;
 		}

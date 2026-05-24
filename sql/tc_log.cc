@@ -1,4 +1,6 @@
 /* Copyright (c) 2015, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2009, 2013, Monty Program Ab
+   Copyright (C) 2012 Percona Inc.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -567,3 +569,4 @@ bool TC_LOG::using_heuristic_recover()
   sql_print_information("Please restart mysqld without --tc-heuristic-recover");
   return true;
 }
+

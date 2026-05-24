@@ -454,7 +454,7 @@ bool my_yyoverflow(short **a, YYSTYPE **b, YYLTYPE **c, ulong *yystacksize);
 %lex-param { class THD *YYTHD }
 %pure-parser                                    /* We have threads */
 /*
-  Currently there are 159 shift/reduce conflicts.
+  Currently there are 158 shift/reduce conflicts.
   We should not introduce new conflicts any more.
 */
 %expect 158

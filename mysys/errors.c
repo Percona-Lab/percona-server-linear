@@ -58,6 +58,7 @@ const char *globerrs[GLOBERRS]=
   "File name '%s' is too long (max: %d)"
 };
 
+
 /*
  We cannot call my_error/my_printf_error here in this function.
   Those functions will set status variable in diagnostic area

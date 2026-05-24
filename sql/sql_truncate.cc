@@ -559,3 +559,4 @@ bool Sql_cmd_truncate_table::execute(THD *thd)
 
   DBUG_RETURN(res);
 }
+

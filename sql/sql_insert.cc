@@ -3111,6 +3111,7 @@ bool Sql_cmd_insert::execute(THD *thd)
                     DBUG_ASSERT(!debug_sync_set_action(current_thd,
                                                        STRING_WITH_LEN(act)));
                   };);
+  DEBUG_SYNC(thd, "after_mysql_insert");
   return res;
 }
 

@@ -4043,3 +4043,4 @@ mysql_declare_plugin(mysql_password)
 }
 #endif /* HAVE_OPENSSL */
 mysql_declare_plugin_end;
+

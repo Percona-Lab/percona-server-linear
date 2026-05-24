@@ -18,6 +18,7 @@
 #include "debug_sync.h"
 #include "prealloced_array.h"
 #include <lf.h>
+#include "mysqld.h"
 #include <mysqld_error.h>
 #include <mysql/plugin.h>
 #include <mysql/service_thd_wait.h>
@@ -1220,6 +1221,7 @@ MDL_lock* MDL_map::find(LF_PINS *pins, const MDL_key *mdl_key, bool *pinned)
       It works since these namespaces contain only one element so keys
       for them look like '<namespace-id>\0\0'.
     */
+
     DBUG_ASSERT(mdl_key->length() == 3);
 
     switch (mdl_key->mdl_namespace())
@@ -1634,6 +1636,8 @@ inline void MDL_lock::reinit(const MDL_key *mdl_key)
     case MDL_key::TABLESPACE:
     case MDL_key::SCHEMA:
     case MDL_key::COMMIT:
+    case MDL_key::BACKUP:
+    case MDL_key::BINLOG:
       m_strategy= &m_scoped_lock_strategy;
       break;
     default:
@@ -1671,6 +1675,8 @@ MDL_lock::get_unobtrusive_lock_increment(const MDL_request *request)
     case MDL_key::TABLESPACE:
     case MDL_key::SCHEMA:
     case MDL_key::COMMIT:
+    case MDL_key::BACKUP:
+    case MDL_key::BINLOG:
       return m_scoped_lock_strategy.m_unobtrusive_lock_increment[request->type];
     default:
       return m_object_lock_strategy.m_unobtrusive_lock_increment[request->type];
@@ -2600,6 +2606,9 @@ void MDL_lock::remove_ticket(MDL_context *ctx, LF_PINS *pins,
   bool is_singleton= mdl_locks.is_lock_object_singleton(&key);
 
   mysql_prlock_wrlock(&m_rwlock);
+
+  DEBUG_SYNC(current_thd, "mdl_lock_remove_ticket_m_rwlock_locked");
+
   (this->*list).remove_ticket(ticket);
 
   /*

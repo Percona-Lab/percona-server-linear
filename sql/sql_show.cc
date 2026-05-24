@@ -2179,7 +2179,10 @@ public:
     if ((!inspect_thd->get_protocol()->connection_alive() &&
          !inspect_thd->system_thread) ||
         (m_user && (inspect_thd->system_thread || !inspect_sctx_user.str ||
-                    strcmp(inspect_sctx_user.str, m_user))))
+                    strcmp(inspect_sctx_user.str, m_user))) ||
+          acl_is_utility_user(inspect_sctx_user.str,
+                              inspect_sctx_host.str,
+                              inspect_sctx->ip().str))
       return;
 
     thread_info *thd_info= new thread_info;
@@ -2381,7 +2384,10 @@ public:
     if ((!inspect_thd->get_protocol()->connection_alive() &&
          !inspect_thd->system_thread) ||
         (user && (inspect_thd->system_thread || !inspect_sctx_user.str ||
-                  strcmp(inspect_sctx_user.str, user))))
+                  strcmp(inspect_sctx_user.str, user))) ||
+        acl_is_utility_user(inspect_sctx_user.str,
+                            inspect_sctx_host.str,
+                            inspect_sctx->ip().str))
       return;
 
     TABLE *table= m_tables->table;

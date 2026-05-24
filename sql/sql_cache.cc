@@ -1901,10 +1901,10 @@ int Query_cache::send_result_to_client(THD *thd, const LEX_CSTRING &sql)
         Test if the query is a SELECT
         (pre-space is removed in dispatch_command).
 
-      First '/' looks like comment before command it is not
-      frequently appeared in real life, consequently we can
-      check all such queries, too.
-    */
+        First '/' looks like comment before command it is not
+        frequently appeared in real life, consequently we can
+        check all such queries, too.
+      */
     if ((my_toupper(system_charset_info, sql.str[i])     != 'S' ||
          my_toupper(system_charset_info, sql.str[i + 1]) != 'E' ||
          my_toupper(system_charset_info, sql.str[i + 2]) != 'L' ||
@@ -5343,3 +5343,4 @@ err2:
 }
 
 #endif /* DBUG_OFF */
+

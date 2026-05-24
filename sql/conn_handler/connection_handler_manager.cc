@@ -50,26 +50,28 @@ uint Connection_handler_manager::max_threads= 0;
 
 static void scheduler_wait_lock_begin()
 {
-  MYSQL_CALLBACK(Connection_handler_manager::event_functions,
-                 thd_wait_begin, (current_thd, THD_WAIT_TABLE_LOCK));
+  THD* thd= current_thd;
+  MYSQL_CALLBACK(thd->scheduler, thd_wait_begin, (thd, THD_WAIT_TABLE_LOCK));
 }
 
 static void scheduler_wait_lock_end()
 {
-  MYSQL_CALLBACK(Connection_handler_manager::event_functions,
-                 thd_wait_end, (current_thd));
+  THD* thd= current_thd;
+  MYSQL_CALLBACK(thd->scheduler, thd_wait_end, (thd));
 }
 
 static void scheduler_wait_sync_begin()
 {
-  MYSQL_CALLBACK(Connection_handler_manager::event_functions,
-                 thd_wait_begin, (current_thd, THD_WAIT_SYNC));
+  THD* thd= current_thd;
+  if (likely(thd))
+    MYSQL_CALLBACK(thd->scheduler, thd_wait_begin, (thd, THD_WAIT_SYNC));
 }
 
 static void scheduler_wait_sync_end()
 {
-  MYSQL_CALLBACK(Connection_handler_manager::event_functions,
-                 thd_wait_end, (current_thd));
+  THD* thd= current_thd;
+  if (likely(thd))
+    MYSQL_CALLBACK(thd->scheduler, thd_wait_end, (thd));
 }
 
 
@@ -151,11 +153,7 @@ static PSI_mutex_info all_conn_manager_mutexes[]=
 
 bool Connection_handler_manager::init()
 {
-  /*
-    This is a static member function.
-    Per_thread_connection_handler's static members need to be initialized
-    even if One_thread_connection_handler is used instead.
-  */
+  // This is a static member function.
   Per_thread_connection_handler::init();
 
   Connection_handler *connection_handler= NULL;
@@ -300,7 +298,6 @@ void destroy_channel_info(Channel_info* channel_info)
 {
   delete channel_info;
 }
-
 
 void dec_connection_count()
 {

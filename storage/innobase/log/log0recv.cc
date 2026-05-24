@@ -46,6 +46,7 @@ Created 9/20/1997 Heikki Tuuri
 #include "btr0btr.h"
 #include "btr0cur.h"
 #include "ibuf0ibuf.h"
+#include "log0archive.h"
 #include "trx0undo.h"
 #include "trx0rec.h"
 #include "fil0fil.h"
@@ -208,6 +209,17 @@ fil_name_process(
 	ulint	space_id,
 	bool	deleted)
 {
+	/* The first condition is true during normal server operation, the
+	second one during server startup after
+	recv_recovery_from_checkpoint_start has completed. */
+	if (!recv_recovery_is_on() || recv_lsn_checks_on)
+	{
+		/* We are being called from online log tracking, file name
+		processing is a no-op, and specifically do not cause any DD
+		changes. */
+		return;
+	}
+
 	/* We will also insert space=NULL into the map, so that
 	further checks can ensure that a MLOG_FILE_NAME record was
 	scanned before applying any page records for the space_id. */
@@ -1580,7 +1592,7 @@ recv_parse_or_apply_log_rec_body(
 		break;
 	case MLOG_WRITE_STRING:
 		ut_ad(!page || page_type != FIL_PAGE_TYPE_ALLOCATED);
-
+		ptr = mlog_parse_string(ptr, end_ptr, page, page_zip);
 		break;
 	case MLOG_ZIP_WRITE_NODE_PTR:
 		ut_ad(!page || fil_page_type_is_index(page_type));
@@ -1658,6 +1670,7 @@ recv_hash(
 /*********************************************************************//**
 Gets the hashed file address struct for a page.
 @return file address struct, NULL if not found from the hash table */
+
 recv_addr_t*
 recv_get_fil_addr_struct(
 /*=====================*/
@@ -2446,6 +2459,7 @@ skip_this_recv_addr:
 @param[in]	apply		whether to apply MLOG_FILE_* records
 @param[out]	body		start of log record body
 @return length of the record, or 0 if the record was not complete */
+
 ulint
 recv_parse_log_rec(
 	mlog_id_t*	type,
@@ -2524,6 +2538,7 @@ recv_parse_log_rec(
 
 /*******************************************************//**
 Calculates the new value for lsn when more data is added to the log. */
+
 lsn_t
 recv_calc_lsn_on_data_add(
 /*======================*/
@@ -3220,6 +3235,11 @@ recv_scan_log_recs(
 			return(true);
 		}
 
+		if (*store_to_hash != STORE_NO
+		    && mem_heap_get_size(recv_sys->heap) > available_memory) {
+			*store_to_hash = STORE_NO;
+		}
+
 		if (recv_sys->recovered_offset > RECV_PARSING_BUF_SIZE / 4) {
 			/* Move parsing buffer data to the buffer start */
 
@@ -3472,6 +3492,9 @@ recv_recovery_from_checkpoint_start(
 	bool		rescan;
 	ib_uint64_t	checkpoint_no;
 	lsn_t		contiguous_lsn;
+#if 0 // TODO laurynas: log archiving broken by WL#8845
+	lsn_t		archived_lsn;
+#endif
 	byte*		buf;
 	byte		log_hdr_buf[LOG_FILE_HDR_SIZE];
 	dberr_t		err;
@@ -3509,6 +3532,9 @@ recv_recovery_from_checkpoint_start(
 
 	checkpoint_lsn = mach_read_from_8(buf + LOG_CHECKPOINT_LSN);
 	checkpoint_no = mach_read_from_8(buf + LOG_CHECKPOINT_NO);
+#if 0 // TODO laurynas: log archiving broken by WL#8845
+	archived_lsn = mach_read_from_8(buf + LOG_CHECKPOINT_ARCHIVED_LSN);
+#endif
 
 	/* Read the first log file header to print a note if this is
 	a recovery from a restored InnoDB Hot Backup */
@@ -3553,7 +3579,24 @@ recv_recovery_from_checkpoint_start(
 		       max_cp_group);
 	}
 
+	/* Start reading the log groups from the checkpoint lsn up. The
+	variable contiguous_lsn contains an lsn up to which the log is
+	known to be contiguously written to all log groups. */
+
 	recv_sys->mlog_checkpoint_lsn = 0;
+
+#if 0 // TODO laurynas: log archiving broken by WL#8845
+	group = UT_LIST_GET_FIRST(log_sys->log_groups);
+
+	while (group) {
+		log_checkpoint_get_nth_group_info(buf, group->id,
+						  &(group->archived_file_no));
+
+		log_archived_get_offset(group, group->archived_file_no,
+			archived_lsn, &(group->archived_offset));
+		group = UT_LIST_GET_NEXT(log_groups, group);
+	}
+#endif
 
 	ut_ad(RECV_SCAN_SIZE <= log_sys->buf_size);
 
@@ -3700,6 +3743,12 @@ recv_recovery_from_checkpoint_start(
 	log_sys->next_checkpoint_lsn = checkpoint_lsn;
 	log_sys->next_checkpoint_no = checkpoint_no + 1;
 
+#if 0 // TODO laurynas: log archiving broken by WL#8845
+	log_sys->archived_lsn = archived_lsn;
+#else
+	log_sys->archived_lsn = 0;
+#endif
+
 	recv_synchronize_groups();
 
 	if (!recv_needed_recovery) {
@@ -3726,6 +3775,15 @@ recv_recovery_from_checkpoint_start(
 		    log_sys->lsn - log_sys->last_checkpoint_lsn);
 
 	log_sys->next_checkpoint_no = checkpoint_no + 1;
+
+#if 0 // TODO laurynas: log archiving broken by WL#8845
+	if (archived_lsn == LSN_MAX) {
+#else
+	{
+#endif
+
+		log_sys->archiving_state = LOG_ARCH_OFF;
+	}
 
 	mutex_enter(&recv_sys->mutex);
 
@@ -3806,10 +3864,10 @@ recv_recovery_from_checkpoint_finish(void)
 		page_id_t(TRX_SYS_SPACE, FSP_DICT_HDR_PAGE_NO),
 		univ_page_size, RW_X_LATCH, &mtr);
 	fil_block_check_type(block, FIL_PAGE_TYPE_SYS, &mtr);
+	mtr.commit();
+
 	/* Roll back any recovered data dictionary transactions, so
-
 	that the data dictionary tables will be free of any locks.
-
 	The data dictionary latch should guarantee that there is at
 	most one data dictionary transaction active at a time. */
 	if (srv_force_recovery < SRV_FORCE_NO_TRX_UNDO) {

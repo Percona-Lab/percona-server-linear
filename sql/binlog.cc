@@ -37,6 +37,7 @@
 #include <pfs_transaction_provider.h>
 #include <mysql/psi/mysql_transaction.h>
 #include "xa.h"
+
 #include <list>
 #include <string>
 
@@ -92,6 +93,7 @@ static int binlog_clone_consistent_snapshot(handlerton *hton, THD *thd,
                                             THD *from_thd);
 static int binlog_xa_commit(handlerton *hton,  XID *xid);
 static int binlog_xa_rollback(handlerton *hton,  XID *xid);
+
 static void exec_binlog_error_action_abort(const char* err_string);
 
 static char binlog_snapshot_file[FN_REFLEN];
@@ -899,6 +901,7 @@ class Binlog_event_writer
   ha_checksum initial_checksum;
   ha_checksum checksum;
   uint32 end_log_pos;
+  THD *thd;
 
 public:
   /**
@@ -907,15 +910,17 @@ public:
     binlog.
 
     @param output_cache_arg IO_CACHE to write to.
+    @param thd_arg THD to account written binlog byte statistics to
     @param have_checksum_al
   */
-  Binlog_event_writer(IO_CACHE *output_cache_arg)
+  Binlog_event_writer(IO_CACHE *output_cache_arg, THD *thd_arg)
     : output_cache(output_cache_arg),
       have_checksum(binlog_checksum_options !=
                     binary_log::BINLOG_CHECKSUM_ALG_OFF),
       initial_checksum(my_checksum(0L, NULL, 0)),
       checksum(initial_checksum),
-      end_log_pos(my_b_tell(output_cache))
+      end_log_pos(my_b_tell(output_cache)),
+      thd(thd_arg)
   {
     // Simulate checksum error
     if (DBUG_EVALUATE_IF("fault_injection_crc_value", 1, 0))
@@ -998,6 +1003,7 @@ public:
     *buf_p+= write_bytes;
     *buf_len_p-= write_bytes;
     *event_len_p-= write_bytes;
+    thd->binlog_bytes_written+= write_bytes;
 
     if (have_checksum)
     {
@@ -1008,6 +1014,7 @@ public:
         int4store(checksum_buf, checksum);
         if (my_b_write(output_cache, checksum_buf, BINLOG_CHECKSUM_LEN))
           DBUG_RETURN(true);
+        thd->binlog_bytes_written+= BINLOG_CHECKSUM_LEN;
         checksum= initial_checksum;
       }
     }
@@ -1422,7 +1429,7 @@ binlog_cache_data::flush(THD *thd, my_off_t *bytes_written, bool *wrote_xid)
       non-empty then we get two Anonymous_gtid_log_events, which is
       correct.
     */
-    Binlog_event_writer writer(mysql_bin_log.get_log_file());
+    Binlog_event_writer writer(mysql_bin_log.get_log_file(), thd);
 
     DBUG_EXECUTE_IF("simulate_binlog_flush_error",
                     {
@@ -1739,6 +1746,7 @@ static int binlog_xa_commit(handlerton *hton,  XID *xid)
 
   return 0;
 }
+
 
 static int binlog_xa_rollback(handlerton *hton,  XID *xid)
 {
@@ -3064,7 +3072,7 @@ bool show_binlog_events(THD *thd, MYSQL_BIN_LOG *binary_log)
         description_event->common_footer->checksum_alg=
                            ev->common_footer->checksum_alg;
       if (event_count >= limit_start &&
-	  ev->net_send(protocol, linfo.log_file_name, pos))
+         ev->net_send(protocol, linfo.log_file_name, pos))
       {
 	errmsg = "Net error";
 	delete ev;
@@ -3399,7 +3407,6 @@ bool generate_new_log_name(char *new_name, ulong *new_ext,
   }
   return false;
 }
-
 
 /**
   @todo
@@ -6281,6 +6288,25 @@ err:
   DBUG_RETURN(error);
 }
 
+/**
+  Remove all logs before the given file date from disk and from the
+  index file.
+
+  @param thd		Thread pointer
+  @param purge_time	Delete all log files before given date.
+  @param auto_purge     True if this is an automatic purge.
+
+  @note
+    If any of the logs before the deleted one is in use,
+    only purge logs up to this one.
+
+  @retval
+    0				ok
+  @retval
+    LOG_INFO_PURGE_NO_ROTATE	Binary file that can't be rotated
+    LOG_INFO_FATAL              if any other than ENOENT error from
+                                mysql_file_stat() or mysql_file_delete()
+*/
 
 int MYSQL_BIN_LOG::purge_logs_before_date(time_t purge_time, bool auto_purge)
 {
@@ -7024,6 +7050,8 @@ bool MYSQL_BIN_LOG::write_event(Log_event *event_info)
                              event_info->event_cache_type, event_info->event_logging_type);
           if (cache_data->write_event(thd, &e))
             goto err;
+          if (event_info->is_using_immediate_logging())
+            thd->binlog_bytes_written+= e.header()->data_written;
         }
         if (thd->auto_inc_intervals_in_cur_stmt_for_binlog.nb_elements() > 0)
         {
@@ -7036,6 +7064,8 @@ bool MYSQL_BIN_LOG::write_event(Log_event *event_info)
                              event_info->event_logging_type);
           if (cache_data->write_event(thd, &e))
             goto err;
+          if (event_info->is_using_immediate_logging())
+            thd->binlog_bytes_written+= e.header()->data_written;
         }
         if (thd->rand_used)
         {
@@ -7044,6 +7074,8 @@ bool MYSQL_BIN_LOG::write_event(Log_event *event_info)
                            event_info->event_logging_type);
           if (cache_data->write_event(thd, &e))
             goto err;
+          if (event_info->is_using_immediate_logging())
+            thd->binlog_bytes_written+= e.header()->data_written;
         }
         if (!thd->user_var_events.empty())
         {
@@ -7067,6 +7099,8 @@ bool MYSQL_BIN_LOG::write_event(Log_event *event_info)
                                  event_info->event_logging_type);
             if (cache_data->write_event(thd, &e))
               goto err;
+            if (event_info->is_using_immediate_logging())
+              thd->binlog_bytes_written+= e.header()->data_written;
           }
         }
       }
@@ -7080,6 +7114,8 @@ bool MYSQL_BIN_LOG::write_event(Log_event *event_info)
 
     if (DBUG_EVALUATE_IF("injecting_fault_writing", 1, 0))
       goto err;
+    if (event_info->is_using_immediate_logging())
+      thd->binlog_bytes_written+= event_info->common_header->data_written;
 
     /*
       After writing the event, if the trx-cache was used and any unsafe
@@ -7163,6 +7199,10 @@ void MYSQL_BIN_LOG::purge()
       ha_flush_logs(NULL);
       purge_logs_before_date(purge_time, true);
     }
+  }
+  if (max_binlog_files)
+  {
+    purge_logs_maximum_number(max_binlog_files);
   }
 #endif
 }
@@ -8028,7 +8068,7 @@ TC_LOG::enum_result MYSQL_BIN_LOG::commit(THD *thd, bool all)
   }
 
   Transaction_ctx::enum_trx_scope trx_scope=  all ? Transaction_ctx::SESSION :
-                                                    Transaction_ctx::STMT;
+      Transaction_ctx::STMT;
 
   DBUG_PRINT("debug", ("in_transaction: %s, no_2pc: %s, rw_ha_count: %d",
                        YESNO(thd->in_multi_stmt_transaction_mode()),
@@ -11214,7 +11254,9 @@ void THD::issue_unsafe_warnings()
                           ER_BINLOG_UNSAFE_STATEMENT,
                           ER(ER_BINLOG_UNSAFE_STATEMENT),
                           ER(LEX::binlog_stmt_unsafe_errcode[unsafe_type]));
-      if (log_error_verbosity > 1)
+      if ((log_error_verbosity > 1) &&
+          ((opt_log_warnings_suppress &
+            (1ULL << log_warnings_suppress_1592)) == 0))
       {
         if (unsafe_type == LEX::BINLOG_STMT_UNSAFE_LIMIT)
           do_unsafe_limit_checkout( buf, unsafe_type, query().str);

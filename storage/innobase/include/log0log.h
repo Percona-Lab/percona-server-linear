@@ -215,12 +215,6 @@ log_group_write_buf(
 					header */
 
 /******************************************************//**
-Completes an i/o to a log file. */
-void
-log_io_complete(
-/*============*/
-	log_group_t*	group);	/*!< in: log group */
-/******************************************************//**
 This function is called, e.g., when a transaction wants to commit. It checks
 that the log has been written to the log file up to the last log entry written
 by the transaction. If there is a flush running, it waits and checks if the
@@ -279,6 +273,14 @@ shutdown. This function also writes all log in log files to the log archive. */
 void
 logs_empty_and_mark_files_at_shutdown(void);
 /*=======================================*/
+
+void
+log_checkpoint_get_nth_group_info(
+/*==============================*/
+	const byte*	buf,	/*!< in: buffer containing checkpoint info */
+	ulint		n,	/*!< in: nth slot */
+	lsn_t*		file_no);/*!< out: archived file number */
+
 /** Read a log group header page to log_sys->checkpoint_buf.
 @param[in]	group	log group
 @param[in]	header	0 or LOG_CHEKCPOINT_1 or LOG_CHECKPOINT2 */
@@ -810,6 +812,7 @@ struct log_t{
 					/*!< number of currently pending
 					checkpoint writes */
 	rw_lock_t	checkpoint_lock;/*!< this latch is x-locked when a
+					checkpoint write is running; a thread
 					should wait for this without owning
 					the log mutex */
 #endif /* !UNIV_HOTBACKUP */

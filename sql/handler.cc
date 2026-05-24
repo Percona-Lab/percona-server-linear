@@ -1980,6 +1980,7 @@ int ha_rollback_trans(THD *thd, bool all)
     trn_ctx->cleanup();
     thd->tx_priority= 0;
   }
+
   if (all)
     thd->transaction_rollback_request= FALSE;
 
@@ -8686,3 +8687,4 @@ bool handler::my_eval_gcolumn_expr(THD *thd,
   const bool res= my_eval_gcolumn_expr_helper(thd, table, fields, record, false);
   DBUG_RETURN(res);
 }
+

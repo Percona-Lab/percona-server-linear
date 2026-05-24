@@ -43,6 +43,7 @@ Created 12/9/1995 Heikki Tuuri
 #include "buf0buf.h"
 #include "buf0flu.h"
 #include "srv0srv.h"
+#include "log0archive.h"
 #include "log0recv.h"
 #include "fil0fil.h"
 #include "dict0boot.h"
@@ -192,8 +193,8 @@ log_buffer_extend(
 	ulint	len)
 {
 	ulint	move_start;
+	ulint	move_end;
 	byte*	tmp_buf[OS_FILE_LOG_BLOCK_SIZE];
-	byte*	tmp_buf = static_cast<byte *>(alloca(OS_FILE_LOG_BLOCK_SIZE));
 
 	log_mutex_enter();
 
@@ -418,8 +419,8 @@ loop:
 		log_mutex_exit();
 
 		os_thread_sleep(10000);
-		log_mutex_enter();
 
+		log_mutex_enter();
 		goto loop;
 	}
 
@@ -543,8 +544,8 @@ log_close(void)
 		tracked_lsn = log_get_tracked_lsn();
 		tracked_lsn_age = lsn - tracked_lsn;
 
-
 		if (tracked_lsn_age >= log->log_group_capacity) {
+
 			ib::error() << "The age of the oldest untracked "
 				"record exceeds the log group capacity!";
 			ib::error() << "Stopping the log tracking thread at "
@@ -738,6 +739,12 @@ log_group_set_fields(
 	group->lsn = lsn;
 }
 
+/* Extra margin, in addition to one log file, used in archiving */
+#define LOG_ARCHIVE_EXTRA_MARGIN	(4 * UNIV_PAGE_SIZE)
+
+/* This parameter controls asynchronous writing to the archive */
+#define LOG_ARCHIVE_RATIO_ASYNC		16
+
 /*****************************************************************//**
 Calculates the recommended highest values for lsn - last_checkpoint_lsn
 and lsn - buf_get_oldest_modification().
@@ -754,6 +761,8 @@ log_calc_max_ages(void)
 	ulint		free;
 	bool		success	= true;
 	lsn_t		smallest_capacity;
+	lsn_t		archive_margin;
+	lsn_t		smallest_archive_margin;
 
 	log_mutex_enter();
 
@@ -762,11 +771,21 @@ log_calc_max_ages(void)
 	ut_ad(group);
 
 	smallest_capacity = LSN_MAX;
+	smallest_archive_margin = LSN_MAX;
 
 	while (group) {
 		if (log_group_get_capacity(group) < smallest_capacity) {
 
 			smallest_capacity = log_group_get_capacity(group);
+		}
+
+		archive_margin = log_group_get_capacity(group)
+		    - (group->file_size - LOG_FILE_HDR_SIZE)
+		    - LOG_ARCHIVE_EXTRA_MARGIN;
+
+		if (archive_margin < smallest_archive_margin) {
+
+		    smallest_archive_margin = archive_margin;
 		}
 
 		group = UT_LIST_GET_NEXT(log_groups, group);
@@ -803,6 +822,10 @@ log_calc_max_ages(void)
 		/ LOG_POOL_CHECKPOINT_RATIO_ASYNC;
 	log_sys->max_checkpoint_age = margin;
 
+	log_sys->max_archived_lsn_age = smallest_archive_margin;
+
+	log_sys->max_archived_lsn_age_async = smallest_archive_margin
+	    - smallest_archive_margin / LOG_ARCHIVE_RATIO_ASYNC;
 failure:
 	log_mutex_exit();
 
@@ -1040,6 +1063,16 @@ log_io_complete(
 /*============*/
 	log_group_t*	group)	/*!< in: log group or a dummy pointer */
 {
+#if 0 // TODO laurynas: log archiving broken by WL#8845
+	if ((byte*) group == &log_archive_io) {
+		/* It was an archive write */
+
+		log_io_complete_archive();
+
+		return;
+	}
+#endif
+
 	if ((ulint) group & 0x1UL) {
 		/* It was a checkpoint write */
 		group = (log_group_t*)((ulint) group - 1);
@@ -1053,13 +1086,13 @@ log_io_complete(
 		case SRV_UNIX_ALL_O_DIRECT:
 			break;
 		case SRV_UNIX_FSYNC:
-			if (thd_flush_log_at_trx_commit(NULL) != 2)
-		case SRV_UNIX_O_DIRECT:
 		case SRV_UNIX_LITTLESYNC:
-				fil_flush(group->space_id);
+		case SRV_UNIX_O_DIRECT:
 		case SRV_UNIX_O_DIRECT_NO_FSYNC:
 			if (thd_flush_log_at_trx_commit(NULL) != 2)
+				fil_flush(group->space_id);
 		}
+#endif /* _WIN32 */
 
 		DBUG_PRINT("ib_log", ("checkpoint info written to group %u",
 				      unsigned(group->id)));
@@ -1143,6 +1176,7 @@ log_block_store_checksum(
 
 /******************************************************//**
 Writes a buffer to a log file group. */
+
 void
 log_group_write_buf(
 /*================*/
@@ -1704,6 +1738,11 @@ log_group_checkpoint(
 /*=================*/
 	log_group_t*	group)	/*!< in: log group */
 {
+#if 0 // TODO laurynas log archiving broken by WL#8845
+	lsn_t		archived_lsn;
+#endif
+	// ulint	fold; TODO laurynas
+	// ulint	i; TODO laurynas
 	lsn_t		lsn_offset;
 	byte*		buf;
 
@@ -1731,6 +1770,16 @@ log_group_checkpoint(
 	mach_write_to_8(buf + LOG_CHECKPOINT_LOG_BUF_SIZE, log_sys->buf_size);
 
 	log_block_set_checksum(buf, log_block_calc_checksum_crc32(buf));
+
+#if 0 // TODO laurynas log archiving broken by WL#8845
+	if (log_sys->archiving_state == LOG_ARCH_OFF) {
+		archived_lsn = LSN_MAX;
+	} else {
+		archived_lsn = log_sys->archived_lsn;
+	}
+
+	mach_write_to_8(buf + LOG_CHECKPOINT_ARCHIVED_LSN, archived_lsn);
+#endif
 
 	MONITOR_INC(MONITOR_PENDING_CHECKPOINT_WRITE);
 
@@ -2177,7 +2226,7 @@ objects! */
 void
 log_check_margins(void)
 {
-	bool	check = true;
+	bool	check	= true;
 
 	do {
 		log_flush_margin();
@@ -2191,7 +2240,9 @@ log_check_margins(void)
 		log_mutex_exit();
 		log_archive_margin();
 		log_mutex_enter();
+		ut_ad(!recv_no_log_write);
 		check = log_sys->check_flush_or_checkpoint;
+		log_mutex_exit();
 	} while (check);
 }
 
@@ -2352,6 +2403,8 @@ loop:
 
 		goto loop;
 	}
+
+	log_archive_all();
 
 	if (srv_fast_shutdown == 2) {
 		if (!srv_read_only_mode) {
@@ -2611,10 +2664,13 @@ log_group_close(
 
 	for (i = 0; i < group->n_files; i++) {
 		ut_free(group->file_header_bufs_ptr[i]);
+		ut_free(group->archive_file_header_bufs_ptr[i]);
 	}
 
 	ut_free(group->file_header_bufs_ptr);
 	ut_free(group->file_header_bufs);
+	ut_free(group->archive_file_header_bufs_ptr);
+	ut_free(group->archive_file_header_bufs);
 	ut_free(group->checkpoint_buf_ptr);
 	ut_free(group);
 }

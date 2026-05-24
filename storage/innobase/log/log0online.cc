@@ -25,8 +25,8 @@ Online database log parsing for changed page tracking
 #include "log0online.h"
 
 #include "my_dbug.h"
-#include "log0archive.h"
 
+#include "log0archive.h"
 #include "log0recv.h"
 #include "mach0data.h"
 #include "mtr0log.h"

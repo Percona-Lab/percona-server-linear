@@ -2111,6 +2111,7 @@ i_s_cmpmem_fill_low(
 
 			table->field[0]->store(BUF_BUDDY_LOW << x);
 			table->field[1]->store(static_cast<double>(i));
+			os_rmb;
 			table->field[2]->store(static_cast<double>(
 				buddy_stat->used));
 			table->field[3]->store(static_cast<double>(

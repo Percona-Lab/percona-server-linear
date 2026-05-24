@@ -158,12 +158,18 @@ public:
     Check if the current number of connections are below or equal
     the value given by the max_connections server system variable.
 
+    @param extra_port_connection true if it is the extra port connections which
+    need to be validated
+
     @return true if a new connection can be accepted, false otherwise.
   */
   bool valid_connection_count(bool extra_port_connection);
 
   /**
     Increment connection count if max_connections is not exceeded.
+
+    @param    extra_port_connection true if it is the extra connection count
+    which needs to be checked and bumped
 
     @retval
       true   max_connections NOT exceeded
@@ -179,6 +185,9 @@ public:
 
   /**
     Decrease the number of current connections.
+
+    @param extra_port_connection true if it is the extra connection count which
+    needs to be decreased
   */
   static void dec_connection_count(bool extra_port_connection)
   {

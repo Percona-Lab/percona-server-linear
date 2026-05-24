@@ -184,7 +184,7 @@ V
 Search system mutex
 |
 V
-Buffer pool mutex
+Buffer pool mutexes
 |
 V
 Log mutex

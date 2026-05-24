@@ -5664,6 +5664,7 @@ bool mysql_create_like_table(THD* thd, TABLE_LIST* table, TABLE_LIST* src_table,
   if (open_tables(thd, &thd->lex->query_tables, &not_used, 0) ||
       thd->decide_logging_format(thd->lex->query_tables))
     goto err;
+
   src_table->table->use_all_columns();
 
   DEBUG_SYNC(thd, "create_table_like_after_open");
@@ -9727,6 +9728,7 @@ bool mysql_alter_table(THD *thd, const char *new_db, const char *new_name,
         my_error(ER_LOCK_WAIT_TIMEOUT, MYF(0));
         goto err_new_table_cleanup;
       });
+   
     /*
       Acquire SRO locks on parent tables to prevent concurrent DML on them to
       perform cascading actions. Since InnoDB releases locks on table being

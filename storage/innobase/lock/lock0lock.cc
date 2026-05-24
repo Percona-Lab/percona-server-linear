@@ -5285,6 +5285,7 @@ lock_print_info_all_transactions(
 	ut_ad(lock_validate());
 }
 
+
 #ifdef UNIV_DEBUG
 /*********************************************************************//**
 Find the the lock in the trx_t::trx_lock_t::table_locks vector.
@@ -5297,6 +5298,10 @@ lock_trx_table_locks_find(
 	const lock_t*	find_lock)	/*!< in: lock to find */
 {
 	bool		found = false;
+	    /* TODO laurynas
+	if ( srv_show_verbose_locks ) {
+	block = buf_page_try_get(space, page_no, &mtr);
+	    */
 
 	trx_mutex_enter(trx);
 
@@ -5323,6 +5328,7 @@ lock_trx_table_locks_find(
 		ut_a(lock_get_type_low(lock) & LOCK_TABLE);
 		ut_a(lock->un_member.tab_lock.table != NULL);
 	}
+	// } see TODO laurynas above
 
 	trx_mutex_exit(trx);
 

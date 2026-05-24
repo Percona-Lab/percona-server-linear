@@ -139,6 +139,7 @@ int hp_rb_write_key(HP_INFO *info, HP_KEYDEF *keyinfo, const uchar *record,
   return 0;
 }
 
+
 /**
   Populate HASH_INFO structure.
   
