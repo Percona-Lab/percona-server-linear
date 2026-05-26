@@ -85,6 +85,9 @@ IF (${MAX_INDEXES} GREATER 255)
 ENDIF()
 MESSAGE(STATUS "Configuring with MAX_INDEXES = ${MAX_INDEXES}")
 
+# PAM build Handling
+OPTION(WITH_PAM "Build with Percona PAM plugin" OFF)
+
 # We choose to provide WITH_DEBUG as alias to standard CMAKE_BUILD_TYPE=Debug
 # which turns out to be not trivial, as this involves synchronization 
 # between CMAKE_BUILD_TYPE and WITH_DEBUG. Besides, we have to deal with cases
@@ -600,7 +603,7 @@ IF(WITH_UNIT_TESTS)
   ENDIF()
   ADD_SUBDIRECTORY(unittest/gunit)
   
-  IF(WITH_RAPID AND EXISTS rapid/unittest/gunit)
+  IF(WITH_RAPID AND EXISTS ${CMAKE_SOURCE_DIR}/rapid/unittest/gunit)
     ADD_SUBDIRECTORY(rapid/unittest/gunit)
   ENDIF()
 ENDIF()
