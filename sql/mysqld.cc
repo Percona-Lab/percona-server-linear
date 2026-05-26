@@ -629,6 +629,8 @@ SHOW_COMP_OPTION have_statement_timeout= SHOW_OPTION_DISABLED;
 
 ulonglong opt_log_warnings_suppress= 0;
 
+char* enforce_storage_engine= NULL;
+
 /* Thread specific variables */
 
 thread_local_key_t THR_MALLOC;

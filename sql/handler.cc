@@ -407,6 +407,37 @@ handlerton *ha_default_handlerton(THD *thd)
   return hton;
 }
 
+/** @brief
+  Return the enforced storage engine handlerton for thread
+
+  SYNOPSIS
+    ha_enforce_handlerton(thd)
+    thd         current thread
+    
+  RETURN
+    pointer to handlerton
+*/
+handlerton *ha_enforce_handlerton(THD* thd)
+{
+  if (enforce_storage_engine)
+  {
+    LEX_STRING name= { enforce_storage_engine,
+      strlen(enforce_storage_engine) };
+    plugin_ref plugin= ha_resolve_by_name(thd, &name, FALSE);
+    if (plugin)
+    {
+      handlerton *hton= plugin_data<handlerton*>(plugin);
+      DBUG_ASSERT(hton);
+      return hton;
+    }
+    else
+    {
+      my_error(ER_UNKNOWN_STORAGE_ENGINE, MYF(0), enforce_storage_engine,
+        enforce_storage_engine);
+    }
+  }
+  return NULL;
+}
 
 static plugin_ref ha_default_temp_plugin(THD *thd)
 {
@@ -8298,4 +8329,3 @@ bool handler::my_eval_gcolumn_expr(THD *thd,
   const bool res= my_eval_gcolumn_expr_helper(thd, table, fields, record, false);
   DBUG_RETURN(res);
 }
-
