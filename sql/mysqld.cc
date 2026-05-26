@@ -1089,6 +1089,9 @@ bool thread_cache_size_specified = false;
 bool host_cache_size_specified = false;
 bool table_definition_cache_specified = false;
 ulong locked_account_connection_count = 0;
+ulong extra_max_connections;
+
+ulonglong denied_connections = 0;
 
 /**
   Limit of the total number of prepared statements in the server.
