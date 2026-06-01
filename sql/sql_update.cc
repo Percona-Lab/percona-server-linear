@@ -808,60 +808,50 @@ bool Sql_cmd_update::update_single_table(THD *thd) {
       table->file->print_error(error, MYF(0));
       error = 1;
     } else
-    while (true) {
-      error = iterator->Read();
-      if (error || thd->killed) break;
-      thd->inc_examined_row_count(1);
-      if (qep_tab.condition() != nullptr) {
-        const bool skip_record = qep_tab.condition()->val_int() == 0;
-        if (thd->is_error()) {
-          error = 1;
-          break;
-        }
-        if (skip_record) {
-          table->file
-              ->unlock_row();  // Row failed condition check, release lock
-          thd->get_stmt_da()->inc_current_row_for_condition();
-          continue;
-        }
-      }
-      DBUG_ASSERT(!thd->is_error());
-
-      if (table->file->was_semi_consistent_read())
-        continue; /* repeat the read of the same row if it still exists */
-
-      table->clear_partial_update_diffs();
-
-      store_record(table, record[1]);
-      bool is_row_changed = false;
-      if (fill_record_n_invoke_before_triggers(
-              thd, &update, *update_field_list, *update_value_list, table,
-              TRG_EVENT_UPDATE, 0, false, &is_row_changed)) {
-        error = 1;
-        break;
-      }
-      found_rows++;
-
-      if (is_row_changed) {
-        /*
-          Default function and default expression values are filled before
-          evaluating the view check option. Check option on view using table(s)
-          with default function and default expression breaks otherwise.
-
-          It is safe to not invoke CHECK OPTION for VIEW if records are same.
-          In this case the row is coming from the view and thus should satisfy
-          the CHECK OPTION.
-        */
-        int check_result = table_list->view_check_option(thd);
-        if (check_result != VIEW_CHECK_OK) {
-          if (check_result == VIEW_CHECK_SKIP)
-            continue;
-          else if (check_result == VIEW_CHECK_ERROR) {
+      while (true) {
+        error = iterator->Read();
+        if (error || thd->killed) break;
+        thd->inc_examined_row_count(1);
+        if (qep_tab.condition() != nullptr) {
+          const bool skip_record = qep_tab.condition()->val_int() == 0;
+          if (thd->is_error()) {
             error = 1;
             break;
           }
+          if (skip_record) {
+            table->file
+                ->unlock_row();  // Row failed condition check, release lock
+            thd->get_stmt_da()->inc_current_row_for_condition();
+            continue;
+          }
         }
+        DBUG_ASSERT(!thd->is_error());
 
+        if (table->file->was_semi_consistent_read())
+          continue; /* repeat the read of the same row if it still exists */
+
+        table->clear_partial_update_diffs();
+
+        store_record(table, record[1]);
+      bool is_row_changed = false;
+        if (fill_record_n_invoke_before_triggers(
+                thd, &update, *update_field_list, *update_value_list, table,
+                TRG_EVENT_UPDATE, 0, false, &is_row_changed)) {
+          error = 1;
+          break;
+        }
+        found_rows++;
+
+        if (is_row_changed) {
+          int check_result = table_list->view_check_option(thd);
+          if (check_result != VIEW_CHECK_OK) {
+            if (check_result == VIEW_CHECK_SKIP)
+              continue;
+            else if (check_result == VIEW_CHECK_ERROR) {
+              error = 1;
+              break;
+            }
+          }
         /*
           Existing rows in table should normally satisfy CHECK constraints. So
           it should be safe to check constraints only for rows that has really
@@ -1081,11 +1071,12 @@ bool Sql_cmd_update::update_single_table(THD *thd) {
     snprintf(buff, sizeof(buff), ER_THD(thd, ER_UPDATE_INFO), (long)found_rows,
              (long)updated_rows,
              (long)thd->get_stmt_da()->current_statement_cond_count());
-    my_ok(thd,
-          thd->get_protocol()->has_client_capability(CLIENT_FOUND_ROWS)
-              ? found_rows
-              : updated_rows,
-          id, buff);
+    const ha_rows row_count =
+        thd->get_protocol()->has_client_capability(CLIENT_FOUND_ROWS)
+            ? found_rows
+            : updated_rows;
+    my_ok(thd, row_count, id, buff);
+    thd->updated_row_count += row_count;
     DBUG_PRINT("info", ("%ld records updated", (long)updated_rows));
   }
   thd->check_for_truncated_fields = CHECK_FIELD_IGNORE;
@@ -2619,11 +2610,12 @@ bool Query_result_update::send_eof(THD *thd) {
   snprintf(buff, sizeof(buff), ER_THD(thd, ER_UPDATE_INFO), (long)found_rows,
            (long)updated_rows,
            (long)thd->get_stmt_da()->current_statement_cond_count());
-  ::my_ok(thd,
-          thd->get_protocol()->has_client_capability(CLIENT_FOUND_ROWS)
-              ? found_rows
-              : updated_rows,
-          id, buff);
+  const ha_rows row_count =
+      thd->get_protocol()->has_client_capability(CLIENT_FOUND_ROWS)
+          ? found_rows
+          : updated_rows;
+  ::my_ok(thd, row_count, id, buff);
+  thd->updated_row_count += row_count;
   return false;
 }
 
