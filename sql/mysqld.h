@@ -30,9 +30,11 @@
 #include <sys/types.h>
 #include <time.h>
 #include <atomic>
+#include <utility>
 
 #include "lex_string.h"
 #include "m_ctype.h"
+#include "map_helpers.h"
 #include "my_command.h"
 #include "my_compiler.h"
 #include "my_getopt.h"
@@ -56,11 +58,13 @@
 #include "mysql/components/services/psi_thread_bits.h"
 #include "mysql/status_var.h"
 #include "mysql_com.h"  // SERVER_VERSION_LENGTH
+#include "sql/handler.h"
 #ifdef _WIN32
 #include "sql/nt_servc.h"
 #endif  // _WIN32
 #include "sql/sql_bitmap.h"
 #include "sql/sql_const.h"  // UUID_LENGTH
+#include "sql_connect.h"
 
 class Rpl_global_filter;
 class THD;
@@ -203,14 +207,15 @@ extern bool opt_enable_shared_memory;
 #endif
 extern bool opt_allow_suspicious_udfs;
 extern char *opt_secure_file_priv;
-extern bool opt_log_slow_admin_statements, opt_log_slow_slave_statements;
-extern ulong opt_log_slow_sp_statements;
-extern ulonglong opt_slow_query_log_use_global_control;
-extern ulong opt_slow_query_log_rate_type;
+extern bool opt_log_slow_slave_statements;
 extern bool sp_automatic_privileges, opt_noacl;
 extern bool opt_old_style_user_limits, trust_function_creators;
 extern bool check_proxy_users, mysql_native_password_proxy_users,
     sha256_password_proxy_users;
+extern bool opt_userstat, opt_thread_statistics;
+extern bool opt_log_slow_slave_statements;
+extern ulonglong opt_slow_query_log_use_global_control;
+extern ulong opt_slow_query_log_rate_type;
 extern char *shared_memory_base_name, *mysqld_unix_port;
 extern char *default_tz_name;
 extern Time_zone *default_tz;
@@ -322,6 +327,17 @@ extern SHOW_VAR status_vars[];
 extern struct System_variables max_system_variables;
 extern struct System_status_var global_status_var;
 extern struct rand_struct sql_rand;
+
+using user_stats_t = collation_unordered_map<std::string, USER_STATS>;
+using thread_stats_t = malloc_unordered_map<my_thread_id, THREAD_STATS>;
+using table_stats_t = collation_unordered_map<std::string, TABLE_STATS>;
+using index_stats_t = collation_unordered_map<std::string, ulonglong>;
+
+extern user_stats_t *global_user_stats;
+extern user_stats_t *global_client_stats;
+extern thread_stats_t *global_thread_stats;
+extern table_stats_t *global_table_stats;
+extern index_stats_t *global_index_stats;
 extern handlerton *myisam_hton;
 extern handlerton *heap_hton;
 extern handlerton *temptable_hton;
@@ -408,6 +424,9 @@ extern PSI_mutex_key key_LOCK_thd_query;
 extern PSI_mutex_key key_LOCK_cost_const;
 extern PSI_mutex_key key_LOCK_current_cond;
 extern PSI_mutex_key key_LOCK_temporary_tables;
+extern PSI_mutex_key key_LOCK_global_user_client_stats;
+extern PSI_mutex_key key_LOCK_global_table_stats;
+extern PSI_mutex_key key_LOCK_global_index_stats;
 extern PSI_mutex_key key_RELAYLOG_LOCK_commit;
 extern PSI_mutex_key key_RELAYLOG_LOCK_commit_queue;
 extern PSI_mutex_key key_RELAYLOG_LOCK_done;
@@ -671,6 +690,9 @@ extern mysql_mutex_t LOCK_mandatory_roles;
 extern mysql_mutex_t LOCK_password_history;
 extern mysql_mutex_t LOCK_password_reuse_interval;
 extern mysql_mutex_t LOCK_default_password_lifetime;
+extern mysql_mutex_t LOCK_global_user_client_stats;
+extern mysql_mutex_t LOCK_global_table_stats;
+extern mysql_mutex_t LOCK_global_index_stats;
 extern mysql_mutex_t LOCK_server_started;
 extern mysql_mutex_t LOCK_reset_gtid_table;
 extern mysql_mutex_t LOCK_compress_gtid_table;
@@ -706,6 +728,19 @@ inline MY_ATTRIBUTE((warn_unused_result)) query_id_t next_query_id() {
 }
 
 #define ER(X) please_use_ER_THD_or_ER_DEFAULT_instead(X)
+
+void init_global_user_stats(void);
+void init_global_table_stats(void);
+void init_global_index_stats(void);
+void init_global_client_stats(void);
+void init_global_thread_stats(void);
+void free_global_user_stats(void) noexcept;
+void free_global_table_stats(void) noexcept;
+void free_global_index_stats(void) noexcept;
+void free_global_client_stats(void) noexcept;
+void free_global_thread_stats(void) noexcept;
+
+void refresh_concurrent_conn_stats() noexcept;
 
 /* Accessor function for _connection_events_loop_aborted flag */
 inline MY_ATTRIBUTE(

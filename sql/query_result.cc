@@ -42,6 +42,7 @@
 #include "mysql/psi/mysql_file.h"
 #include "mysql/udf_registration_types.h"
 #include "mysql_com.h"
+#include "sql/debug_sync.h"
 #include "sql/derror.h"  // ER_THD
 #include "sql/item.h"
 #include "sql/item_func.h"
@@ -101,6 +102,8 @@ bool Query_result_send::send_data(List<Item> &items) {
   }
 
   thd->inc_sent_row_count(1);
+  thd->sent_row_count_2++;
+  DEBUG_SYNC(thd, "sent_row");
   DBUG_RETURN(protocol->end_row());
 }
 
@@ -621,6 +624,7 @@ err:
 
 void Query_result_export::cleanup() {
   thd->set_sent_row_count(row_count);
+  thd->sent_row_count_2 = row_count;
   Query_result_to_file::cleanup();
 }
 
