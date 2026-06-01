@@ -1723,6 +1723,12 @@ void close_thread_table(THD *thd, TABLE **table_ptr) {
   table->pos_in_table_list = nullptr;
 
   mysql_mutex_lock(&thd->LOCK_thd_data);
+
+  if (unlikely(opt_userstat && table->file)) {
+    table->file->update_global_table_stats();
+    table->file->update_global_index_stats();
+  }
+
   *table_ptr = table->next;
   mysql_mutex_unlock(&thd->LOCK_thd_data);
 
@@ -2389,6 +2395,11 @@ void close_temporary(THD *thd, TABLE *table, bool free_share,
   DBUG_TRACE;
   DBUG_PRINT("tmptable", ("closing table: '%s'.'%s'", table->s->db.str,
                           table->s->table_name.str));
+
+  if (unlikely(opt_userstat)) {
+    table->file->update_global_table_stats();
+    table->file->update_global_index_stats();
+  }
 
   free_io_cache(table);
   closefrm(table, false);

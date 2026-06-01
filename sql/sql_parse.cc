@@ -173,6 +173,7 @@
 #include "sql/thd_raii.h"
 #include "sql/transaction.h"  // trans_rollback_implicit
 #include "sql/transaction_info.h"
+#include "sql/userstat.h"
 #include "sql_string.h"
 #include "template_utils.h"
 #include "thr_lock.h"
@@ -575,6 +576,11 @@ void init_sql_command_flags(void) {
   sql_command_flags[SQLCOM_SHOW_TABLE_STATUS] =
       (CF_STATUS_COMMAND | CF_SHOW_TABLE_COMMAND | CF_HAS_RESULT_SET |
        CF_REEXECUTION_FRAGILE);
+  sql_command_flags[SQLCOM_SHOW_USER_STATS] = CF_STATUS_COMMAND;
+  sql_command_flags[SQLCOM_SHOW_TABLE_STATS] = CF_STATUS_COMMAND;
+  sql_command_flags[SQLCOM_SHOW_INDEX_STATS] = CF_STATUS_COMMAND;
+  sql_command_flags[SQLCOM_SHOW_CLIENT_STATS] = CF_STATUS_COMMAND;
+  sql_command_flags[SQLCOM_SHOW_THREAD_STATS] = CF_STATUS_COMMAND;
   /**
     ACL DDLs do not access data-dictionary tables. However, they still
     need to be marked to avoid autocommit. This is necessary because
@@ -961,6 +967,11 @@ void init_sql_command_flags(void) {
   sql_command_flags[SQLCOM_END] |= CF_ALLOW_PROTOCOL_PLUGIN;
   sql_command_flags[SQLCOM_CREATE_SRS] |= CF_ALLOW_PROTOCOL_PLUGIN;
   sql_command_flags[SQLCOM_DROP_SRS] |= CF_ALLOW_PROTOCOL_PLUGIN;
+  sql_command_flags[SQLCOM_SHOW_USER_STATS] |= CF_ALLOW_PROTOCOL_PLUGIN;
+  sql_command_flags[SQLCOM_SHOW_TABLE_STATS] |= CF_ALLOW_PROTOCOL_PLUGIN;
+  sql_command_flags[SQLCOM_SHOW_INDEX_STATS] |= CF_ALLOW_PROTOCOL_PLUGIN;
+  sql_command_flags[SQLCOM_SHOW_CLIENT_STATS] |= CF_ALLOW_PROTOCOL_PLUGIN;
+  sql_command_flags[SQLCOM_SHOW_THREAD_STATS] |= CF_ALLOW_PROTOCOL_PLUGIN;
 
   /*
     Mark DDL statements which require that auto-commit mode to be temporarily
@@ -1224,6 +1235,12 @@ bool do_command(THD *thd) {
   */
   thd->clear_error();  // Clear error message
   thd->get_stmt_da()->reset_diagnostics_area();
+  thd->updated_row_count = 0;
+  thd->busy_time = 0;
+  thd->cpu_time = 0;
+  thd->bytes_received = 0;
+  thd->bytes_sent = 0;
+  thd->binlog_bytes_written = 0;
 
   /*
     This thread will do a blocking read from the client which
@@ -1455,7 +1472,7 @@ static void check_secondary_engine_statement(THD *thd,
   thd->variables.option_bits |= OPTION_LOG_OFF;
 
   // Restart the statement.
-  dispatch_sql_command(thd, parser_state);
+  dispatch_sql_command(thd, parser_state, true);
 
   // Restore the original option bits.
   thd->variables.option_bits = saved_option_bits;
@@ -1604,6 +1621,12 @@ bool dispatch_command(THD *thd, const COM_DATA *com_data,
 
   if (!(server_command_flags[command] & CF_SKIP_QUESTIONS))
     thd->status_var.questions++;
+
+  /* Declare userstat variables and start timer */
+  double start_busy_usecs = 0.0;
+  double start_cpu_nsecs = 0.0;
+  if (unlikely(opt_userstat))
+    userstat_start_timer(&start_busy_usecs, &start_cpu_nsecs);
 
   /**
     Clear the set of flags that are expected to be cleared at the
@@ -1839,7 +1862,7 @@ bool dispatch_command(THD *thd, const COM_DATA *com_data,
       copy_bind_parameter_values(thd, com_data->com_query.parameters,
                                  com_data->com_query.parameter_count);
 
-      dispatch_sql_command(thd, &parser_state);
+      dispatch_sql_command(thd, &parser_state, false);
 
       // Check if the statement failed and needs to be restarted in
       // another storage engine.
@@ -1924,7 +1947,7 @@ bool dispatch_command(THD *thd, const COM_DATA *com_data,
         thd->set_secondary_engine_optimization(
             Secondary_engine_optimization::PRIMARY_TENTATIVELY);
         /* TODO: set thd->lex->sql_command to SQLCOM_END here */
-        dispatch_sql_command(thd, &parser_state);
+        dispatch_sql_command(thd, &parser_state, false);
 
         check_secondary_engine_statement(thd, &parser_state,
                                          beginning_of_next_stmt, length);
@@ -2221,6 +2244,15 @@ done:
   assert(thd->open_tables == nullptr ||
          (thd->locked_tables_mode == LTM_LOCK_TABLES));
 
+  /* Update user statistics only if at least one timer was initialized */
+  if (unlikely(start_busy_usecs > 0.0 || start_cpu_nsecs > 0.0)) {
+    userstat_finish_timer(start_busy_usecs, start_cpu_nsecs, &thd->busy_time,
+                          &thd->cpu_time);
+    /* Updates THD stats and the global user stats. */
+    thd->update_stats(true);
+    update_global_user_stats(thd, true, my_getsystime());
+  }
+
   /* Finalize server status flags after executing a command. */
   thd->update_slow_query_status();
   if (thd->killed) thd->send_kill_message();
@@ -2392,6 +2424,12 @@ int prepare_schema_table(THD *thd, LEX *lex, Table_ident *table_ident,
       thd->profiling->discard_current_query();
 #endif
       break;
+    case SCH_USER_STATS:
+    case SCH_CLIENT_STATS:
+    case SCH_THREAD_STATS:
+      if (check_global_access(thd, SUPER_ACL | PROCESS_ACL)) return 1;
+    case SCH_TABLE_STATS:
+    case SCH_INDEX_STATS:
     case SCH_OPTIMIZER_TRACE:
     case SCH_OPEN_TABLES:
     case SCH_ENGINES:
@@ -2506,6 +2544,7 @@ static bool sp_process_definer(THD *thd) {
                        thd->security_context()->priv_host().str))) {
       if (!(sctx->check_access(SUPER_ACL) ||
             sctx->has_global_grant(STRING_WITH_LEN("SET_USER_ID")).first)) {
+        thd->diff_access_denied_errors++;
         my_error(ER_SPECIFIC_ACCESS_DENIED_ERROR, MYF(0),
                  "SUPER or SET_USER_ID");
         return true;
@@ -4877,7 +4916,8 @@ void THD::reset_for_next_command() {
   @param parser_state Parser state.
 */
 
-void dispatch_sql_command(THD *thd, Parser_state *parser_state) {
+void dispatch_sql_command(THD *thd, Parser_state *parser_state,
+                          bool update_userstat) {
   DBUG_TRACE;
   DBUG_PRINT("dispatch_sql_command", ("query: '%s'", thd->query().str));
 
@@ -4885,6 +4925,12 @@ void dispatch_sql_command(THD *thd, Parser_state *parser_state) {
 
   mysql_reset_thd_for_next_command(thd);
   lex_start(thd);
+
+  /* Declare userstat variables and start timer */
+  double start_busy_usecs = 0.0;
+  double start_cpu_nsecs = 0.0;
+  if (unlikely(opt_userstat && update_userstat))
+    userstat_start_timer(&start_busy_usecs, &start_cpu_nsecs);
 
   thd->m_parser_state = parser_state;
   invoke_pre_parse_rewrite_plugins(thd);
@@ -5050,6 +5096,16 @@ void dispatch_sql_command(THD *thd, Parser_state *parser_state) {
   thd->end_statement();
   thd->cleanup_after_query();
   assert(thd->change_list.is_empty());
+
+  /* Update user statistics only if at least one timer was initialized */
+  if (unlikely(update_userstat &&
+               (start_busy_usecs > 0.0 || start_cpu_nsecs > 0.0))) {
+    userstat_finish_timer(start_busy_usecs, start_cpu_nsecs, &thd->busy_time,
+                          &thd->cpu_time);
+    /* Updates THD stats and the global user stats. */
+    thd->update_stats(true);
+    update_global_user_stats(thd, true, my_getsystime());
+  }
 
   DEBUG_SYNC(thd, "query_rewritten");
 }
