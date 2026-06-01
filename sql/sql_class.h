@@ -1413,7 +1413,7 @@ class THD : public MDL_context_owner,
   uint16 peer_port;
   struct timeval start_time;
   struct timeval user_time;
-  ulonglong start_utime, utime_after_lock;
+  ulonglong start_utime, utime_after_lock, utime_after_query;
 
   /**
     Type of lock to be used for all DML statements, except INSERT, in cases
