@@ -1087,6 +1087,8 @@ MYSQL_PLUGIN_IMPORT uint opt_debug_sync_timeout = 0;
 bool opt_old_style_user_limits = 0, trust_function_creators = 0;
 bool check_proxy_users = 0, mysql_native_password_proxy_users = 0,
      sha256_password_proxy_users = 0;
+bool opt_userstat = false;
+bool opt_thread_statistics = false;
 /*
   True if there is at least one per-hour limit for some user, so we should
   check them before each query (and possibly reset counters when hour is
@@ -1345,6 +1347,8 @@ mysql_mutex_t LOCK_status, LOCK_uuid_generator, LOCK_crypt,
     LOCK_global_system_variables, LOCK_user_conn, LOCK_error_messages;
 mysql_mutex_t LOCK_sql_rand;
 
+mysql_mutex_t LOCK_global_user_client_stats, LOCK_global_table_stats,
+    LOCK_global_index_stats;
 /**
   The below lock protects access to two global server variables:
   max_prepared_stmt_count and prepared_stmt_count. These variables
@@ -2282,6 +2286,11 @@ static void clean_up(bool print_message) {
   free_tmpdir(&mysql_tmpdir_list);
   my_free(opt_bin_logname);
   free_max_user_conn();
+  free_global_user_stats();
+  free_global_client_stats();
+  free_global_thread_stats();
+  free_global_table_stats();
+  free_global_index_stats();
   end_slave_list();
   delete binlog_filter;
   rpl_channel_filters.clean_up();
@@ -2399,11 +2408,15 @@ static void clean_up_mutexes() {
   mysql_mutex_destroy(&LOCK_keyring_operations);
   mysql_mutex_destroy(&LOCK_tls_ctx_options);
   mysql_mutex_destroy(&LOCK_rotate_binlog_master_key);
+  mysql_mutex_destroy(&LOCK_global_user_client_stats);
+  mysql_mutex_destroy(&LOCK_global_table_stats);
+  mysql_mutex_destroy(&LOCK_global_index_stats);
 }
 
 /****************************************************************************
 ** Init IP and UNIX socket
 ****************************************************************************/
+
 
 static void set_ports() {
   char *env;
@@ -4803,6 +4816,14 @@ static int init_thread_environment() {
   mysql_mutex_init(key_LOCK_collect_instance_log, &LOCK_collect_instance_log,
                    MY_MUTEX_INIT_FAST);
   mysql_cond_init(key_COND_compress_gtid_table, &COND_compress_gtid_table);
+
+  mysql_mutex_init(key_LOCK_global_user_client_stats,
+                   &LOCK_global_user_client_stats, MY_MUTEX_INIT_FAST);
+  mysql_mutex_init(key_LOCK_global_table_stats, &LOCK_global_table_stats,
+                   MY_MUTEX_INIT_FAST);
+  mysql_mutex_init(key_LOCK_global_index_stats, &LOCK_global_index_stats,
+                   MY_MUTEX_INIT_FAST);
+
   Events::init_mutexes();
 #if defined(_WIN32)
   mysql_mutex_init(key_LOCK_handler_count, &LOCK_handler_count,
@@ -5113,11 +5134,25 @@ static void setup_error_log() {
   help information. Since the implementation of plugin server
   variables the help output is now written much later.
 
-  log_error_dest can be:
-  disabled_my_option     --log-error was not used or --log-error=
-  ""                     --log-error without arguments (no '=')
-  filename               --log-error=filename
-*/
+  randominit(&sql_rand, (ulong)server_start_time, (ulong)server_start_time / 2);
+  setup_fpu();
+  init_slave_list();
+
+  init_global_table_stats();
+  init_global_index_stats();
+
+  /* Setup logs */
+
+  /*
+    Enable old-fashioned error log, except when the user has requested
+    help information. Since the implementation of plugin server
+    variables the help output is now written much later.
+
+    log_error_dest can be:
+    disabled_my_option     --log-error was not used or --log-error=
+    ""                     --log-error without arguments (no '=')
+    filename               --log-error=filename
+  */
 #ifdef _WIN32
   /*
     Enable the error log file only if console option is not specified
@@ -5995,6 +6030,9 @@ static int init_server_components() {
 
   init_max_user_conn();
 
+  init_global_user_stats();
+  init_global_client_stats();
+  init_global_thread_stats();
   return 0;
 }
 
@@ -10537,6 +10575,9 @@ PSI_mutex_key key_LOCK_thd_query;
 PSI_mutex_key key_LOCK_cost_const;
 PSI_mutex_key key_LOCK_current_cond;
 PSI_mutex_key key_LOCK_temporary_tables;
+PSI_mutex_key key_LOCK_global_user_client_stats;
+PSI_mutex_key key_LOCK_global_table_stats;
+PSI_mutex_key key_LOCK_global_index_stats;
 PSI_mutex_key key_RELAYLOG_LOCK_commit;
 PSI_mutex_key key_RELAYLOG_LOCK_commit_queue;
 PSI_mutex_key key_RELAYLOG_LOCK_done;
@@ -10587,6 +10628,12 @@ static PSI_mutex_info all_server_mutexes[]=
   { &key_LOCK_global_system_variables, "LOCK_global_system_variables", PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME},
 #if defined(_WIN32)
   { &key_LOCK_handler_count, "LOCK_handler_count", PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME},
+  { &key_LOCK_global_user_client_stats,
+    "LOCK_global_user_client_stats", PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME},
+  { &key_LOCK_global_table_stats,
+    "LOCK_global_table_stats", PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME},
+  { &key_LOCK_global_index_stats,
+    "LOCK_global_index_stats", PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME},
 #endif
   { &key_LOCK_manager, "LOCK_manager", PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME},
   { &key_LOCK_prepared_stmt_count, "LOCK_prepared_stmt_count", PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME},
