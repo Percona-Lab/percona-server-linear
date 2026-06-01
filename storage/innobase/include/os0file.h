@@ -209,9 +209,9 @@ enum os_file_create_t {
 
   OS_FILE_ON_ERROR_NO_EXIT = 128, /*!< do not exit on unknown errors */
   OS_FILE_ON_ERROR_SILENT = 256   /*!< don't print diagnostic messages to
-                                  the log unless it is a fatal error,
-                                  this flag is only used if
-                                  ON_ERROR_NO_EXIT is set */
+                            the log unless it is a fatal error,
+                            this flag is only used if
+                            ON_ERROR_NO_EXIT is set */
 };
 
 static const ulint OS_FILE_READ_ONLY = 333;
@@ -813,6 +813,7 @@ MY_COMPILER_DIAGNOSTIC_POP()
 bool os_file_set_nocache(int fd, const char *file_name,
                          const char *operation_name,
                          bool on_error_silent = false);
+
 /** NOTE! Use the corresponding macro os_file_create(), not directly
 this function!
 Opens an existing file or creates a new.
