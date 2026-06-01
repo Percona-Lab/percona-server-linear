@@ -3313,8 +3313,9 @@ pfs_os_file_t os_file_create_func(const char *name, ulint create_mode,
 
   } while (retry);
 
-  /* We disable OS caching (O_DIRECT) only on data files. For clone we
-  need to set O_DIRECT even for read_only mode. */
+  /* Do fsync() on log and parallel doublewrite files
+  when setting O_DIRECT fails.
+  See log_io_complete() and buf_dblwr_flush_buffered_writes() */
 
   if ((!read_only || type == OS_CLONE_DATA_FILE) && *success &&
       (type == OS_DATA_FILE || type == OS_CLONE_DATA_FILE ||
@@ -5543,8 +5544,9 @@ static bool os_file_handle_error_no_exit(const char *name,
 @param[in]	fd		file descriptor to alter
 @param[in]	file_name	file name, used in the diagnostic message
 @param[in]	operation_name	"open" or "create"; used in the diagnostic
-                                message */
-void os_file_set_nocache(int fd MY_ATTRIBUTE((unused)),
+                                message
+@return true if operation is success and false */
+bool os_file_set_nocache(int fd MY_ATTRIBUTE((unused)),
                          const char *file_name MY_ATTRIBUTE((unused)),
                          const char *operation_name MY_ATTRIBUTE((unused))) {
 /* some versions of Solaris may not have DIRECTIO_ON */
@@ -5557,6 +5559,7 @@ void os_file_set_nocache(int fd MY_ATTRIBUTE((unused)),
         << operation_name << ": " << strerror(errno_save)
         << ","
            " continuing anyway.";
+    return false;
   }
 #elif defined(O_DIRECT)
   if (fcntl(fd, F_SETFL, O_DIRECT) == -1) {
@@ -5586,8 +5589,10 @@ void os_file_set_nocache(int fd MY_ATTRIBUTE((unused)),
                               << "; " << operation_name << " : "
                               << strerror(errno_save) << ", continuing anyway.";
     }
+    return false;
   }
 #endif /* defined(UNIV_SOLARIS) && defined(DIRECTIO_ON) */
+  return true;
 }
 
 bool os_file_set_size_fast(const char *name, pfs_os_file_t pfs_file,
