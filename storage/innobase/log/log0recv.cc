@@ -3656,6 +3656,11 @@ dberr_t recv_recovery_from_checkpoint_start(log_t &log, lsn_t flush_lsn) {
       version is from a clean shutdown. */
       err = recv_log_recover_pre_8_0_4(log, checkpoint_no, checkpoint_lsn);
 
+      if (err == DB_SUCCESS) {
+        buf_parallel_dblwr_finish_recovery();
+        buf_parallel_dblwr_delete();
+      }
+
       return (err);
 
     default:
@@ -3696,6 +3701,11 @@ dberr_t recv_recovery_from_checkpoint_start(log_t &log, lsn_t flush_lsn) {
   lsn_t recovered_lsn;
 
   recovered_lsn = recv_sys->recovered_lsn;
+
+  if (!recv_needed_recovery) {
+    buf_parallel_dblwr_finish_recovery();
+    buf_parallel_dblwr_delete();
+  }
 
   ut_a(recv_needed_recovery || checkpoint_lsn == recovered_lsn);
 

@@ -301,6 +301,10 @@ and/or load it during startup. */
 extern bool srv_buffer_pool_dump_at_shutdown;
 extern bool srv_buffer_pool_load_at_startup;
 
+/** Path to the parallel doublewrite buffer */
+#define SRV_PARALLEL_DOUBLEWRITE_PATH_DEFAULT "xb_doublewrite"
+extern char *srv_parallel_doublewrite_path;
+
 /* Whether to disable file system cache if it is defined */
 extern bool srv_disable_sort_file_cache;
 

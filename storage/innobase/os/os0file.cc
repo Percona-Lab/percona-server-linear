@@ -288,6 +288,7 @@ mysql_pfs_key_t innodb_temp_file_key;
 mysql_pfs_key_t innodb_arch_file_key;
 mysql_pfs_key_t innodb_clone_file_key;
 mysql_pfs_key_t innodb_bmp_file_key;
+mysql_pfs_key_t innodb_parallel_dblwrite_file_key;
 #endif /* UNIV_PFS_IO */
 
 #endif /* !UNIV_HOTBACKUP */
@@ -2998,6 +2999,14 @@ os_file_t os_file_create_simple_func(const char *name, ulint create_mode,
   ut_a(!(create_mode & OS_FILE_ON_ERROR_SILENT));
   ut_a(!(create_mode & OS_FILE_ON_ERROR_NO_EXIT));
 
+  int create_o_sync;
+  if (create_mode & OS_FILE_O_SYNC) {
+    create_o_sync = O_SYNC;
+    create_mode &= ~(static_cast<ulint>(OS_FILE_O_SYNC));
+  } else {
+    create_o_sync = 0;
+  }
+
   if (create_mode == OS_FILE_OPEN) {
     if (access_type == OS_FILE_READ_ONLY) {
       create_flag = O_RDONLY;
@@ -3041,7 +3050,7 @@ os_file_t os_file_create_simple_func(const char *name, ulint create_mode,
   bool retry;
 
   do {
-    file = ::open(name, create_flag, os_innodb_umask);
+    file = ::open(name, create_flag | create_o_sync, os_innodb_umask);
 
     if (file == -1) {
       *success = false;
@@ -5437,10 +5446,13 @@ static bool os_file_handle_error_no_exit(const char *name,
 @param[in]	file_name	file name, used in the diagnostic message
 @param[in]	operation_name	"open" or "create"; used in the diagnostic
                                 message
+@param[in]	failure_warning	if true (the default), the failure to disable
+caching is diagnosed at warning severity, and at note severity otherwise
 @return true if operation is success and false */
 bool os_file_set_nocache(int fd MY_ATTRIBUTE((unused)),
                          const char *file_name MY_ATTRIBUTE((unused)),
-                         const char *operation_name MY_ATTRIBUTE((unused))) {
+                         const char *operation_name MY_ATTRIBUTE((unused)),
+                         bool failure_warning MY_ATTRIBUTE((unused))) {
 /* some versions of Solaris may not have DIRECTIO_ON */
 #if defined(UNIV_SOLARIS) && defined(DIRECTIO_ON)
   if (directio(fd, DIRECTIO_ON) == -1) {
@@ -5461,7 +5473,7 @@ bool os_file_set_nocache(int fd MY_ATTRIBUTE((unused)),
       if (!warning_message_printed) {
         warning_message_printed = true;
 #ifdef UNIV_LINUX
-        ib::warn(ER_IB_MSG_824)
+        ib::warn_or_info(ER_IB_MSG_824, failure_warning)
             << "Failed to set O_DIRECT on file" << file_name << "; "
             << operation_name << ": " << strerror(errno_save)
             << ", "
@@ -5477,9 +5489,10 @@ bool os_file_set_nocache(int fd MY_ATTRIBUTE((unused)),
 #ifndef UNIV_LINUX
     short_warning:
 #endif
-      ib::warn(ER_IB_MSG_825) << "Failed to set O_DIRECT on file " << file_name
-                              << "; " << operation_name << " : "
-                              << strerror(errno_save) << ", continuing anyway.";
+      ib::warn_or_info(ER_IB_MSG_825, failure_warning)
+          << "Failed to set O_DIRECT on file " << file_name << "; "
+          << operation_name << " : " << strerror(errno_save)
+          << ", continuing anyway.";
     }
     return false;
   }
