@@ -13285,6 +13285,12 @@ ER_AUTOPILOT_OLTP_ADVISOR_ERROR
   eng "%s"
 
 #
+# End of MySQL 9.x error messages intended to be written to the server error log.
+#
+
+
+
+#
 # Start of Percona Server 8.0 server error log messages
 #
 start-error-number 48000
@@ -13379,12 +13385,6 @@ ER_IB_MSG_UNDO_TRUNCATE_DELAY_BY_LTFB
 ER_XPLUGIN_SSL_RELOAD_REGISTER_FAILED
   eng "X plugin failed to register SSL reload callback. ALTER INSTANCE RELOAD TLS will have no effect on the plugin."
 
-ER_IB_MSG_DEPRECATED_INNODB_PARALLEL_DOUBLEWRITE_PATH
-  eng "Setting Percona-specific INNODB_PARALLEL_DOUBLEWRITE_PATH is deprecated and has no effect. Use INNODB_DOUBLEWRITE_DIR instead."
-
-ER_IB_MSG_DEPRECATED_INNODB_PARALLEL_DBLWR_ENCRYPT
-  eng "Setting Percona-specific INNODB_PARALLEL_DBLWR_ENCRYPT is deprecated and has no effect."
-
 ER_KEYRING_COMPONENT_NO_CONFIG
   eng "Keyring configuration doesn't exists: %s"
 
@@ -13420,6 +13420,9 @@ ER_CONN_CONTROL_FAILED_CONN_THRESHOLD_REACHED_WITH_WARN
 
 ER_CONN_CONTROL_DELAYED_CONN_STATS
   eng "Delayed %llu connection attempts during last %llu seconds"
+
+ER_LOG_NAME_NOT_MATCHING_SEC_LOG_PATH
+  eng "The --secure-file-path is configured, %s must be set accordingly."
 
 ER_AUDIT_INIT_STARTED
   eng "Initializing Audit Event Filter..."
@@ -13640,6 +13643,9 @@ ER_AUDIT_UDF_SET_FILTER_FAILURE
 ER_AUDIT_REPLACE_FIELD_UNEXPECTED_EVENT_TYPE
   eng "Unexpected event type for replace_field action"
 
+ER_SSL_FIPS_MODE_ENABLED
+  eng "A FIPS-approved version of the OpenSSL cryptographic library has been detected in the operating system with a properly configured FIPS module available for loading. Percona Server for MySQL will load this module and run in FIPS mode."
+
 ER_AUDIT_PARSE_CONDITION_TYPE_UNEXPECTED_COND_TYPE
   eng "Wrong JSON filter '%s' format, the 'log' field must be of bool or object type"
 
@@ -13649,6 +13655,7 @@ ER_AUDIT_SYS_VAR_INVALID_FILE_DIRECTORY
 #
 # End of Percona Server 8.0 server error log messages
 #
+
 
 ################################################################################
 # Error numbers 50000 to 51999 are reserved. Please do not use them for
