@@ -829,8 +829,9 @@ null-terminated string
 @param[in]      fd              file descriptor to alter
 @param[in]      file_name       file name, used in the diagnostic message
 @param[in]      operation_name  "open" or "create"; used in the diagnostic
-                                message */
-void os_file_set_nocache(int fd, const char *file_name,
+                                message
+@return true if operation is success and false */
+bool os_file_set_nocache(int fd, const char *file_name,
                          const char *operation_name);
 
 /** NOTE! Use the corresponding macro os_file_create(), not directly
