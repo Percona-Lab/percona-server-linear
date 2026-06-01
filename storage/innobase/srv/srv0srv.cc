@@ -64,6 +64,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "ibuf0ibuf.h"
 #ifndef UNIV_HOTBACKUP
 #include "lock0lock.h"
+#include "log0online.h"
 #include "log0recv.h"
 #include "mem0mem.h"
 #include "my_compiler.h"
@@ -743,11 +744,18 @@ and/or load it during startup. */
 bool srv_buffer_pool_dump_at_shutdown = true;
 bool srv_buffer_pool_load_at_startup = true;
 
+/** Path to the parallel doublewrite buffer */
+char *srv_parallel_doublewrite_path;
+
 /** Slot index in the srv_sys->sys_threads array for the purge thread. */
 static const ulint SRV_PURGE_SLOT = 1;
 
 /** Slot index in the srv_sys->sys_threads array for the master thread. */
 static const ulint SRV_MASTER_SLOT = 0;
+
+os_event_t srv_checkpoint_completed_event;
+
+os_event_t srv_redo_log_tracked_event;
 
 #ifdef HAVE_PSI_STAGE_INTERFACE
 /** Performance schema stage event for monitoring ALTER TABLE progress
@@ -1095,6 +1103,11 @@ static void srv_init(void) {
     buf_flush_event = os_event_create("buf_flush_event");
 
     UT_LIST_INIT(srv_sys->tasks, &que_thr_t::queue);
+
+    srv_checkpoint_completed_event = os_event_create(0);
+
+    srv_redo_log_tracked_event = os_event_create(0);
+    os_event_set(srv_redo_log_tracked_event);
   }
 
   srv_buf_resize_event = os_event_create(0);
@@ -1142,6 +1155,8 @@ void srv_free(void) {
     os_event_destroy(srv_monitor_event);
     os_event_destroy(srv_buf_dump_event);
     os_event_destroy(buf_flush_event);
+    os_event_destroy(srv_checkpoint_completed_event);
+    os_event_destroy(srv_redo_log_tracked_event);
   }
 
   os_event_destroy(srv_buf_resize_event);
@@ -1831,6 +1846,36 @@ bool srv_master_thread_active() {
   srv_sys_mutex_exit();
 
   return (active);
+}
+
+/** A thread which follows the redo log and outputs the changed page bitmap. */
+void srv_redo_log_follow_thread() {
+  ut_ad(!srv_read_only_mode);
+
+  my_thread_init();
+  srv_redo_log_thread_started = true;
+
+  do {
+    os_event_wait(srv_checkpoint_completed_event);
+    os_event_reset(srv_checkpoint_completed_event);
+
+    if (srv_track_changed_pages &&
+        srv_shutdown_state < SRV_SHUTDOWN_LAST_PHASE) {
+      if (!log_online_follow_redo_log()) {
+        /* TODO: sync with I_S log tracking status? */
+        ib::error() << "Log tracking bitmap write "
+                       "failed, stopping log tracking thread!";
+        break;
+      }
+      os_event_set(srv_redo_log_tracked_event);
+    }
+
+  } while (srv_shutdown_state < SRV_SHUTDOWN_LAST_PHASE);
+
+  log_online_read_shutdown();
+  os_event_set(srv_redo_log_tracked_event);
+
+  my_thread_end();
 }
 
 /** Tells the InnoDB server that there has been activity in the database
