@@ -1248,6 +1248,10 @@ typedef int (*alter_tablespace_t)(handlerton *hton, THD *thd,
                                   const dd::Tablespace *old_ts_def,
                                   dd::Tablespace *new_ts_def);
 
+using flush_changed_page_bitmaps_t = bool (*)(void);
+
+using purge_changed_page_bitmaps_t = bool (*)(ulonglong lsn);
+
 /**
   Get the tablespace data from SE and insert it into Data dictionary
 
@@ -1888,6 +1892,8 @@ struct handlerton {
   is_valid_tablespace_name_t is_valid_tablespace_name;
   get_tablespace_t get_tablespace;
   alter_tablespace_t alter_tablespace;
+  flush_changed_page_bitmaps_t flush_changed_page_bitmaps;
+  purge_changed_page_bitmaps_t purge_changed_page_bitmaps;
   upgrade_tablespace_t upgrade_tablespace;
   upgrade_space_version_t upgrade_space_version;
   get_tablespace_type_t get_tablespace_type;
