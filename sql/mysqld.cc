@@ -6815,6 +6815,18 @@ static int init_server_components() {
           "If relay logs are in use, they will be encrypted.");
   }
 
+  if (total_ha_2pc > 1 || (1 == total_ha_2pc && opt_bin_log)) {
+    if (opt_bin_log)
+      tc_log = &mysql_bin_log;
+    else
+      tc_log = &tc_log_mmap;
+  }
+
+  if (Recovered_xa_transactions::init()) {
+    LogErr(ERROR_LEVEL, ER_OOM);
+    unireg_abort(MYSQLD_ABORT_EXIT);
+  }
+
   if (tc_log->open(opt_bin_log ? opt_bin_logname : opt_tc_log_file)) {
     LogErr(ERROR_LEVEL, ER_CANT_INIT_TC_LOG);
     unireg_abort(MYSQLD_ABORT_EXIT);
