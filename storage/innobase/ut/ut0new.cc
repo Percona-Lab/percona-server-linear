@@ -65,6 +65,7 @@ PSI_memory_key	mem_key_log_online_read_buf;
 PSI_memory_key	mem_key_log_online_iterator_files;
 PSI_memory_key	mem_key_log_online_iterator_page;
 PSI_memory_key	mem_key_trx_distinct_page_access_hash;
+PSI_memory_key mem_key_parallel_doublewrite;
 
 #ifdef UNIV_PFS_MEMORY
 
@@ -94,6 +95,8 @@ static PSI_memory_info pfs_info[] = {
     {&mem_key_dict_stats_n_diff_on_level, "dict_stats_n_diff_on_level", 0, 0,
      PSI_DOCUMENT_ME},
     {&mem_key_other, "other", 0, 0, PSI_DOCUMENT_ME},
+    {&mem_key_parallel_doublewrite, "parallel_doublewrite", 0, 0,
+     PSI_DOCUMENT_ME},
     {&mem_key_partitioning, "partitioning", 0, 0, PSI_DOCUMENT_ME},
     {&mem_key_row_log_buf, "row_log_buf", 0, 0, PSI_DOCUMENT_ME},
     {&mem_key_row_merge_sort, "row_merge_sort", 0, 0, PSI_DOCUMENT_ME},

@@ -174,10 +174,11 @@ enum os_file_create_t {
   that the above values stay below 128. */
 
   OS_FILE_ON_ERROR_NO_EXIT = 128, /*!< do not exit on unknown errors */
-  OS_FILE_ON_ERROR_SILENT = 256   /*!< don't print diagnostic messages to
-                                  the log unless it is a fatal error,
-                                  this flag is only used if
-                                  ON_ERROR_NO_EXIT is set */
+  OS_FILE_ON_ERROR_SILENT = 256,  /*!< don't print diagnostic messages to
+                            the log unless it is a fatal error,
+                            this flag is only used if
+                            ON_ERROR_NO_EXIT is set */
+  OS_FILE_O_SYNC = 512            /*!< Open file with O_SYNC */
 };
 
 /** Options for os_file_advise_func @{ */
@@ -953,9 +954,26 @@ pfs_os_file_t os_file_create_simple_no_error_handling_func(
 @param[in]	file_name	file name, used in the diagnostic message
 @param[in]	operation_name	"open" or "create"; used in the diagnostic
                                 message
+@param[in]	failure_warning	if true (the default), the failure to disable
+caching is diagnosed at warning severity, and at note severity otherwise
 @return true if operation is success and false */
 bool os_file_set_nocache(int fd, const char *file_name,
-                         const char *operation_name);
+                         const char *operation_name,
+                         bool failure_warning = true);
+
+/** Tries to disable OS caching on an opened file file.
+@param[in]	file		file to alter
+@param[in]	file_name	file name, used in the diagnostic message
+@param[in]	name		"open" or "create"; used in the diagnostic
+message
+@param[in]	failure_warning	if true (the default), the failure to disable
+caching is diagnosed at warning severity, and at note severity otherwise
+@return true if operation is success and false */
+UNIV_INLINE
+bool os_file_set_nocache(pfs_os_file_t file, const char *file_name,
+                         const char *operation_name,
+                         bool failure_warning = true);
+
 
 /** NOTE! Use the corresponding macro os_file_create(), not directly
 this function!
@@ -990,6 +1008,8 @@ bool os_file_delete_func(const char *name);
 @return true if success */
 bool os_file_delete_if_exists_func(const char *name, bool *exist);
 
+extern mysql_pfs_key_t innodb_bmp_file_key;
+extern mysql_pfs_key_t innodb_parallel_dblwrite_file_key;
 /** NOTE! Use the corresponding macro os_file_rename(), not directly
 this function!
 Renames a file (can also move it to another directory). It is safest that the
