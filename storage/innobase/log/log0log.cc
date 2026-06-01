@@ -258,9 +258,9 @@ log_buffer_extend(
 	srv_log_buffer_size = len / UNIV_PAGE_SIZE + 1;
 	ut_free(log_sys->buf_ptr);
 	log_sys->buf_ptr = static_cast<byte*>(
-		ut_zalloc_nokey(LOG_BUFFER_SIZE + OS_FILE_LOG_BLOCK_SIZE));
+		ut_zalloc_nokey(LOG_BUFFER_SIZE + srv_log_write_ahead_size));
 	log_sys->buf = static_cast<byte*>(
-		ut_align(log_sys->buf_ptr, OS_FILE_LOG_BLOCK_SIZE));
+		ut_align(log_sys->buf_ptr, srv_log_write_ahead_size));
 	log_sys->buf_size = LOG_BUFFER_SIZE;
 	log_sys->max_buf_free = log_sys->buf_size / LOG_BUF_FLUSH_RATIO
 		- LOG_BUF_FLUSH_MARGIN;
@@ -857,10 +857,10 @@ log_init(void)
 	ut_a(LOG_BUFFER_SIZE >= 4 * UNIV_PAGE_SIZE);
 
 	log_sys->buf_ptr = static_cast<byte*>(
-		ut_zalloc_nokey(LOG_BUFFER_SIZE + OS_FILE_LOG_BLOCK_SIZE));
+		ut_zalloc_nokey(LOG_BUFFER_SIZE + srv_log_write_ahead_size));
 
 	log_sys->buf = static_cast<byte*>(
-		ut_align(log_sys->buf_ptr, OS_FILE_LOG_BLOCK_SIZE));
+		ut_align(log_sys->buf_ptr, srv_log_write_ahead_size));
 
 	log_sys->buf_size = LOG_BUFFER_SIZE;
 
@@ -888,10 +888,10 @@ log_init(void)
 		SYNC_NO_ORDER_CHECK);
 
 	log_sys->checkpoint_buf_ptr = static_cast<byte*>(
-		ut_zalloc_nokey(2 * OS_FILE_LOG_BLOCK_SIZE));
+		ut_zalloc_nokey(OS_FILE_LOG_BLOCK_SIZE + srv_log_write_ahead_size));
 
 	log_sys->checkpoint_buf = static_cast<byte*>(
-		ut_align(log_sys->checkpoint_buf_ptr, OS_FILE_LOG_BLOCK_SIZE));
+		ut_align(log_sys->checkpoint_buf_ptr, srv_log_write_ahead_size));
 
 	/*----------------------------*/
 
@@ -942,18 +942,18 @@ log_group_init(
 	for (i = 0; i < n_files; i++) {
 		group->file_header_bufs_ptr[i] = static_cast<byte*>(
 			ut_zalloc_nokey(LOG_FILE_HDR_SIZE
-					+ OS_FILE_LOG_BLOCK_SIZE));
+					+ srv_log_write_ahead_size));
 
 		group->file_header_bufs[i] = static_cast<byte*>(
 			ut_align(group->file_header_bufs_ptr[i],
-				 OS_FILE_LOG_BLOCK_SIZE));
+				 srv_log_write_ahead_size));
 	}
 
 	group->checkpoint_buf_ptr = static_cast<byte*>(
-		ut_zalloc_nokey(2 * OS_FILE_LOG_BLOCK_SIZE));
+		ut_zalloc_nokey(OS_FILE_LOG_BLOCK_SIZE + srv_log_write_ahead_size));
 
 	group->checkpoint_buf = static_cast<byte*>(
-		ut_align(group->checkpoint_buf_ptr,OS_FILE_LOG_BLOCK_SIZE));
+		ut_align(group->checkpoint_buf_ptr,srv_log_write_ahead_size));
 
 	UT_LIST_ADD_LAST(log_sys->log_groups, group);
 
@@ -1010,12 +1010,14 @@ log_io_complete(
 		switch (srv_unix_file_flush_method) {
 		case SRV_UNIX_O_DSYNC:
 		case SRV_UNIX_NOSYNC:
+		case SRV_UNIX_ALL_O_DIRECT:
 			break;
 		case SRV_UNIX_FSYNC:
 		case SRV_UNIX_LITTLESYNC:
 		case SRV_UNIX_O_DIRECT:
 		case SRV_UNIX_O_DIRECT_NO_FSYNC:
-			fil_flush(group->space_id);
+			if (thd_flush_log_at_trx_commit(NULL) != 2)
+				fil_flush(group->space_id);
 		}
 #endif /* _WIN32 */
 
@@ -1435,9 +1437,11 @@ loop:
 	log_sys_write_completion();
 
 #ifndef _WIN32
-	if (srv_unix_file_flush_method == SRV_UNIX_O_DSYNC) {
-		/* O_SYNC means the OS did not buffer the log file at all:
-		so we have also flushed to disk what we have written */
+	if (srv_unix_file_flush_method == SRV_UNIX_O_DSYNC
+	    || srv_unix_file_flush_method == SRV_UNIX_ALL_O_DIRECT) {
+		/* O_SYNC and ALL_O_DIRECT mean the OS did not buffer the log
+		file at all: so we have also flushed to disk what we have
+		written */
 		log_sys->flushed_to_disk_lsn = log_sys->write_lsn;
 	}
 #endif /* !_WIN32 */
@@ -1826,6 +1830,7 @@ log_checkpoint(
 #ifndef _WIN32
 	switch (srv_unix_file_flush_method) {
 	case SRV_UNIX_NOSYNC:
+	case SRV_UNIX_ALL_O_DIRECT:
 		break;
 	case SRV_UNIX_O_DSYNC:
 	case SRV_UNIX_FSYNC:
