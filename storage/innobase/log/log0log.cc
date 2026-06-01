@@ -2,6 +2,7 @@
 
 Copyright (c) 1995, 2016, Oracle and/or its affiliates. All Rights Reserved.
 Copyright (c) 2009, Google Inc.
+Copyright (c) 2016, Percona Inc. All Rights Reserved.
 
 Portions of this file contain modifications contributed and copyrighted by
 Google, Inc. Those modifications are gratefully acknowledged and are described
@@ -1556,8 +1557,6 @@ bool
 log_preflush_pool_modified_pages(
 	lsn_t			new_oldest)
 {
-	bool	success;
-
 	if (recv_recovery_on) {
 		/* If the recovery is running, we must first apply all
 		log records to their respective file pages to get the
@@ -1571,39 +1570,17 @@ log_preflush_pool_modified_pages(
 		recv_apply_hashed_log_recs(TRUE);
 	}
 
-	if (new_oldest == LSN_MAX
-	    || !buf_page_cleaner_is_active
-	    || srv_is_being_started) {
+	/* better to wait for flushed by page cleaner */
+	ut_ad(buf_page_cleaner_is_active);
 
-		ulint	n_pages;
-
-		success = buf_flush_lists(ULINT_MAX, new_oldest, &n_pages);
-
-		buf_flush_wait_batch_end(NULL, BUF_FLUSH_LIST);
-
-		if (!success) {
-			MONITOR_INC(MONITOR_FLUSH_SYNC_WAITS);
-		}
-
-		MONITOR_INC_VALUE_CUMULATIVE(
-			MONITOR_FLUSH_SYNC_TOTAL_PAGE,
-			MONITOR_FLUSH_SYNC_COUNT,
-			MONITOR_FLUSH_SYNC_PAGES,
-			n_pages);
-	} else {
-		/* better to wait for flushed by page cleaner */
-
-		if (srv_flush_sync) {
-			/* wake page cleaner for IO burst */
-			buf_flush_request_force(new_oldest);
-		}
-
-		buf_flush_wait_flushed(new_oldest);
-
-		success = true;
+	if (srv_flush_sync) {
+		/* wake page cleaner for IO burst */
+		buf_flush_request_force(new_oldest);
 	}
 
-	return(success);
+	buf_flush_wait_flushed(new_oldest);
+
+	return(true);
 }
 #endif /* !UNIV_HOTBACKUP */
 /******************************************************//**
@@ -1985,8 +1962,10 @@ log_make_checkpoint_at(
 {
 	/* Preflush pages synchronously */
 
-	while (!log_preflush_pool_modified_pages(lsn)) {
-		/* Flush as much as we can */
+	if (srv_shutdown_state != SRV_SHUTDOWN_FLUSH_PHASE) {
+		while (!log_preflush_pool_modified_pages(lsn)) {
+			/* Flush as much as we can */
+		}
 	}
 
 	while (!log_checkpoint(true, write_always)) {
