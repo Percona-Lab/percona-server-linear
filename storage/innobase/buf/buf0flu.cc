@@ -1184,7 +1184,7 @@ static void buf_flush_write_block_low(buf_page_t *bpage, buf_flush_t flush_type,
     buf_dblwr_write_single_page(bpage, sync);
   } else {
     ut_ad(!sync);
-    buf_dblwr_add_to_batch(bpage);
+    buf_dblwr_add_to_batch(bpage, flush_type);
   }
 
   /* When doing single page flushing the IO is done synchronously
@@ -1316,7 +1316,8 @@ ibool buf_flush_page(buf_pool_t *buf_pool, buf_page_t *bpage,
         /* avoiding deadlock possibility involves
         doublewrite buffer, should flush it, because
         it might hold the another block->lock. */
-        buf_dblwr_flush_buffered_writes();
+        buf_dblwr_flush_buffered_writes(
+            buf_parallel_dblwr_partition(bpage, flush_type));
       } else {
         buf_dblwr_sync_datafiles();
       }
@@ -1961,8 +1962,11 @@ static ibool buf_flush_start(buf_pool_t *buf_pool, buf_flush_t flush_type) {
 
 /** End a buffer flush batch for LRU or flush list
 @param[in]	buf_pool	buffer pool instance
-@param[in]	flush_type	BUF_FLUSH_LRU or BUF_FLUSH_LIST */
-static void buf_flush_end(buf_pool_t *buf_pool, buf_flush_t flush_type) {
+@param[in]	flush_type	BUF_FLUSH_LRU or BUF_FLUSH_LIST
+@param[in]	flushed_page_count number of dirty pages whose writes have been
+queued by this flush. */
+static void buf_flush_end(buf_pool_t *buf_pool, buf_flush_t flush_type,
+                          ulint flushed_page_count) {
   mutex_enter(&buf_pool->flush_state_mutex);
 
   buf_pool->init_flush[flush_type] = FALSE;
@@ -1977,8 +1981,9 @@ static void buf_flush_end(buf_pool_t *buf_pool, buf_flush_t flush_type) {
 
   mutex_exit(&buf_pool->flush_state_mutex);
 
-  if (!srv_read_only_mode) {
-    buf_dblwr_flush_buffered_writes();
+  if (!srv_read_only_mode && flushed_page_count) {
+    buf_dblwr_flush_buffered_writes(
+        buf_parallel_dblwr_partition(buf_pool, flush_type));
   } else {
     os_aio_simulated_wake_handler_threads();
   }
@@ -2037,7 +2042,7 @@ bool buf_flush_do_batch(buf_pool_t *buf_pool, buf_flush_t type, ulint min_n,
 
   ulint page_count = buf_flush_batch(buf_pool, type, min_n, lsn_limit);
 
-  buf_flush_end(buf_pool, type);
+  buf_flush_end(buf_pool, type, page_count);
 
   if (n_processed != NULL) {
     *n_processed = page_count;

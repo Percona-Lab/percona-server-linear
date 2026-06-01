@@ -2125,6 +2125,10 @@ files_checked:
 
     purge_queue = trx_sys_init_at_db_start();
 
+    /* Create the per-buffer pool instance doublewrite buffers */
+    err = buf_parallel_dblwr_create();
+    if (err != DB_SUCCESS) return (srv_init_abort(err));
+
     /* The purge system needs to create the purge view and
     therefore requires that the trx_sys is inited. */
 
@@ -2166,12 +2170,29 @@ files_checked:
     and there must be no page in the buf_flush list. */
     buf_pool_invalidate();
 
+    /* Start monitor thread early enough so that e.g. crash recovery failing to
+    find free pages in the buffer pool is diagnosed. */
+    if (!srv_read_only_mode) {
+      /* Create the thread which prints InnoDB monitor info */
+      os_thread_create(srv_monitor_thread_key, srv_monitor_thread);
+      srv_start_state_set(SRV_START_STATE_MONITOR);
+    }
+
     /* We always try to do a recovery, even if the database had
     been shut down normally: this is the normal startup path */
 
     err = recv_recovery_from_checkpoint_start(*log_sys, flushed_lsn);
 
-    recv_sys->dblwr.pages.clear();
+    /* Doublewrite-recovered pages should have been either
+    processed, either it should have been impossible to process
+    them due to a missing tablespace or innodb_force_recovery
+    setting, or server being read-only, or instance being
+    corrupted. */
+    ut_ad(
+        recv_sys->dblwr.pages.empty() || err == DB_TABLESPACE_NOT_FOUND ||
+        (err == DB_SUCCESS && (srv_force_recovery >= SRV_FORCE_NO_LOG_REDO)) ||
+        err == DB_ERROR || err == DB_CORRUPTION || err == DB_READ_ONLY);
+    buf_parallel_dblwr_finish_recovery();
 
     if (err == DB_SUCCESS) {
       /* Initialize the change buffer. */
@@ -2196,6 +2217,9 @@ files_checked:
     if (!srv_read_only_mode) {
       log_start_background_threads(*log_sys);
     }
+
+    err = buf_parallel_dblwr_create();
+    if (err != DB_SUCCESS) return (srv_init_abort(err));
 
     if (srv_force_recovery < SRV_FORCE_NO_LOG_REDO) {
       /* Apply the hashed log records to the
