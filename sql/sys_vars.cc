@@ -2673,7 +2673,7 @@ static Sys_var_bool Sys_log_statements_unsafe_for_binlog(
     GLOBAL_VAR(opt_log_unsafe_statements), CMD_LINE(OPT_ARG), DEFAULT(true));
 
 static bool update_cached_long_query_time(sys_var *, THD *thd,
-                                          enum_var_type type) {
+                                          enum_var_type type) noexcept {
   if (type == OPT_SESSION)
     thd->variables.long_query_time =
         double2ulonglong(thd->variables.long_query_time_double * 1e6);
@@ -5199,11 +5199,10 @@ static Sys_var_plugin Sys_default_tmp_storage_engine(
     NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(check_storage_engine));
 
 static Sys_var_charptr Sys_enforce_storage_engine(
-       "enforce_storage_engine", "Force the use of a storage engine for new "
-       "tables",
-       READ_ONLY GLOBAL_VAR(enforce_storage_engine),
-       CMD_LINE(REQUIRED_ARG), IN_SYSTEM_CHARSET,
-       DEFAULT(0));
+    "enforce_storage_engine",
+    "Force the use of a storage engine for new tables",
+    READ_ONLY GLOBAL_VAR(enforce_storage_engine), CMD_LINE(REQUIRED_ARG),
+    IN_SYSTEM_CHARSET, DEFAULT(nullptr));
 
 #if defined(ENABLED_DEBUG_SYNC)
 /*
