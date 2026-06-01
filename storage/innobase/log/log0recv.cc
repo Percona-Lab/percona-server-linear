@@ -1454,7 +1454,6 @@ recv_read_checkpoint_info_for_backup(
 block.
 @param[in]	log block
 @return whether the checksum matches */
-static
 bool
 log_block_checksum_is_ok(
 	const byte*	block)	/*!< in: pointer to a log block */
@@ -2987,7 +2986,6 @@ skip_this_recv_addr:
 @param[in]	apply		whether to apply MLOG_FILE_* records
 @param[out]	body		start of log record body
 @return length of the record, or 0 if the record was not complete */
-static
 ulint
 recv_parse_log_rec(
 	mlog_id_t*	type,
@@ -3066,7 +3064,6 @@ recv_parse_log_rec(
 
 /*******************************************************//**
 Calculates the new value for lsn when more data is added to the log. */
-static
 lsn_t
 recv_calc_lsn_on_data_add(
 /*======================*/
