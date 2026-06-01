@@ -64,7 +64,7 @@ EOF
 --write_file $MYSQL_TMP_DIR/mysqlx-connection_session_track.tmp
 -->sql
 SET @@session.session_track_system_variables='mysqlx_port,mysqlx_idle_worker_thread_timeout,mysqlx_max_allowed_packet,mysqlx_max_connections,mysqlx_min_worker_threads';
-show variables like '%track%';
+show variables like '%session_track%';
 uninstall plugin mysqlx;
 show warnings;
 show variables like '%mysqlx_max_connections%';
