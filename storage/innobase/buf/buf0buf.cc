@@ -364,9 +364,6 @@ lsn_t buf_pool_get_oldest_modification_approx(void) {
   lsn_t lsn = 0;
   lsn_t oldest_lsn = 0;
 
-  /* When we traverse all the flush lists we don't care if previous
-  flush lists changed. We do not require consistent result. */
-
   for (ulint i = 0; i < srv_buf_pool_instances; i++) {
     buf_pool_t *buf_pool;
 
