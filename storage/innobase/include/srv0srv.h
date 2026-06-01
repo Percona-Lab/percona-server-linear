@@ -215,6 +215,9 @@ struct Srv_threads {
   same shared state as m_page_cleaner_coordinator. */
   IB_thread *m_page_cleaner_workers;
 
+  /** Changed page tracking thread. */
+  IB_thread m_changed_page_tracker;
+
   /** Archiver's log archiver (used by Clone). */
   IB_thread m_log_archiver;
 
@@ -775,6 +778,8 @@ extern mysql_pfs_key_t trx_recovery_rollback_thread_key;
 extern mysql_pfs_key_t srv_ts_alter_encrypt_thread_key;
 extern mysql_pfs_key_t parallel_read_thread_key;
 extern mysql_pfs_key_t parallel_read_ahead_thread_key;
+extern mysql_pfs_key_t srv_log_tracking_thread_key;
+extern mysql_pfs_key_t log_scrub_thread_key;
 #endif /* UNIV_PFS_THREAD */
 #endif /* !UNIV_HOTBACKUP */
 

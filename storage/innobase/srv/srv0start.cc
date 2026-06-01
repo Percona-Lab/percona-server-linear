@@ -68,6 +68,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "ha_prototypes.h"
 #include "ibuf0ibuf.h"
 #include "log0log.h"
+#include "log0online.h"
 #include "log0recv.h"
 #include "mem0mem.h"
 #include "mtr0mtr.h"
@@ -198,6 +199,7 @@ mysql_pfs_key_t srv_lock_timeout_thread_key;
 mysql_pfs_key_t srv_master_thread_key;
 mysql_pfs_key_t srv_monitor_thread_key;
 mysql_pfs_key_t srv_purge_thread_key;
+mysql_pfs_key_t srv_log_tracking_thread_key;
 mysql_pfs_key_t srv_worker_thread_key;
 mysql_pfs_key_t trx_recovery_rollback_thread_key;
 mysql_pfs_key_t srv_ts_alter_encrypt_thread_key;
@@ -1574,6 +1576,23 @@ static void srv_start_wait_for_purge_to_start() {
   }
 }
 
+/** Initializes the log tracking subsystem and starts its thread.  */
+void srv_init_log_online(void) {
+  if (UNIV_UNLIKELY(srv_force_recovery > 0 || srv_read_only_mode)) {
+    srv_track_changed_pages = false;
+    return;
+  }
+
+  if (srv_track_changed_pages) {
+    log_online_read_init();
+
+    /* Create the thread that follows the redo log to output the
+       changed page bitmap */
+    srv_threads.m_changed_page_tracker = os_thread_create(
+        srv_log_tracking_thread_key, srv_redo_log_follow_thread);
+  }
+}
+
 /** Create the temporary file tablespace.
 @param[in]	create_new_db	whether we are creating a new database
 @param[in,out]	tmp_space	Shared Temporary SysTablespace
@@ -2123,6 +2142,9 @@ dberr_t srv_start(bool create_new_db, const std::string &scan_directories) {
 
   fsp_init();
   pars_init();
+
+  log_online_init();
+
   recv_sys_create();
   recv_sys_init(buf_pool_get_curr_size());
   trx_sys_create();
@@ -2358,6 +2380,8 @@ files_checked:
 
     log_start_background_threads(*log_sys);
 
+    srv_init_log_online();
+
     err = srv_undo_tablespaces_init(true);
 
     if (err != DB_SUCCESS) {
@@ -2576,6 +2600,17 @@ files_checked:
       ut_a(err == DB_SUCCESS);
 
       RECOVERY_CRASH(4);
+
+      /* If log tracking is enabled, make it catch up with
+      the old logs synchronously. */
+      if (srv_track_changed_pages) {
+        const lsn_t checkpoint_lsn = log_sys->last_checkpoint_lsn;
+        ib::info() << "Tracking redo log synchronously until "
+                   << checkpoint_lsn;
+        if (!log_online_follow_redo_log()) {
+          return (srv_init_abort(DB_ERROR));
+        }
+      }
 
       /* Close and free the redo log files, so that
       we can replace them. */
@@ -3526,6 +3561,7 @@ void srv_shutdown() {
   btr_search_disable(true);
 
   ibuf_close();
+  log_online_shutdown();
   ddl_log_close();
   log_sys_close();
   recv_sys_close();

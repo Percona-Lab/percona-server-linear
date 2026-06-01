@@ -184,6 +184,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "json_dom.h"
 
 #include "log0log.h"
+#include "log0online.h"
 #include "os0file.h"
 
 
@@ -729,9 +730,9 @@ static PSI_thread_info all_innodb_threads[] = {
     PSI_KEY(log_flusher_thread, 0, 0, PSI_DOCUMENT_ME),
     PSI_KEY(log_write_notifier_thread, 0, 0, PSI_DOCUMENT_ME),
     PSI_KEY(log_flush_notifier_thread, 0, 0, PSI_DOCUMENT_ME),
-    PSI_KEY(recv_writer_thread, 0, 0, PSI_DOCUMENT_ME),
     PSI_KEY(srv_error_monitor_thread, 0, 0, PSI_DOCUMENT_ME),
     PSI_KEY(srv_lock_timeout_thread, 0, 0, PSI_DOCUMENT_ME),
+    PSI_KEY(srv_log_tracking_thread, 0, 0, PSI_DOCUMENT_ME),
     PSI_KEY(srv_master_thread, 0, 0, PSI_DOCUMENT_ME),
     PSI_KEY(srv_monitor_thread, 0, 0, PSI_DOCUMENT_ME),
     PSI_KEY(srv_purge_thread, 0, 0, PSI_DOCUMENT_ME),
@@ -784,6 +785,19 @@ static int innodb_stopword_table_validate(
     void *save,                    /*!< out: immediate result
                                    for update function */
     struct st_mysql_value *value); /*!< in: incoming string */
+
+/** Synchronously read and parse the redo log up to the last checkpoint to
+write the changed page bitmap.
+@retval false to indicate success.  Current implementation cannot fail. */
+static bool innobase_flush_changed_page_bitmaps() noexcept;
+
+/** Delete all the bitmap files for data less than the specified LSN.
+If called with lsn == IB_ULONGLONG_MAX (i.e. set by RESET request),
+restart the bitmap file sequence, otherwise continue it.
+@param[in]	lsn	LSN to purge files up to
+@retval false success
+@retval true failure */
+static bool innobase_purge_changed_page_bitmaps(ulonglong lsn) noexcept;
 
 /** Validate passed-in "value" is a valid directory name.
 This function is registered as a callback with MySQL.
@@ -4721,7 +4735,10 @@ static int innodb_init(void *p) {
   innobase_hton->replace_native_transaction_in_thd = innodb_replace_trx_in_thd;
   innobase_hton->file_extensions = ha_innobase_exts;
   innobase_hton->data = &innodb_api_cb;
-
+  innobase_hton->flush_changed_page_bitmaps =
+      innobase_flush_changed_page_bitmaps;
+  innobase_hton->purge_changed_page_bitmaps =
+      innobase_purge_changed_page_bitmaps;
   innobase_hton->ddse_dict_init = innobase_ddse_dict_init;
 
   innobase_hton->dict_register_dd_table_id = innobase_dict_register_dd_table_id;
@@ -5229,6 +5246,27 @@ static bool innobase_flush_logs(handlerton *hton, bool binlog_group_flush) {
                            srv_flush_log_at_trx_commit == 1);
 
   DBUG_RETURN(false);
+}
+
+/** Synchronously read and parse the redo log up to the last checkpoint to
+write the changed page bitmap.
+@retval false to indicate success.  Current implementation cannot fail. */
+static bool innobase_flush_changed_page_bitmaps() noexcept {
+  if (srv_track_changed_pages) {
+    os_event_reset(srv_checkpoint_completed_event);
+    log_online_follow_redo_log();
+  }
+  return false;
+}
+
+/** Delete all the bitmap files for data less than the specified LSN.
+If called with lsn == IB_ULONGLONG_MAX (i.e. set by RESET request),
+restart the bitmap file sequence, otherwise continue it.
+@param[in]	lsn	LSN to purge files up to
+@retval false success
+@retval true failure */
+static bool innobase_purge_changed_page_bitmaps(ulonglong lsn) noexcept {
+  return log_online_purge_changed_page_bitmaps(lsn);
 }
 
 /** Commits a transaction in an InnoDB database. */
