@@ -7610,6 +7610,7 @@ bool check_valid_definer(THD *thd, LEX_USER *definer) {
     if (!(sctx->check_access(SUPER_ACL) ||
           sctx->has_global_grant(STRING_WITH_LEN("SET_USER_ID")).first ||
           sctx->has_global_grant(STRING_WITH_LEN("SET_ANY_DEFINER")).first)) {
+      thd->diff_access_denied_errors++;
       my_error(ER_SPECIFIC_ACCESS_DENIED_ERROR, MYF(0),
                "SUPER, SET_USER_ID or SET_ANY_DEFINER");
       return true;
@@ -7623,6 +7624,7 @@ bool check_valid_definer(THD *thd, LEX_USER *definer) {
           sctx->has_global_grant(STRING_WITH_LEN("SET_USER_ID")).first ||
           sctx->has_global_grant(STRING_WITH_LEN("ALLOW_NONEXISTENT_DEFINER"))
               .first)) {
+      thd->diff_access_denied_errors++;
       my_error(ER_SPECIFIC_ACCESS_DENIED_ERROR, MYF(0),
                "SUPER, SET_USER_ID or ALLOW_NONEXISTENT_DEFINER");
       return true;
