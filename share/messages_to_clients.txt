@@ -9300,7 +9300,46 @@ reserved-error-section 5000 5999
 
 
 #
-# Start of Percona Server error messages
+# Start of Percona Server 8.0 server error log messages
+#
+start-error-number 48000
+
+ER_RPL_FAILED_TO_RECREATE_CACHE_FOR_INFO_FILE
+  eng "Failed to recreate a cache on info file (file '%s')"
+
+ER_XB_MSG_0
+  eng "%s"
+
+ER_XB_MSG_1
+  eng "%s"
+
+ER_COMPRESSION_DICTIONARY_NO_CREATE
+  eng "Cannot create compression dictionary tables in %s%sread-only mode."
+
+ER_XB_MSG_2
+  eng "%s"
+
+ER_XB_MSG_3
+  eng "%s"
+
+ER_XB_MSG_4
+  eng "Table %s is encrypted but decryption failed. Seems that the encryption key fetched from keyring is not the correct one. Are you using the correct keyring?";
+
+ER_XB_MSG_5
+  eng "Tablespace id %u in file %s is encrypted but keyring or used key_id %u is not available. Can't continue reading table. Please provide the correct keyring.";
+
+ER_XB_MSG_WAIT_FOR_KEYRING_ENCRYPT_THREAD
+  eng "Waiting for keyring encryption threads to exit"
+
+ER_PARALLEL_DOUBLEWRITE_WRITE_ERROR
+  eng "Parallel doublewrite buffer write failed, crashing the server to avoid data loss"
+
+#
+# End of Percona Server 8.0 server error log messages
+#
+
+#
+# Start of Percona Server 8.0 error messages to be sent to client
 #
 
 start-error-number 49000
