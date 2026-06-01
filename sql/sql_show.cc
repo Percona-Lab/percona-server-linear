@@ -2184,7 +2184,10 @@ public:
     if ((!inspect_thd->get_protocol()->connection_alive() &&
          !inspect_thd->system_thread) ||
         (m_user && (inspect_thd->system_thread || !inspect_sctx_user.str ||
-                    strcmp(inspect_sctx_user.str, m_user))))
+                    strcmp(inspect_sctx_user.str, m_user))) ||
+          acl_is_utility_user(inspect_sctx_user.str,
+                              inspect_sctx_host.str,
+                              inspect_sctx->ip().str))
       return;
 
     thread_info *thd_info= new thread_info;
@@ -5536,6 +5539,27 @@ static int get_schema_tables_record(THD *thd, TABLE_LIST *tables,
       case ROW_TYPE_PAGE:
         tmp_buff= "Paged";
         break;
+      case ROW_TYPE_TOKU_UNCOMPRESSED:
+        tmp_buff= "tokudb_uncompressed";
+        break;
+      case ROW_TYPE_TOKU_ZLIB:
+        tmp_buff= "tokudb_zlib";
+        break;
+      case ROW_TYPE_TOKU_SNAPPY:
+        tmp_buff= "tokudb_snappy";
+        break;
+      case ROW_TYPE_TOKU_QUICKLZ:
+        tmp_buff= "tokudb_quicklz";
+        break;
+      case ROW_TYPE_TOKU_LZMA:
+        tmp_buff= "tokudb_lzma";
+        break;
+      case ROW_TYPE_TOKU_FAST:
+        tmp_buff= "tokudb_fast";
+        break;
+      case ROW_TYPE_TOKU_SMALL:
+        tmp_buff= "tokudb_small";
+        break;
       }
 
       table->field[6]->store(tmp_buff, strlen(tmp_buff), cs);
@@ -8760,7 +8784,7 @@ ST_FIELD_INFO tables_fields_info[]=
   {"ENGINE", NAME_CHAR_LEN, MYSQL_TYPE_STRING, 0, 1, "Engine", OPEN_FRM_ONLY},
   {"VERSION", MY_INT64_NUM_DECIMAL_DIGITS, MYSQL_TYPE_LONGLONG, 0,
    (MY_I_S_MAYBE_NULL | MY_I_S_UNSIGNED), "Version", OPEN_FRM_ONLY},
-  {"ROW_FORMAT", 10, MYSQL_TYPE_STRING, 0, 1, "Row_format", OPEN_FULL_TABLE},
+  {"ROW_FORMAT", 20, MYSQL_TYPE_STRING, 0, 1, "Row_format", OPEN_FULL_TABLE},
   {"TABLE_ROWS", MY_INT64_NUM_DECIMAL_DIGITS, MYSQL_TYPE_LONGLONG, 0,
    (MY_I_S_MAYBE_NULL | MY_I_S_UNSIGNED), "Rows", OPEN_FULL_TABLE},
   {"AVG_ROW_LENGTH", MY_INT64_NUM_DECIMAL_DIGITS, MYSQL_TYPE_LONGLONG, 0, 
@@ -9480,7 +9504,7 @@ ST_FIELD_INFO files_fields_info[]=
   {"TRANSACTION_COUNTER", 4, MYSQL_TYPE_LONGLONG, 0, 1, 0, SKIP_OPEN_TABLE},
   {"VERSION", 21 , MYSQL_TYPE_LONGLONG, 0,
    (MY_I_S_MAYBE_NULL | MY_I_S_UNSIGNED), "Version", SKIP_OPEN_TABLE},
-  {"ROW_FORMAT", 10, MYSQL_TYPE_STRING, 0, 1, "Row_format", SKIP_OPEN_TABLE},
+  {"ROW_FORMAT", 20, MYSQL_TYPE_STRING, 0, 1, "Row_format", SKIP_OPEN_TABLE},
   {"TABLE_ROWS", 21 , MYSQL_TYPE_LONGLONG, 0,
    (MY_I_S_MAYBE_NULL | MY_I_S_UNSIGNED), "Rows", SKIP_OPEN_TABLE},
   {"AVG_ROW_LENGTH", 21 , MYSQL_TYPE_LONGLONG, 0, 
