@@ -11276,6 +11276,18 @@ ER_IB_WRN_OLD_GEOMETRY_TYPE
 # End of 8.0 error messages intended to be written to the server error log.
 #
 
+#
+# Start of Percona Server 8.0 server error log messages
+#
+start-error-number 48000
+
+ER_IB_MSG_DEPRECATED_INNODB_PARALLEL_DOUBLEWRITE_PATH
+  eng "Setting Percona-specific INNODB_PARALLEL_DOUBLEWRITE_PATH is deprecated and has no effect. Use INNODB_DOUBLEWRITE_DIR instead."
+
+#
+# End of Percona Server 8.0 server error log messages
+#
+
 ################################################################################
 # Error numbers 50000 to 51999 are reserved. Please do not use them for
 # other error messages.

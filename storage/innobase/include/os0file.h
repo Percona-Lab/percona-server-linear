@@ -833,6 +833,16 @@ pfs_os_file_t os_file_create_simple_no_error_handling_func(
 bool os_file_set_nocache(int fd, const char *file_name,
                          const char *operation_name);
 
+/** Tries to disable OS caching on an opened file file.
+@param[in]	file		file to alter
+@param[in]	file_name	file name, used in the diagnostic message
+@param[in]	name		"open" or "create"; used in the diagnostic
+message
+@return true if operation is success and false */
+UNIV_INLINE
+bool os_file_set_nocache(pfs_os_file_t file, const char *file_name,
+                         const char *operation_name);
+
 /** NOTE! Use the corresponding macro os_file_create(), not directly
 this function!
 Opens an existing file or creates a new.
