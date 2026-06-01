@@ -5436,8 +5436,9 @@ static bool os_file_handle_error_no_exit(const char *name,
 @param[in]	fd		file descriptor to alter
 @param[in]	file_name	file name, used in the diagnostic message
 @param[in]	operation_name	"open" or "create"; used in the diagnostic
-                                message */
-void os_file_set_nocache(int fd MY_ATTRIBUTE((unused)),
+                                message
+@return true if operation is success and false */
+bool os_file_set_nocache(int fd MY_ATTRIBUTE((unused)),
                          const char *file_name MY_ATTRIBUTE((unused)),
                          const char *operation_name MY_ATTRIBUTE((unused))) {
 /* some versions of Solaris may not have DIRECTIO_ON */
@@ -5450,6 +5451,7 @@ void os_file_set_nocache(int fd MY_ATTRIBUTE((unused)),
         << operation_name << ": " << strerror(errno_save)
         << ","
            " continuing anyway.";
+    return false;
   }
 #elif defined(O_DIRECT)
   if (fcntl(fd, F_SETFL, O_DIRECT) == -1) {
@@ -5479,8 +5481,10 @@ void os_file_set_nocache(int fd MY_ATTRIBUTE((unused)),
                               << "; " << operation_name << " : "
                               << strerror(errno_save) << ", continuing anyway.";
     }
+    return false;
   }
 #endif /* defined(UNIV_SOLARIS) && defined(DIRECTIO_ON) */
+  return true;
 }
 
 /**  Write the specified number of zeros to a file from specific offset.
