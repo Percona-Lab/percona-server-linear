@@ -1372,7 +1372,7 @@ class THD : public MDL_context_owner,
   uint16 peer_port;
   struct timeval start_time;
   struct timeval user_time;
-  ulonglong start_utime, utime_after_lock;
+  ulonglong start_utime, utime_after_lock, utime_after_query;
 
   /**
     Type of lock to be used for all DML statements, except INSERT, in cases
@@ -2868,7 +2868,8 @@ class THD : public MDL_context_owner,
    setting, mark the query as slow.
   */
   void update_slow_query_status() {
-    if (my_micro_time() > utime_after_lock + variables.long_query_time)
+    utime_after_query = current_utime();
+    if (utime_after_query > utime_after_lock + variables.long_query_time)
       server_status |= SERVER_QUERY_WAS_SLOW;
   }
   inline ulonglong found_rows(void) { return previous_found_rows; }
