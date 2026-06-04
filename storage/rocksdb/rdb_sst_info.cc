@@ -185,9 +185,8 @@ Rdb_sst_info::Rdb_sst_info(rocksdb::DB *const db, const std::string &tablename,
   if (rdb_normalize_tablename(tablename.c_str(), &normalized_table)) {
     // We failed to get a normalized table name.  This should never happen,
     // but handle it anyway.
-    m_prefix += "fallback_" +
-                std::to_string(reinterpret_cast<intptr_t>(
-                    reinterpret_cast<void *>(this))) +
+    m_prefix += "fallback_" + std::to_string(reinterpret_cast<intptr_t>(
+                                  reinterpret_cast<void *>(this))) +
                 "_" + indexname + "_";
   } else {
     m_prefix += normalized_table + "_" + indexname + "_";

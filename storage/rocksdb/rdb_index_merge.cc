@@ -83,7 +83,8 @@ int Rdb_index_merge::merge_file_create() {
   } else {
     char filename[FN_REFLEN];
     fd = create_temp_file(filename, m_tmpfile_path, "myrocks",
-                          O_CREAT | O_EXCL | O_RDWR | O_TEMPORARY, MYF(MY_WME));
+                          O_CREAT | O_EXCL | O_RDWR | O_TEMPORARY,
+                          MYF(MY_WME));
     if (fd >= 0) {
 #ifndef __WIN__
       /*
@@ -99,8 +100,7 @@ int Rdb_index_merge::merge_file_create() {
   if (fd < 0) {
     return HA_ERR_INTERNAL_ERROR;
   }
-
-  m_merge_file.fd = fd;
+ m_merge_file.fd = fd;
   m_merge_file.num_sort_buffers = 0;
 
   return HA_EXIT_SUCCESS;

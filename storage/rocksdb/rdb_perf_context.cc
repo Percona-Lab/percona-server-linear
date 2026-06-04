@@ -209,4 +209,4 @@ void Rdb_io_perf::end_and_record(const uint32_t perf_context_level) {
   }
 }
 
-} // namespace myrocks
+}  // namespace myrocks

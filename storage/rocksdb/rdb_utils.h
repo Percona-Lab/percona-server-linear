@@ -17,12 +17,12 @@
 
 /* C++ standard header files */
 #include <chrono>
-#include <regex>
 #include <string>
+#include <regex>
 
 /* MySQL header files */
-#include "./sql_regex.h"
 #include "./sql_string.h"
+#include "./sql_regex.h"
 
 /* RocksDB header files */
 #include "rocksdb/slice.h"
@@ -79,14 +79,14 @@ namespace myrocks {
 #endif
 
 #ifndef SHIP_ASSERT
-#define SHIP_ASSERT(expr)                                                      \
-  do {                                                                         \
-    if (!(expr)) {                                                             \
-      my_safe_printf_stderr("\nShip assert failure: \'%s\'\n", #expr);         \
-      abort_with_stack_traces();                                               \
-    }                                                                          \
+#define SHIP_ASSERT(expr)                                               \
+  do {                                                                  \
+    if (!(expr)) {                                                      \
+      my_safe_printf_stderr("\nShip assert failure: \'%s\'\n", #expr);  \
+      abort_with_stack_traces();                                        \
+    }                                                                   \
   } while (0)
-#endif // SHIP_ASSERT
+#endif  // SHIP_ASSERT
 
 /*
   Assert a implies b.
@@ -250,4 +250,4 @@ bool rdb_database_exists(const std::string &db_name);
 
 void warn_about_bad_patterns(const Regex &regex, const char *name);
 
-} // namespace myrocks
+}  // namespace myrocks

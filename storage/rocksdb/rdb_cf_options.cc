@@ -85,9 +85,10 @@ void Rdb_cf_options::get(const std::string &cf_name,
 bool Rdb_cf_options::set_default(const std::string &default_config) {
   rocksdb::ColumnFamilyOptions options;
 
-  if (!default_config.empty() && !rocksdb::GetColumnFamilyOptionsFromString(
-                                      options, default_config, &options)
-                                      .ok()) {
+  if (!default_config.empty() &&
+      !rocksdb::GetColumnFamilyOptionsFromString(options, default_config,
+                                                 &options)
+           .ok()) {
     fprintf(stderr, "Invalid default column family config: %s\n",
             default_config.c_str());
     return false;

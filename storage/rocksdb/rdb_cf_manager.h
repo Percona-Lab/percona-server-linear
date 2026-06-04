@@ -67,8 +67,8 @@ public:
 
   /*
     This is called right after the DB::Open() call. The parameters describe
-    column families that are present in the database. The first CF is the
-    default CF.
+    column
+    families that are present in the database. The first CF is the default CF.
   */
   void init(Rdb_cf_options *cf_options,
             std::vector<rocksdb::ColumnFamilyHandle *> *const handles);

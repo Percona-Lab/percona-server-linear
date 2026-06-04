@@ -438,7 +438,8 @@ int Rdb_index_stats::unmaterialize(const std::string &s,
       stats.m_entry_merges = rdb_netbuf_read_uint64(&p);
       stats.m_entry_others = rdb_netbuf_read_uint64(&p);
     }
-    if (p + stats.m_distinct_keys_per_prefix.size() *
+    if (p +
+            stats.m_distinct_keys_per_prefix.size() *
                 sizeof(stats.m_distinct_keys_per_prefix[0]) >
         p2) {
       return HA_EXIT_FAILURE;

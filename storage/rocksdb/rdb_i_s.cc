@@ -784,7 +784,7 @@ static int rdb_i_s_global_info_fill_table(my_core::THD *const thd,
 
     if (ret) {
       break;
-  }
+    }
   }
 
   /* DDL_DROP_INDEX_ONGOING */

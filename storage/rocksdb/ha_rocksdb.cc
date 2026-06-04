@@ -68,14 +68,14 @@ extern "C" {
  *   Get the user thread's binary logging format
  *   @param thd  user thread
  *   @return Value to be used as index into the binlog_format_names array
- */
+*/
 int thd_binlog_format(const MYSQL_THD thd);
 
 /**
  *   Check if binary logging is filtered for thread's current db.
  *   @param  thd   Thread handle
  *   @retval 1 the query is not filtered, 0 otherwise.
- */
+*/
 bool thd_binlog_filter_ok(const MYSQL_THD thd);
 }
 
@@ -333,8 +333,7 @@ static void rocksdb_set_collation_exception_list(THD *thd,
                                                  void *var_ptr,
                                                  const void *save);
 
-static void rocksdb_set_bulk_load(THD *thd,
-                                  struct st_mysql_sys_var *var
+static void rocksdb_set_bulk_load(THD *thd, struct st_mysql_sys_var *var
                                   __attribute__((__unused__)),
                                   void *var_ptr, const void *save);
 
@@ -473,8 +472,8 @@ static MYSQL_THDVAR_BOOL(
 
 static MYSQL_THDVAR_STR(
     read_free_rpl_tables, PLUGIN_VAR_RQCMDARG | PLUGIN_VAR_MEMALLOC,
-    "List of tables that will use read-free replication on the slave "
-    "(i.e. not lookup a row during replication)",
+    "Regex that describes set of tables that will use read-free replication "
+    "on the slave (i.e. not lookup a row during replication)",
     nullptr, nullptr, "");
 
 static MYSQL_SYSVAR_BOOL(
@@ -1018,7 +1017,7 @@ static MYSQL_SYSVAR_BOOL(strict_collation_check, rocksdb_strict_collation_check,
 static MYSQL_SYSVAR_STR(strict_collation_exceptions,
                         rocksdb_strict_collation_exceptions,
                         PLUGIN_VAR_RQCMDARG | PLUGIN_VAR_MEMALLOC,
-                        "List of tables (using regex) that are excluded "
+                        "Regex that describes set of tables that are excluded "
                         "from the case sensitive collation enforcement",
                         nullptr, rocksdb_set_collation_exception_list, "");
 
@@ -1233,7 +1232,6 @@ static struct st_mysql_sys_var *rocksdb_system_variables[] = {
     MYSQL_SYSVAR(compact_cf),
     MYSQL_SYSVAR(signal_drop_index_thread),
     MYSQL_SYSVAR(pause_background_work),
-    MYSQL_SYSVAR(enable_2pc),
     MYSQL_SYSVAR(strict_collation_check),
     MYSQL_SYSVAR(strict_collation_exceptions),
     MYSQL_SYSVAR(collect_sst_properties),
@@ -1278,8 +1276,7 @@ rdb_get_rocksdb_write_options(my_core::THD *const thd) {
 */
 
 uchar *Rdb_open_tables_map::get_hash_key(Rdb_table_handler *const table_handler,
-                                         size_t *const length,
-                                         my_bool not_used
+                                         size_t *const length, my_bool not_used
                                          __attribute__((__unused__))) {
   *length = table_handler->m_table_name_length;
   return reinterpret_cast<uchar *>(table_handler->m_table_name);
@@ -1354,7 +1351,7 @@ public:
 };
 
 /* This is the base class for transactions when interacting with rocksdb.
- */
+*/
 class Rdb_transaction {
 protected:
   ulonglong m_write_count = 0;
@@ -1383,6 +1380,7 @@ protected:
 
   std::shared_ptr<Rdb_snapshot_notifier> m_notifier;
 
+  // This should be used only when updating binlog information.
   virtual bool commit_no_binlog() = 0;
   virtual rocksdb::Iterator *
   get_iterator(const rocksdb::ReadOptions &options,
@@ -2573,7 +2571,7 @@ static std::string format_string(const char *const format, ...) {
     // the output in place.  This would probably work but feels like a hack.
     // Since this isn't code that needs to be super-performant we are going
     // with this 'safer' method.
-    res = std::string(buff);
+     res = std::string(buff);
   }
 
   va_end(args_copy);
@@ -2865,10 +2863,10 @@ static int rocksdb_start_tx_and_assign_read_view(
     tx->acquire_snapshot(true);
   } else {
     push_warning_printf(thd, Sql_condition::SL_WARNING, HA_ERR_UNSUPPORTED,
-                        "Only REPEATABLE READ isolation level is supported "
-                        "for START TRANSACTION WITH CONSISTENT SNAPSHOT "
-                        "in RocksDB Storage Engine. Snapshot has not been "
-                        "taken.");
+                        "RocksDB: Only REPEATABLE READ isolation level is "
+                        "supported for START TRANSACTION WITH CONSISTENT "
+                        "SNAPSHOT in RocksDB Storage Engine. Snapshot has not "
+                        "been taken.");
   }
   return HA_EXIT_SUCCESS;
 }
@@ -2896,13 +2894,15 @@ rocksdb_rollback_to_savepoint_can_release_mdl(handlerton *const hton,
 }
 
 static rocksdb::Status check_rocksdb_options_compatibility(
-    const char *const dbpath, const rocksdb::Options &main_opts,
-    const std::vector<rocksdb::ColumnFamilyDescriptor> &cf_descr) {
+  const char *const dbpath, const rocksdb::Options& main_opts,
+  const std::vector<rocksdb::ColumnFamilyDescriptor>& cf_descr)
+{
   DBUG_ASSERT(rocksdb_datadir != nullptr);
 
   rocksdb::DBOptions loaded_db_opt;
   std::vector<rocksdb::ColumnFamilyDescriptor> loaded_cf_descs;
-  rocksdb::Status status = LoadLatestOptions(dbpath, rocksdb::Env::Default(),
+  rocksdb::Status status = LoadLatestOptions(dbpath,
+                                             rocksdb::Env::Default(),
                                              &loaded_db_opt, &loaded_cf_descs);
 
   // If we're starting from scratch and there are no options saved yet then this
@@ -2976,8 +2976,7 @@ static int rocksdb_init_func(void *const p) {
                    MY_MUTEX_INIT_FAST);
 
 #if defined(HAVE_PSI_INTERFACE)
-  rdb_collation_exceptions =
-      new Regex_list_handler(key_rwlock_collation_exception_list);
+  rdb_collation_exceptions = new Regex(key_rwlock_collation_exception_list);
 #else
   rdb_collation_exceptions = new Regex();
 #endif
@@ -3252,7 +3251,7 @@ static int rocksdb_init_func(void *const p) {
                                          ,
                                          rdb_background_psi_thread_key
 #endif
-  );
+                                         );
   if (err != 0) {
     sql_print_error("RocksDB: Couldn't start the background thread: (errno=%d)",
                     err);
@@ -3265,7 +3264,7 @@ static int rocksdb_init_func(void *const p) {
                                           ,
                                           rdb_drop_idx_psi_thread_key
 #endif
-  );
+                                          );
   if (err != 0) {
     sql_print_error("RocksDB: Couldn't start the drop index thread: (errno=%d)",
                     err);
@@ -4318,8 +4317,14 @@ void ha_rocksdb::set_use_read_free_rpl(const char *const whitelist) {
   Regex regex_handler;
 #endif
 
-  if (!regex_handler.set_patterns(whitelist)) {
-    warn_about_bad_patterns(&regex_handler, "read_free_rpl_tables");
+  int flags = MY_REG_EXTENDED | MY_REG_NOSUB;
+  if (lower_case_table_names)
+    flags |= MY_REG_ICASE;
+
+  if (!regex_handler.compile(whitelist,
+                             flags,
+                             table_alias_charset)) {
+      warn_about_bad_patterns(regex_handler, "read_free_rpl_tables");
   }
 
   m_use_read_free_rpl = regex_handler.match(m_tbl_def->base_tablename());
@@ -4600,7 +4605,7 @@ int ha_rocksdb::create_cfs(
            part++) {
         if (!rdb_is_index_collation_supported(
                 table_arg->key_info[i].key_part[part].field) &&
-            !rdb_collation_exceptions->matches(tablename_sys)) {
+            !rdb_collation_exceptions->match(tablename_sys)) {
           std::string collation_err;
           for (const auto &coll : RDB_INDEX_COLLATIONS) {
             if (collation_err != "") {
@@ -4609,9 +4614,8 @@ int ha_rocksdb::create_cfs(
             collation_err += coll->name;
           }
           my_printf_error(
-              ER_UNKNOWN_ERROR,
-              "Unsupported collation on string indexed "
-              "column %s.%s Use binary collation (%s).",
+              ER_UNKNOWN_ERROR, "Unsupported collation on string indexed "
+                                "column %s.%s Use binary collation (%s).",
               MYF(0), tbl_def_arg->full_tablename().c_str(),
               table_arg->key_info[i].key_part[part].field->field_name,
               collation_err.c_str());
@@ -5041,9 +5045,8 @@ int ha_rocksdb::create(const char *const name, TABLE *const table_arg,
   }
 
   if (contains_foreign_key(thd)) {
-    my_printf_error(ER_NOT_SUPPORTED_YET,
-                    "MyRocks does not currently support "
-                    "foreign key constraints",
+    my_printf_error(ER_NOT_SUPPORTED_YET, "MyRocks does not currently support "
+                                          "foreign key constraints",
                     MYF(0));
     DBUG_RETURN(HA_ERR_INTERNAL_ERROR);
   }
@@ -5055,9 +5058,8 @@ int ha_rocksdb::create(const char *const name, TABLE *const table_arg,
   for (uint keyno = 0; keyno < table_arg->s->keys; keyno++) {
     if ((table_arg->key_info[keyno].flags & HA_NOSAME) &&
         has_hidden_pk(table_arg)) {
-      my_printf_error(ER_UNKNOWN_ERROR,
-                      "Unique index support is disabled when "
-                      "the table has no primary key. ",
+      my_printf_error(ER_UNKNOWN_ERROR, "Unique index support is disabled when "
+                                        "the table has no primary key. ",
                       MYF(0));
       DBUG_RETURN(HA_ERR_INTERNAL_ERROR);
     }
@@ -7414,7 +7416,7 @@ int ha_rocksdb::index_end() {
 
   active_index = MAX_KEY;
   in_range_check_pushed_down = FALSE;
-
+ 
   DBUG_RETURN(HA_EXIT_SUCCESS);
 }
 
@@ -7862,13 +7864,12 @@ int ha_rocksdb::external_lock(THD *const thd, int lock_type) {
   } else {
     if (my_core::thd_tx_isolation(thd) < ISO_READ_COMMITTED ||
         my_core::thd_tx_isolation(thd) > ISO_REPEATABLE_READ) {
-      my_printf_error(ER_UNKNOWN_ERROR,
-                      "MyRocks supports only READ COMMITTED and "
-                      "REPEATABLE READ isolation levels. "
-                      "Please change from current isolation "
-                      "level %s",
-                      MYF(0),
-                      tx_isolation_names[my_core::thd_tx_isolation(thd)]);
+      my_printf_error(
+          ER_UNKNOWN_ERROR, "MyRocks supports only READ COMMITTED and "
+                            "REPEATABLE READ isolation levels. "
+                            "Please change from current isolation "
+                            "level %s",
+          MYF(0), tx_isolation_names[my_core::thd_tx_isolation(thd)]);
       DBUG_RETURN(HA_ERR_INTERNAL_ERROR);
     }
     /*
@@ -9829,8 +9830,12 @@ void rocksdb_set_rate_limiter_bytes_per_sec(my_core::THD *const thd,
 void rdb_set_collation_exception_list(const char *const exception_list) {
   DBUG_ASSERT(rdb_collation_exceptions != nullptr);
 
-  if (!rdb_collation_exceptions->set_patterns(exception_list)) {
-    warn_about_bad_patterns(rdb_collation_exceptions,
+  int flags = MY_REG_EXTENDED | MY_REG_NOSUB;
+  if (lower_case_table_names)
+    flags |= MY_REG_ICASE;
+  if (!rdb_collation_exceptions->compile(
+          exception_list, flags, table_alias_charset)) {
+    warn_about_bad_patterns(*rdb_collation_exceptions,
                             "strict_collation_exceptions");
   }
 }
@@ -9846,8 +9851,7 @@ void rocksdb_set_collation_exception_list(THD *const thd,
   *static_cast<const char **>(var_ptr) = val;
 }
 
-void rocksdb_set_bulk_load(THD *const thd,
-                           struct st_mysql_sys_var *const var
+void rocksdb_set_bulk_load(THD *const thd, struct st_mysql_sys_var *const var
                            __attribute__((__unused__)),
                            void *const var_ptr, const void *const save) {
   Rdb_transaction *&tx = get_tx_from_thd(thd);

@@ -2673,9 +2673,7 @@ bool Rdb_tbl_def::put_dict(Rdb_dict_manager *const dict,
 
 void Rdb_tbl_def::check_if_is_mysql_system_table() {
   static const char *const system_dbs[] = {
-      "mysql",
-      "performance_schema",
-      "information_schema",
+      "mysql", "performance_schema", "information_schema",
   };
 
   m_is_mysql_system_table = false;

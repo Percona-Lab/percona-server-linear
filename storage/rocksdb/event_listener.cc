@@ -47,11 +47,10 @@ extract_index_stats(const std::vector<std::string> &files,
 }
 
 void Rdb_event_listener::update_index_stats(
-  const rocksdb::TableProperties& props
-) {
+    const rocksdb::TableProperties &props) {
   DBUG_ASSERT(m_ddl_manager != nullptr);
   const auto tbl_props =
-    std::make_shared<const rocksdb::TableProperties>(props);
+      std::make_shared<const rocksdb::TableProperties>(props);
 
   std::vector<Rdb_index_stats> stats;
   Rdb_tbl_prop_coll::read_stats_from_tbl_props(tbl_props, &stats);
@@ -78,9 +77,7 @@ void Rdb_event_listener::OnFlushCompleted(
 }
 
 void Rdb_event_listener::OnExternalFileIngested(
-  rocksdb::DB* db,
-  const rocksdb::ExternalFileIngestionInfo& info
-) {
+    rocksdb::DB *db, const rocksdb::ExternalFileIngestionInfo &info) {
   DBUG_ASSERT(db != nullptr);
   update_index_stats(info.table_properties);
 }

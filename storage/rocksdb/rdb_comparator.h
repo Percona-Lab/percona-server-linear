@@ -67,8 +67,8 @@ public:
   const char *Name() const override { return "RocksDB_SE_v3.10"; }
 
   // TODO: advanced funcs:
-  //  - FindShortestSeparator
-  //  - FindShortSuccessor
+  // - FindShortestSeparator
+  // - FindShortSuccessor
 
   // for now, do-nothing implementations:
   void FindShortestSeparator(std::string *start,
