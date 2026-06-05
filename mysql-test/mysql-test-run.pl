@@ -260,6 +260,10 @@ our $ports_per_thread   = 30;
 #
 # Suites run by default (i.e. when invoking ./mtr without parameters)
 #
+# @DEFAULT_SUITES is divided into three groups, separated by blank lines:
+#   1. Default upstream MTR suites
+#   2. Percona-added MTR suites
+#   3. Non-default upstream MTR suites
 our @DEFAULT_SUITES = qw(
   auth_sec
   binlog
@@ -300,6 +304,7 @@ our @DEFAULT_SUITES = qw(
   x
   component_keyring_file
 
+  auth_openid_connect
   audit_log_filter
   component_encryption_udf
   percona
@@ -381,6 +386,8 @@ our $exe_libtool;
 our $exe_mysql;
 our $exe_mysql_migrate_keyring;
 our $exe_mysql_keyring_encryption_test;
+our $exe_mysql_test_jwt_generator;
+our $exe_create_id_token;
 our $exe_mysqladmin;
 our $exe_mysqltest;
 our $exe_mysql_test_event_tracking;
@@ -2904,7 +2911,8 @@ sub executable_setup () {
     mtr_exe_exists("$path_client_bindir/mysql_migrate_keyring");
   $exe_mysql_keyring_encryption_test =
     mtr_exe_exists("$path_client_bindir/mysql_keyring_encryption_test");
-
+  $exe_mysql_test_jwt_generator = mtr_exe_maybe_exists("$path_client_bindir/mysql_test_jwt_generator");
+  $exe_create_id_token = mtr_exe_maybe_exists("$path_client_bindir/create_id_token");
   # Look for mysql_test_event_tracking binary
   $exe_mysql_test_event_tracking = my_find_bin($bindir,
                 [ "runtime_output_directory", "bin" ],
@@ -3466,7 +3474,8 @@ sub environment_setup {
   $ENV{'MYSQL_SECURE_INSTALLATION'} =
     "$path_client_bindir/mysql_secure_installation";
   $ENV{'OPENSSL_EXECUTABLE'} = $exe_openssl;
-
+  $ENV{'MYSQL_TEST_JWT_GENERATOR'} = $exe_mysql_test_jwt_generator;
+  $ENV{'CREATE_ID_TOKEN'} = $exe_create_id_token;
   my $exe_mysqld = find_mysqld($basedir);
   $ENV{'MYSQLD'} = $exe_mysqld;
 
