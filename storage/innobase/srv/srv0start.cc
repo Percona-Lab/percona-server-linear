@@ -1183,10 +1183,15 @@ static dberr_t srv_open_tmp_tablespace(ib::fsp::SysTablespace &tmp_space) {
         return DB_ERROR;
       }
 
+      fsp_flags_set_encryption((*space)->flags);
+
       const auto encryption_err =
           fil_set_encryption((*space)->id, Encryption::AES, nullptr, nullptr);
+      if (encryption_err != DB_SUCCESS) {
+        fil_space_release(*space);
+        return encryption_err;
+      }
       tmp_space.set_flags((*space)->flags);
-      ut_a(encryption_err == DB_SUCCESS);
     }
 
     fil_space_release(*space);
