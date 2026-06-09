@@ -35,6 +35,7 @@ INCLUDE_DIRECTORIES(
   ${CMAKE_SOURCE_DIR}/libbinlogevents/include/   # byteorder.h
   ${SSL_INCLUDE_DIRS}                            # SSL include dirs
   ${LZ4_INCLUDE_DIR}                             # LZ4
+  ${TIRPC_INCLUDE_DIR}                           # tirpc RPC headers
   ${XCOM_WINDEPS_INCLUDE_DIRS}                   # win deps and sun rpc
   ${CMAKE_CURRENT_SOURCE_DIR}/include
   ${CMAKE_CURRENT_SOURCE_DIR}/include/sql_service
@@ -218,6 +219,7 @@ MYSQL_ADD_PLUGIN(group_replication
                  LINK_LIBRARIES
                  ${LZ4_LIBRARY}
                  ${SSL_LIBRARIES}
+                 ${TIRPC_LIBRARY}
                  MODULE_ONLY MODULE_OUTPUT_NAME "group_replication")
 
 ### INSTALLATION ###
