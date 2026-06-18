@@ -145,6 +145,7 @@ SELECT prio,error_code,subsystem,data
 # Percona-added:
 # MY-010097: ER_SEC_FILE_PRIV_EMPTY, emitted for --secure-log-path
 # MY-015641: ER_SERVER_WARN_CONTAINER_IGNORED, depends on whether server runs in a container
+# MY-048400: ER_VECTOR_DISTANCE_SIMD_DISPATCH, emits to inform about the SIMD/scalar used to calculate vector_distance
 SELECT prio,error_code,subsystem
   FROM performance_schema.error_log
  WHERE logged>=@startup

@@ -183,6 +183,7 @@ SET(TESTS
   unhex
   utf8alias
   val_int_compare
+  vector_distance
   )
 
 LIST(TRANSFORM TESTS APPEND "-t.cc" OUTPUT_VARIABLE ALL_SMALL_TESTS)
@@ -370,6 +371,7 @@ DISABLE_MISSING_PROFILE_WARNING()
 LIST(TRANSFORM SERVER_TESTS APPEND "-t.cc" OUTPUT_VARIABLE ALL_LARGE_TESTS)
 
 SET(SQL_GUNIT_LIB_SOURCE
+  ${CMAKE_SOURCE_DIR}/vector-common/vector_distance.cc
   ${CMAKE_SOURCE_DIR}/sql/filesort_utils.cc
   ${CMAKE_SOURCE_DIR}/sql/mdl.cc
   ${CMAKE_SOURCE_DIR}/sql/sql_list.cc
@@ -381,6 +383,12 @@ SET(SQL_GUNIT_LIB_SOURCE
   ${CMAKE_SOURCE_DIR}/sql/join_optimizer/overflow_bitset.cc
   ${CMAKE_SOURCE_DIR}/sql/locks/shared_spin_lock.cc
   )
+
+# Fused multiply-add would make DISTANCE() differ between SIMD tiers. It is
+# disabled here as in the server build (sql/CMakeLists.txt), so the unit tests
+# exercise exactly the code the server runs.
+ADD_CXX_COMPILE_FLAGS_TO_FILES(-ffp-contract=off
+  FILES ${CMAKE_SOURCE_DIR}/vector-common/vector_distance.cc)
 
 ADD_LIBRARY(sqlgunitlib STATIC ${SQL_GUNIT_LIB_SOURCE})
 ADD_DEPENDENCIES(sqlgunitlib GenError)
@@ -426,6 +434,16 @@ FOREACH(test ${TESTS})
     ADD_GCOV_TEST ${test}
   )
 ENDFOREACH()
+
+# vector_distance per-tier benchmark — all SIMD tiers × 12 sizes × all metrics.
+# Unavailable tiers (wrong ISA or CPU) are skipped at runtime via GTEST_SKIP().
+MYSQL_ADD_EXECUTABLE(vector_distance_benchmark-t vector_distance_benchmark-t.cc
+  COMPILE_DEFINITIONS ${DISABLE_PSI_DEFINITIONS}
+  ENABLE_EXPORTS
+  EXCLUDE_FROM_ALL
+  LINK_LIBRARIES sqlgunitlib gunit_small extra::boost
+  SKIP_INSTALL
+)
 
 # Disable by default, since it dumps a stack trace.
 # We don't want ppl to think there was a segfault or something.

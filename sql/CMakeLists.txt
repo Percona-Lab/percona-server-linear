@@ -369,6 +369,7 @@ SET(SQL_SHARED_SOURCES
   auth/sha2_password_common.cc
   auth/sha2_password.cc
   ../vector-common/vector_conversion.cc
+  ../vector-common/vector_distance.cc
   ssl_wrapper_service.cc
   bootstrap.cc
   check_stack.cc
@@ -672,6 +673,13 @@ SET(SQL_SHARED_SOURCES
   sql_event_tracking_to_audit_event_mapping.cc
   command_mapping.cc
 )
+
+# Fused multiply-add rounds once instead of twice, which would make DISTANCE()
+# results differ between SIMD tiers and so between machines. DISTANCE() values
+# can be stored in functional indexes and generated columns, and tables with
+# such objects must stay binary portable between machines.
+ADD_CXX_COMPILE_FLAGS_TO_FILES(-ffp-contract=off
+  FILES ../vector-common/vector_distance.cc)
 
 IF(BUILD_IS_SINGLE_CONFIG)
   GET_PROPERTY(CWD_DEFINITIONS DIRECTORY PROPERTY COMPILE_DEFINITIONS)
