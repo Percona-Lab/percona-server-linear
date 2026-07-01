@@ -30,6 +30,7 @@ SET PERSIST_ONLY group_replication_bootstrap_group = @@GLOBAL.group_replication_
 SET PERSIST_ONLY group_replication_certification_loop_chunk_size = @@GLOBAL.group_replication_certification_loop_chunk_size;
 SET PERSIST_ONLY group_replication_certification_loop_sleep_time = @@GLOBAL.group_replication_certification_loop_sleep_time;
 SET PERSIST_ONLY group_replication_clone_threshold = @@GLOBAL.group_replication_clone_threshold;
+SET PERSIST_ONLY group_replication_communication_debug_max_file_size = @@GLOBAL.group_replication_communication_debug_max_file_size;
 SET PERSIST_ONLY group_replication_communication_debug_options = @@GLOBAL.group_replication_communication_debug_options;
 SET PERSIST_ONLY group_replication_communication_max_message_size = @@GLOBAL.group_replication_communication_max_message_size;
 SET PERSIST_ONLY group_replication_communication_stack = @@GLOBAL.group_replication_communication_stack;
@@ -112,6 +113,7 @@ RESET PERSIST IF EXISTS group_replication_bootstrap_group;
 RESET PERSIST IF EXISTS group_replication_certification_loop_chunk_size;
 RESET PERSIST IF EXISTS group_replication_certification_loop_sleep_time;
 RESET PERSIST IF EXISTS group_replication_clone_threshold;
+RESET PERSIST IF EXISTS group_replication_communication_debug_max_file_size;
 RESET PERSIST IF EXISTS group_replication_communication_debug_options;
 RESET PERSIST IF EXISTS group_replication_communication_max_message_size;
 RESET PERSIST IF EXISTS group_replication_communication_stack;
