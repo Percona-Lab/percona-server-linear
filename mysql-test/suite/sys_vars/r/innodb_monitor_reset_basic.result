@@ -107,6 +107,8 @@ buffer_LRU_search_scanned_per_call	disabled
 buffer_LRU_unzip_search_scanned	disabled
 buffer_LRU_unzip_search_num_scan	disabled
 buffer_LRU_unzip_search_scanned_per_call	disabled
+buffer_LRU_single_page_flush_count	disabled
+buffer_LRU_flush_await_count	disabled
 buffer_page_read_index_leaf	disabled
 buffer_page_read_index_non_leaf	disabled
 buffer_page_read_index_ibuf_leaf	disabled
@@ -209,7 +211,6 @@ log_writer_waits	disabled
 log_writer_wait_loops	disabled
 log_writer_on_file_space_waits	disabled
 log_writer_on_archiver_waits	disabled
-log_writer_on_tracker_waits	disabled
 log_flusher_no_waits	disabled
 log_flusher_waits	disabled
 log_flusher_wait_loops	disabled
