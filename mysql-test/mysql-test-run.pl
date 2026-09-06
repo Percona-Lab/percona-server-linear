@@ -268,6 +268,27 @@ our @DEFAULT_SUITES = qw(
   test_services
   x
   component_keyring_file
+
+  audit_log
+  audit_log_filter
+  binlog_57_decryption
+  percona-pam-for-mysql
+  component_masking_functions
+  data_masking
+  procfs
+  rocksdb
+  rocksdb_rpl
+  rocksdb_sys_vars
+  rocksdb_stress
+  rpl_encryption
+
+  audit_null
+  engines/iuds
+  engines/funcs
+  funcs_1
+  group_replication
+  jp
+  stress
 );
 
 our $DEFAULT_SUITES = join ',', @DEFAULT_SUITES;
