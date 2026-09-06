@@ -42,6 +42,9 @@
 
 --source include/rpl/init_source_replica.inc
 
+--source include/rpl_connection_slave.inc
+--source include/not_mts_replica_parallel_workers.inc
+
 --echo ==== Initialize ====
 
 --echo [on master]
