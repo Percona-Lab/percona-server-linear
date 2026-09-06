@@ -286,6 +286,27 @@ our @DEFAULT_SUITES = qw(
   component_keyring_file
   component_connection_control
   jdv
+
+  audit_log_filter
+  component_encryption_udf
+  percona
+  percona_innodb
+  percona-pam-for-mysql
+  component_masking_functions
+  procfs
+  rocksdb
+  rocksdb_rpl
+  rocksdb_sys_vars
+  rocksdb_stress
+  rpl_encryption
+
+  audit_null
+  engines/iuds
+  engines/funcs
+  funcs_1
+  group_replication
+  jp
+  stress
 );
 
 our $DEFAULT_SUITES = join ',', @DEFAULT_SUITES;
