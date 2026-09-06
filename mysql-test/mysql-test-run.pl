@@ -214,7 +214,13 @@ our $opt_xml_report;
 #
 # Suites run by default (i.e. when invoking ./mtr without parameters)
 #
-our $DEFAULT_SUITES = "auth_sec,binlog_gtid,binlog_nogtid,clone,collations,connection_control,encryption,federated,funcs_2,gcol,sysschema,gis,innodb,innodb_fts,innodb_gis,innodb_undo,innodb_zip,json,main,opt_trace,parts,perfschema,query_rewrite_plugins,rpl,rpl_gtid,rpl_nogtid,secondary_engine,service_status_var_registration,service_sys_var_registration,service_udf_registration,sys_vars,binlog,test_service_sql_api,test_services,x";
+our $DEFAULT_SUITES = "auth_sec,binlog_gtid,binlog_nogtid,clone,collations,connection_control,encryption,federated,funcs_2,gcol,sysschema,gis,innodb,innodb_fts,innodb_gis,innodb_undo,innodb_zip,json,main,opt_trace,parts,perfschema,query_rewrite_plugins,rpl,rpl_gtid,rpl_nogtid,secondary_engine,service_status_var_registration,service_sys_var_registration,service_udf_registration,sys_vars,binlog,test_service_sql_api,test_services,x,"
+  # Percona suites
+  ."funcs_1,jp,stress,engines/iuds,engines/funcs,group_replication,"
+  ."innodb_stress,"
+  ."tokudb.add_index,tokudb.alter_table,tokudb,tokudb.bugs,tokudb.parts,"
+  ."tokudb.rpl,tokudb.perfschema,"
+  ."rocksdb,rocksdb.rpl,rocksdb.sys_vars";
 
 # End of list of default suites
 
@@ -1898,6 +1904,7 @@ sub command_line_setup {
       $opt_ddd                  ||
       $opt_client_ddd           ||
       $opt_manual_gdb           ||
+      $opt_lldb                 ||
       $opt_manual_lldb          ||
       $opt_manual_ddd           ||
       $opt_manual_debug         ||
@@ -2040,7 +2047,7 @@ sub command_line_setup {
   if ($opt_valgrind) {
     # Default to --tool=memcheck if no other tool has been explicitly
     # specified. From >= 2.1.2, this option is needed
-    if (!@valgrind_args or !grep(/^--tool=/, @valgrind_args)) {
+    if ((!@valgrind_args and !$opt_helgrind) or !grep(/^--tool=/, @valgrind_args)) {
       # Set default valgrind options for memcheck, can be overriden by user
       unshift(@valgrind_args,
               ("--tool=memcheck", "--num-callers=16", "--show-reachable=yes"));
@@ -2235,6 +2242,12 @@ sub collect_mysqld_features {
   # Need --user=root if running as *nix root user
   if (!IS_WINDOWS and $> == 0) {
     mtr_add_arg($args, "--user=root");
+  }
+
+  foreach my $extra_opt (@opt_extra_mysqld_opt) {
+    if ($extra_opt =~ /--plugin-load/) {
+      mtr_add_arg($args, $extra_opt);
+    }
   }
 
   my $exe_mysqld = find_mysqld($basedir);
@@ -4354,6 +4367,15 @@ sub resfile_report_test ($) {
   resfile_test_info("start_time", isotime time);
 }
 
+sub error_logs_to_comment {
+  my $tinfo= shift;
+  foreach my $mysqld (mysqlds())
+  {
+    $tinfo->{comment}.= "\nServer " . $mysqld->{proc} . " log: ".
+      get_log_from_proc($mysqld->{proc}, $tinfo->{name});
+  }
+}
+
 # Extracts bootstrap options from opt file.
 sub extract_bootstrap_opts {
   my ($option, $bootstrap_opts, $i, $command_boot_opts, $opt_file_options) = @_;
@@ -4836,6 +4858,8 @@ sub run_testcase ($) {
           goto SRVDIED;
         }
 
+        error_logs_to_comment($tinfo);
+
         # Test case failure reported by mysqltest
         report_failure_and_restart($tinfo);
       } else {
@@ -4949,8 +4973,9 @@ sub run_testcase ($) {
       if (-e $log_file_name) {
         $tinfo->{comment} .=
           "== $log_file_name == \n" .
-          mtr_lastlinesfromfile($log_file_name, 20) . "\n";
+          mtr_lastlinesfromfile($log_file_name, 500) . "\n";
       }
+      error_logs_to_comment($tinfo);
 
       # Mark as timeout
       $tinfo->{'timeout'} = testcase_timeout($tinfo);
@@ -5691,7 +5716,7 @@ sub report_failure_and_restart ($) {
           if (-e $log_file_name) {
             $tinfo->{comment} .=
               "The result from queries just before the failure was:" .
-              "\n< snip >\n" . mtr_lastlinesfromfile($log_file_name, 20) . "\n";
+              "\n< snip >\n" . mtr_lastlinesfromfile($log_file_name, 500) . "\n";
           }
         }
       } else {
@@ -6730,7 +6755,7 @@ sub start_mysqltest ($) {
   mtr_add_arg($args, "--test-file=%s", $tinfo->{'path'});
 
   # Number of lines of resut to include in failure report
-  mtr_add_arg($args, "--tail-lines=20");
+  mtr_add_arg($args, "--tail-lines=500");
 
   if (defined $tinfo->{'result_file'}) {
     mtr_add_arg($args, "--result-file=%s", $tinfo->{'result_file'});
@@ -6780,8 +6805,10 @@ sub start_mysqltest ($) {
 }
 
 sub create_debug_statement {
+  my $run = shift;
   my $args  = shift;
   my $input = shift;
+  my @params_to_quote = ("--plugin_load=", "--plugin_load_add=");
 
   # Put arguments into a single string and enclose values which
   # contain metacharacters in quotes
@@ -6809,7 +6836,7 @@ sub gdb_arguments {
   # Remove the old gdbinit file
   unlink($gdb_init_file);
 
-  my $runline = create_debug_statement($args, $input);
+  my $runline = create_debug_statement("run", $args, $input);
 
   # write init file for mysqld or client
   mtr_tofile($gdb_init_file, "break main\n" . $runline);
@@ -6890,7 +6917,7 @@ sub ddd_arguments {
   # Remove the old gdbinit file
   unlink($gdb_init_file);
 
-  my $runline = create_debug_statement($args, $input);
+  my $runline = create_debug_statement("run", $args, $input);
 
   # Write init file for mysqld or client
   mtr_tofile($gdb_init_file, "file $$exe\n" . "break main\n" . $runline);
@@ -7021,12 +7048,11 @@ sub valgrind_arguments {
   my $exe           = shift;
   my $report_prefix = shift;
 
-  my @tool_list = grep(/^--tool=(memcheck|callgrind|massif)/, @valgrind_args);
-
+  my @tool_list = grep(/^--tool=(memcheck|callgrind|massif|helgrind)/, @valgrind_args);
   if (@tool_list) {
     # Get the value of the last specified --tool=<> argument to valgrind
-    my ($tool_name) = $tool_list[-1] =~ /(memcheck|callgrind|massif)$/;
-    if ($tool_name =~ /memcheck/) {
+    my ($tool_name)= $tool_list[-1] =~ /(memcheck|callgrind|massif|helgrind)$/;
+    if ($tool_name=~ /memcheck/) {
       $daemonize_mysqld ? mtr_add_arg($args, "--leak-check=no") :
         mtr_add_arg($args, "--leak-check=yes");
     } else {
@@ -7036,6 +7062,9 @@ sub valgrind_arguments {
                   "--$tool_name-out-file=$opt_vardir/log/" .
                     "$report_prefix" . "_$tool_name.out.%%p");
     }
+    # Support statically-linked malloc libraries and
+    # dynamically-linked jemalloc
+    mtr_add_arg($args, "--soname-synonyms=somalloc=NONE,somalloc=*jemalloc*");
   }
 
   # Add valgrind options, can be overriden by user
@@ -7559,3 +7588,4 @@ sub list_options ($) {
 
   exit(1);
 }
+
