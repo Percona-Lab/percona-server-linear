@@ -1473,8 +1473,7 @@ static void sync_latch_meta_init() UNIV_NOTHROW {
   LATCH_ADD_MUTEX(MASTER_KEY_ID_MUTEX, SYNC_NO_ORDER_CHECK,
                   master_key_id_mutex_key);
 
-  LATCH_ADD_MUTEX(FIL_CRYPT_MUTEX, SYNC_NO_ORDER_CHECK,
-                  PFS_NOT_INSTRUMENTED);
+  LATCH_ADD_MUTEX(FIL_CRYPT_MUTEX, SYNC_NO_ORDER_CHECK, PFS_NOT_INSTRUMENTED);
   LATCH_ADD_MUTEX(FIL_CRYPT_STAT_MUTEX, SYNC_NO_ORDER_CHECK,
                   PFS_NOT_INSTRUMENTED);
   LATCH_ADD_MUTEX(FIL_CRYPT_DATA_MUTEX, SYNC_NO_ORDER_CHECK,
@@ -1687,8 +1686,7 @@ void sync_check_init(size_t max_threads) {
   sync_array_init(max_threads);
 }
 
-/** Frees the resources in InnoDB's own synchronization data structures. Use
-os_sync_free() after calling this. */
+/** Frees the resources in InnoDB's own synchronization data structures. */
 void sync_check_close() {
   ut_d(LatchDebug::shutdown());
 
