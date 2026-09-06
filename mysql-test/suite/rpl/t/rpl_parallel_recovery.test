@@ -23,6 +23,9 @@
 --source include/have_replica_parallel_workers.inc
 --source include/rpl/init_source_replica.inc
 
+--source include/rpl_connection_slave.inc
+--source include/only_mts_replica_parallel_type_logical_clock.inc
+
 --source common/rpl/rpl_parallel_recovery_core.test
 
 --source include/rpl/deinit.inc
