@@ -13,7 +13,13 @@ CALL mtr.add_suppression("Replica SQL for channel 'ch1': Replica failed to initi
 CREATE USER 'replication_applier'@'localhost' IDENTIFIED BY 'password';
 GRANT REPLICATION_APPLIER ON * . * TO 'replication_applier'@'localhost';
 FLUSH PRIVILEGES;
-STOP REPLICA FOR CHANNEL "";
+#
+# TC.P.F1: CHANGE REPLICATION SOURCE sets the PRIVILEGE_CHECKS_USER correctly.
+#
+STOP SLAVE;
+Warnings:
+Warning	1287	'STOP SLAVE' is deprecated and will be removed in a future release. Please use STOP REPLICA instead
+CHANGE REPLICATION SOURCE TO SOURCE_HOST="localhost", SOURCE_PORT=10, PRIVILEGE_CHECKS_USER=NULL;
 CHANGE REPLICATION SOURCE TO SOURCE_HOST="localhost", SOURCE_PORT=10, PRIVILEGE_CHECKS_USER='replication_applier'@'localhost';
 #
 # Restart slave with TABLE repository to test with privilege_checks_user config.
@@ -24,7 +30,7 @@ include/assert.inc [Check that performance_schema.replication_applier_configurat
 include/assert.inc [Check that priv_chks_username for channel "" is correct]
 include/assert.inc [Check that priv_chks_hostname for channel "" is correct]
 #
-# TC.P.T1: CHANGE MASTER sets the PRIVILEGE_CHECKS_USER correctly.
+# TC.P.T1: CHANGE REPLICATION SOURCE sets the PRIVILEGE_CHECKS_USER correctly.
 #
 CHANGE REPLICATION SOURCE TO SOURCE_HOST="localhost", SOURCE_PORT=11, PRIVILEGE_CHECKS_USER=NULL FOR CHANNEL "ch1";
 CHANGE REPLICATION SOURCE TO SOURCE_HOST="localhost", SOURCE_PORT=12, PRIVILEGE_CHECKS_USER='replication_applier'@'localhost' FOR CHANNEL "ch2" ;

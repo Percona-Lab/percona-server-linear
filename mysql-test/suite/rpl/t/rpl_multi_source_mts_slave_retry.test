@@ -34,6 +34,9 @@ CREATE TABLE t1( a int unique);
 --let $sync_slave_connection= server_2
 --source include/sync_slave_sql_with_master.inc
 
+# connection was switched to slave
+--source include/only_mts_replica_parallel_workers.inc
+
 --echo # stop slave
 --source include/rpl_stop_slaves.inc
 
