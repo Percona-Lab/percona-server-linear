@@ -70,7 +70,11 @@ while ($j > 0) {
     BEGIN;
     INSERT INTO t1 SET a = 10, b = 11;
 
-    --source include/rpl/connection_source.inc
+  let $ps_query_suffix = FROM performance_schema.threads AS t, performance_schema.events_statements_current AS esc
+    WHERE t.thread_id = esc.thread_id AND t.name IN ('thread/sql/replica_sql', 'thread/sql/replica_worker') AND esc.sql_text LIKE 'XA START%';
+  # wait for the applier thread to start applying
+  --let $wait_condition=SELECT COUNT(*) > 0 $ps_query_suffix
+  --source include/wait_condition.inc
 
     INSERT INTO t1 SET a = 22, b = 22;
     XA START 'xa1';

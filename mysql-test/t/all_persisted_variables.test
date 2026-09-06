@@ -77,7 +77,8 @@ performance_schema.global_variables WHERE variable_name NOT IN
 'innodb_monitor_disable',
 'innodb_monitor_reset',
 'innodb_monitor_reset_all',
-'rbr_exec_mode');
+'rbr_exec_mode',
+'jemalloc_profiling');
 
 --let $count_vars= `SELECT COUNT(*) FROM global_vars;`
 --let $var_id=1
