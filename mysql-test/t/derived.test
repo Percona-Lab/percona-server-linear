@@ -3481,3 +3481,154 @@ SET max_heap_table_size = DEFAULT;
 SET tmp_table_size = DEFAULT;
 SET internal_tmp_mem_storage_engine = DEFAULT;
 
+--echo # Bug#36557029: Recent failure in check_column_grant_in_table_ref
+
+CREATE TABLE t (
+  a INTEGER GENERATED ALWAYS AS (1) VIRTUAL,
+  KEY (a)
+) ENGINE = InnoDB;
+
+--error ER_BAD_FIELD_ERROR
+WITH cte1 AS (
+  SELECT (SELECT a) AS a
+  FROM t AS r
+  WHERE a > 0
+  GROUP BY r.a, r.a
+)
+SELECT a, a FROM cte1 WHERE cte1.a <= r.a;
+
+DROP TABLE t;
+
+--echo #
+--echo # Bug#34646522: Literal value with different character set from derived
+--echo #               table causes error
+--echo #
+
+CREATE TABLE t
+(a VARCHAR(10) CHARACTER SET ascii,
+ b VARCHAR(10) CHARACTER SET latin1,
+ c VARCHAR(10) CHARACTER SET latin2,
+ d VARCHAR(10) CHARACTER SET utf16
+);
+
+SELECT _utf8mb4 'a' AS a UNION SELECT a FROM t;
+SELECT * FROM (SELECT _utf8mb4 'a' AS a) AS dt UNION SELECT a FROM t;
+
+--error ER_CANNOT_CONVERT_STRING
+SELECT _utf8mb4 'Â±' AS a UNION SELECT a FROM t;
+--error ER_CANNOT_CONVERT_STRING
+SELECT * FROM (SELECT _utf8mb4 'Â±' AS a) AS dt UNION SELECT a FROM t;
+
+SELECT _utf8mb4 'a' AS a UNION SELECT b FROM t;
+SELECT * FROM (SELECT _utf8mb4 'a' AS a) AS dt UNION SELECT b FROM t;
+
+SELECT _utf8mb4 'Â±' AS a UNION SELECT b FROM t;
+SELECT * FROM (SELECT _utf8mb4 'Â±' AS a) AS dt UNION SELECT b FROM t;
+
+SELECT _utf8mb4 'a' AS a UNION SELECT c FROM t;
+SELECT * FROM (SELECT _utf8mb4 'a' AS a) AS dt UNION SELECT c FROM t;
+
+--error ER_CANNOT_CONVERT_STRING
+SELECT _utf8mb4 'Â±' AS a UNION SELECT c FROM t;
+--error ER_CANNOT_CONVERT_STRING
+SELECT * FROM (SELECT _utf8mb4 'Â±' AS a) AS dt UNION SELECT c FROM t;
+
+SELECT _utf8mb4 'a' AS a UNION SELECT d FROM t;
+SELECT * FROM (SELECT _utf8mb4 'a' AS a) AS dt UNION SELECT d FROM t;
+
+SELECT _latin1 'a' AS a UNION SELECT a FROM t;
+SELECT * FROM (SELECT _latin1 'a' AS a) AS dt UNION SELECT a FROM t;
+
+--error ER_CANNOT_CONVERT_STRING
+SELECT _latin1 'Ã¥' AS a UNION SELECT a FROM t;
+--error ER_CANNOT_CONVERT_STRING
+SELECT * FROM (SELECT _latin1 'Ã¥' AS a) AS dt UNION SELECT a FROM t;
+
+SELECT _latin1 'a' AS a UNION SELECT c FROM t;
+SELECT * FROM (SELECT _latin1 'a' AS a) AS dt UNION SELECT c FROM t;
+
+--error ER_CANNOT_CONVERT_STRING
+SELECT _latin1 'Ã¥' AS a UNION SELECT c FROM t;
+--error ER_CANNOT_CONVERT_STRING
+SELECT * FROM (SELECT _latin1 'Ã¥' AS a) AS dt UNION SELECT c FROM t;
+
+DROP TABLE t;
+
+--echo #
+--echo # Bug#38191248: Issue with NULL Detection for DATE-Type Columns in
+--echo #               Derived Tables after Derived Merge
+--echo #
+
+CREATE TABLE t(id INT PRIMARY KEY, d DATE, t TIME, dt DATETIME);
+INSERT INTO t(id, d, t, dt) VALUES
+ (1, '2025-01-01', '00:00:00', '2025-01-01 00:00:00'),
+ (2, '2025-01-02', '01:02:03', '2025-01-02 01:02:03');
+
+let $date_query =
+SELECT ttt.b,
+       t.d,
+       COALESCE(NULL, t.d) AS c1,
+       COALESCE(ttt.b, t.d) AS c2,
+       COALESCE(ttt.b, t.id) AS c3
+FROM t LEFT JOIN
+     (SELECT DATE'2024-01-03' AS b
+      FROM (SELECT 1) AS tt
+      WHERE FALSE) AS ttt
+     ON TRUE;
+
+let $time_query =
+SELECT ttt.b,
+       t.t,
+       COALESCE(NULL, t.t) AS c1,
+       COALESCE(ttt.b, t.t) AS c2,
+       COALESCE(ttt.b, t.id) AS c3
+FROM t LEFT JOIN
+     (SELECT TIME'23:59:59' AS b
+      FROM (SELECT 1) AS tt
+      WHERE FALSE) AS ttt
+     ON TRUE;
+
+let $datetime_query =
+SELECT ttt.b,
+       t.dt,
+       COALESCE(NULL, t.dt) AS c1,
+       COALESCE(ttt.b, t.dt) AS c2,
+       COALESCE(ttt.b, t.id) AS c3
+FROM t LEFT JOIN
+     (SELECT TIMESTAMP'2024-01-03 23:59:59' AS b
+      FROM (SELECT 1) AS tt
+      WHERE FALSE) AS ttt
+     ON TRUE;
+
+eval $date_query;
+eval $time_query;
+eval $datetime_query;
+
+SET optimizer_switch="derived_merge=off";
+
+eval $date_query;
+eval $time_query;
+eval $datetime_query;
+
+SET optimizer_switch=default;
+
+DROP TABLE t;
+
+
+
+--echo #
+--echo # PS-8725 : Assertion `m_opened_table != nullptr' failed in temptable::Handler::opened_table_validate()
+--echo # Bug#35105404: Server crashes with signal 11 and asserts in temptable code.
+--echo #
+--echo # Re-execution of statements involving MIN/MAX optimization and
+--echo # derived/CTE table caused assertion failures.
+SET @optimizer_switch_saved= @@optimizer_switch;
+SET optimizer_switch="derived_merge=off";
+PREPARE stmt1 FROM "WITH cte AS (VALUES ROW(1), ROW(5), ROW(3)) SELECT column_0 FROM cte WHERE cte.column_0 = (SELECT max(column_0) FROM cte WHERE column_0 < 5)";
+EXECUTE stmt1;
+EXECUTE stmt1;
+DEALLOCATE PREPARE stmt1;
+SET optimizer_switch= @optimizer_switch_saved;
+
+# Restore the default for gtid_mode which is ON
+--source include/rpl/set_gtid_mode_on.inc
