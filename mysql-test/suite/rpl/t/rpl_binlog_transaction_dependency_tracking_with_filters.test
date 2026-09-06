@@ -19,7 +19,6 @@
 
 --source include/rpl/init_source_replica.inc
 --source include/have_binlog_format_row.inc
---source include/not_replica_parallel_workers.inc
 
 --source include/rpl/connection_replica.inc
 # Set filter rule.
