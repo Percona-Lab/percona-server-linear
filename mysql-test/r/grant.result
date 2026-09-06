@@ -769,6 +769,7 @@ show grants for mysqltest_8@'';
 Grants for mysqltest_8@
 GRANT USAGE ON *.* TO `mysqltest_8`@``
 GRANT UPDATE (`a`) ON `test`.`t1` TO `mysqltest_8`@``
+GRANT UPDATE (a) ON `test`.`t1` TO 'mysqltest_8'@'%'
 show grants for mysqltest_8;
 Grants for mysqltest_8@%
 GRANT USAGE ON *.* TO `mysqltest_8`@`%`
@@ -778,6 +779,7 @@ show grants for mysqltest_8@'';
 Grants for mysqltest_8@
 GRANT USAGE ON *.* TO `mysqltest_8`@``
 GRANT UPDATE (`a`) ON `test`.`t1` TO `mysqltest_8`@``
+GRANT UPDATE (a) ON `test`.`t1` TO 'mysqltest_8'@'%'
 show grants for mysqltest_8;
 Grants for mysqltest_8@%
 GRANT USAGE ON *.* TO `mysqltest_8`@`%`
@@ -812,6 +814,7 @@ show grants for mysqltest_8@'';
 Grants for mysqltest_8@
 GRANT USAGE ON *.* TO `mysqltest_8`@``
 GRANT UPDATE ON `test`.`t1` TO `mysqltest_8`@``
+GRANT UPDATE ON `test`.`t1` TO 'mysqltest_8'@'%'
 show grants for mysqltest_8;
 Grants for mysqltest_8@%
 GRANT USAGE ON *.* TO `mysqltest_8`@`%`
@@ -821,6 +824,7 @@ show grants for mysqltest_8@'';
 Grants for mysqltest_8@
 GRANT USAGE ON *.* TO `mysqltest_8`@``
 GRANT UPDATE ON `test`.`t1` TO `mysqltest_8`@``
+GRANT UPDATE ON `test`.`t1` TO 'mysqltest_8'@'%'
 show grants for mysqltest_8;
 Grants for mysqltest_8@%
 GRANT USAGE ON *.* TO `mysqltest_8`@`%`
