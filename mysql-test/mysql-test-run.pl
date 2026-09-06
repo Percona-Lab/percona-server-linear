@@ -190,6 +190,7 @@ my $exe_ndbmtd_counter = 0;
 my $source_dist        = 0;
 my $shutdown_report    = 0;
 my $valgrind_reports   = 0;
+my $shutdown_report_text = '';
 
 my @valgrind_args;
 
@@ -231,6 +232,7 @@ our $opt_summary_report;
 our $opt_vardir;
 our $opt_xml_report;
 our $ports_per_thread   = 30;
+our $opt_gterm;
 
 #
 # Suites run by default (i.e. when invoking ./mtr without parameters)
@@ -335,6 +337,7 @@ our $opt_warnings  = 1;
 
 our @opt_cases;
 our @opt_combinations;
+our $opt_only_combinations;
 our @opt_extra_bootstrap_opt;
 our @opt_extra_mysqld_opt;
 our @opt_extra_mysqltest_opt;
@@ -461,6 +464,16 @@ select(STDOUT);
 $| = 1;    # Automatically flush STDOUT
 
 main();
+
+sub is_core_dump {
+  my $core_path= shift;
+  my $core_name= basename($core_path);
+  # Name beginning with core, not ending in .gz, .c, .o, .d nor .log, not
+  # belonging to Boost, or ending with .dmp on Windows
+  return (($core_name =~ /^core/ and $core_name !~ /\.gz$|\.c$|\.o$|\.d$|\.log$/
+           and $core_path !~ /\/boost_/ and $core_path !~ /\/coredumper/)
+          or (IS_WINDOWS and $core_name =~ /\.dmp$/));
+}
 
 sub main {
   # Default, verbosity on
@@ -863,6 +876,22 @@ sub main {
     mtr_error("Test suite aborted");
   }
 
+  my $aggregated_shutdown_report = '';
+  my $aggregated_valgrind_report = '';
+  foreach my $t (@$completed) {
+    if ($t->{name} eq "shutdown_report") {
+      if (defined $t->{comment} && $t->{comment} ne '') {
+        $aggregated_shutdown_report .= $t->{comment};
+      }
+      if (($opt_valgrind || $opt_sanitize) && defined $t->{valgrind_comment}
+            && $t->{valgrind_comment} ne '') {
+        $aggregated_valgrind_report .= $t->{valgrind_comment};
+      }
+    }
+  }
+
+  @$completed = grep {$_->{name} ne "shutdown_report"} @$completed;
+
   if (@$completed != $num_tests) {
     # Not all tests completed, failure
     mtr_print_line();
@@ -899,9 +928,9 @@ sub main {
 
   # Set dummy worker id to align report with normal tests
   $tinfo->{worker} = 0 if $opt_parallel > 1;
-  if ($shutdown_report) {
+  if ($shutdown_report && $aggregated_shutdown_report ne '') {
     $tinfo->{result}   = 'MTR_RES_FAILED';
-    $tinfo->{comment}  = "Mysqld reported failures at shutdown, see above";
+    $tinfo->{comment}  = "Mysqld reported failures at shutdown: \n$aggregated_shutdown_report";
     $tinfo->{failures} = 1;
   } else {
     $tinfo->{result} = 'MTR_RES_PASSED';
@@ -919,13 +948,13 @@ sub main {
 
     # Set dummy worker id to align report with normal tests
     $tinfo->{worker} = 0 if $opt_parallel > 1;
-    if ($valgrind_reports) {
+    if ($aggregated_valgrind_report ne '') {
       $tinfo->{result} = 'MTR_RES_FAILED';
       if ($opt_valgrind_mysqld) {
-        $tinfo->{comment} = "Valgrind reported failures at shutdown, see above";
+        $tinfo->{comment} = "Valgrind reported failures at shutdown: \n$aggregated_valgrind_report";
       } else {
         $tinfo->{comment} =
-          "Sanitizer reported failures at shutdown, see above";
+          "Sanitizer reported failures at shutdown: \n$aggregated_valgrind_report";
       }
       $tinfo->{failures} = 1;
     } else {
@@ -955,6 +984,18 @@ sub main {
   # Cleanup the build thread id files
   remove_redundant_thread_id_file_locations();
   clean_unique_id_dir();
+
+  if ($opt_ctest) {
+    find({ wanted => sub {
+             my $core_file= $File::Find::name;
+
+             if (is_core_dump($core_file)) {
+               mtr_report(" - found '$core_file'");
+
+               My::CoreDump->show($core_file, "", 1);
+             }
+       }}, $bindir);
+  }
 
   print_total_times($opt_parallel) if $opt_report_times;
 
@@ -1084,10 +1125,7 @@ sub run_test_server ($$$) {
                       my $core_file = $File::Find::name;
                       my $core_name = basename($core_file);
 
-                      # Name beginning with core, not ending in .gz
-                      if (($core_name =~ /^core/ and $core_name !~ /\.gz$/) or
-                          (IS_WINDOWS and $core_name =~ /\.dmp$/)) {
-                        # Ending with .dmp
+                      if (is_core_dump($core_name)) {
 
                         if (exists $saved_cores_paths{$core_file}) {
                           mtr_report(" - found '$core_name' again, keeping it");
@@ -1131,8 +1169,10 @@ sub run_test_server ($$$) {
               # Test has failed, force is off
               push(@$completed, $result);
               return $completed unless $result->{'dont_kill_server'};
-              # Prevent kill of server, to get valgrind report
-              print $sock "BYE\n";
+              # Prevent kill of server, to get shutdown/valgrind report from the
+              # worker, BYE should be sent to the worker for complete exit once
+              # report is received.
+              print $sock "GETREPORTS\n";
               next;
             } elsif ($opt_max_test_fail > 0 and
                      $num_failed_test >= $opt_max_test_fail) {
@@ -1193,14 +1233,10 @@ sub run_test_server ($$$) {
           # various phases of execution, to be used when 'report-times' option
           # is enabled.
           add_total_times($line);
-        } elsif ($line eq 'VALGREP' && ($opt_valgrind or $opt_sanitize)) {
-          # 'VALGREP' means that the worker found some valgrind reports in the
-          # server logs. This will cause the master to flag the pseudo test
-          # valgrind_report as failed.
-          $valgrind_reports = 1;
-        } elsif ($line eq 'SRV_CRASH') {
+        } elsif ($line eq 'SHUTDOWN_REPORT') {
           # Mysqld detected crash during shutdown
           $shutdown_report = 1;
+          push(@$completed, My::Test::read_test($sock));
         } else {
           # Unknown message from worker
           mtr_error("Unknown response: '$line' from client");
@@ -1313,11 +1349,12 @@ sub run_test_server ($$$) {
             $running{ $next->key() } = $next;
             $num_ndb_tests++ if ($next->{ndb_test});
           } else {
-            # No more test, tell child to exit
-            print $sock "BYE\n";
-	    # Mark socket as unused, no more tests will be allocated
-	    $closed_sock{$sock} = 1;
-
+            # No more test, get shutdown/valgrind reports from the worker, BYE
+            # should be sent to the worker for complete exit once report is
+            # received.
+            print $sock "GETREPORTS\n";
+	        # Mark socket as unused, no more tests will be allocated
+	        $closed_sock{$sock} = 1;
           }
         }
       }
@@ -1380,6 +1417,8 @@ sub run_worker ($) {
 
   mark_time_used('init');
 
+  my $exit_code = 0;
+
   while (my $line = <$server>) {
     chomp($line);
     if ($line eq 'TESTCASE') {
@@ -1409,27 +1448,35 @@ sub run_worker ($) {
       mark_time_used('restart');
     } elsif ($line eq 'BYE') {
       mtr_report("Server said BYE");
-      my $ret = stop_all_servers($opt_shutdown_timeout);
-      if (defined $ret and $ret != 0) {
-        shutdown_exit_reports();
-        $shutdown_report = 1;
-      }
-      print $server "SRV_CRASH\n" if $shutdown_report;
-      mark_time_used('restart');
+      my $found_err = 0;
+      my $valgrind_report_text = '';
 
-      my $valgrind_reports = 0;
-      if ($opt_valgrind_mysqld or $opt_sanitize) {
-        $valgrind_reports = valgrind_exit_reports() if not $shutdown_report;
-        print $server "VALGREP\n" if $valgrind_reports;
+      stop_all_servers($opt_shutdown_timeout);
+
+      if ($opt_valgrind || $opt_sanitize) {
+        $valgrind_report_text = valgrind_exit_reports() if not $shutdown_report;
       }
+
+      if ($shutdown_report || $valgrind_report_text) {
+        my $test = My::Test->new(
+          name => 'shutdown_report',
+          comment => $shutdown_report_text,
+          valgrind_comment => $valgrind_report_text,
+        );
+        $test->write_test($server, "SHUTDOWN_REPORT");
+        $found_err = 1;
+      }
+
+      mark_time_used('restart');
 
       if ($opt_gprof) {
         gprof_collect(find_mysqld($basedir), keys %gprof_dirs);
       }
 
       mark_time_used('admin');
+
       print_times_used($server, $thread_num);
-      exit($valgrind_reports);
+      exit($found_err);
     } else {
       mtr_error("Could not understand server, '$line'");
     }
@@ -1681,6 +1728,7 @@ sub command_line_setup {
     # Control what test suites or cases to run
     'big-test'                           => \$opt_big_test,
     'combination=s'                      => \@opt_combinations,
+    'only-combinations=s'                => \$opt_only_combinations,
     'do-suite=s'                         => \$opt_do_suite,
     'do-test=s'                          => \&collect_option,
     'force'                              => \$opt_force,
@@ -1742,6 +1790,8 @@ sub command_line_setup {
     'debugger=s'           => \$opt_debugger,
     'gdb'                  => \$opt_gdb,
     'gdb-secondary-engine' => \$opt_gdb_secondary_engine,
+    # For using gnome-terminal when using --gdb option
+    'gterm'                => \$opt_gterm,
     'lldb'                 => \$opt_lldb,
     'manual-boot-gdb'      => \$opt_manual_boot_gdb,
     'manual-dbx'           => \$opt_manual_dbx,
@@ -2158,6 +2208,7 @@ sub command_line_setup {
       $opt_ddd                  ||
       $opt_client_ddd           ||
       $opt_manual_gdb           ||
+      $opt_lldb                 ||
       $opt_manual_lldb          ||
       $opt_manual_ddd           ||
       $opt_manual_debug         ||
@@ -2308,7 +2359,7 @@ sub command_line_setup {
   if ($opt_valgrind) {
     # Default to --tool=memcheck if no other tool has been explicitly
     # specified. From >= 2.1.2, this option is needed
-    if (!@valgrind_args or !grep(/^--tool=/, @valgrind_args)) {
+    if ((!@valgrind_args and !$opt_helgrind) or !grep(/^--tool=/, @valgrind_args)) {
       # Set default valgrind options for memcheck, can be overriden by user
       unshift(@valgrind_args,
               ("--tool=memcheck", "--num-callers=16", "--show-reachable=yes"));
@@ -2641,6 +2692,12 @@ sub collect_mysqld_features {
   # Need --user=root if running as *nix root user
   if (!IS_WINDOWS and $> == 0) {
     mtr_add_arg($args, "--user=root");
+  }
+
+  foreach my $extra_opt (@opt_extra_mysqld_opt) {
+    if ($extra_opt =~ /--plugin-load/) {
+      mtr_add_arg($args, $extra_opt);
+    }
   }
 
   my $exe_mysqld = find_mysqld($basedir);
@@ -3213,6 +3270,7 @@ sub environment_setup {
   $ENV{'MYSQL_TMP_DIR'}       = $opt_tmpdir;
   $ENV{'MYSQLTEST_VARDIR'}    = $opt_vardir;
   $ENV{'USE_RUNNING_SERVER'}  = using_extern();
+  $ENV{'MTR_REPEAT'}          = $opt_repeat;
 
   if (IS_WINDOWS) {
     $ENV{'SECURE_LOAD_PATH'}      = $glob_mysql_test_dir . "\\std_data";
@@ -3403,6 +3461,17 @@ sub environment_setup {
     $ENV{'IBD2SDI'} = mtr_args2str($exe_ibd2sdi, @$args);
   }
 
+  # sst_dump
+  # ----------------------------------------------------
+  my $exe_sst_dump=
+    mtr_exe_maybe_exists(
+           vs_config_dirs('storage/rocksdb', 'sst_dump'),
+           "$path_client_bindir/sst_dump",
+           "$basedir/storage/rocksdb/sst_dump");
+  $ENV{'MYSQL_SST_DUMP'}= native_path($exe_sst_dump);
+
+
+  # ----------------------------------------------------
   # Setup env so childs can execute myisampack and myisamchk
   $ENV{'MYISAMCHK'} =
     native_path(mtr_exe_exists("$path_client_bindir/myisamchk"));
@@ -3459,7 +3528,6 @@ sub environment_setup {
     if $opt_sanitize;
 
   $ENV{'ASAN_OPTIONS'} = "suppressions=\"${glob_mysql_test_dir}/asan.supp\""
-    . ",detect_stack_use_after_return=false"
     if $opt_sanitize;
 
 # The Thread Sanitizer allocator should return NULL instead of crashing on out-of-memory.
@@ -4509,6 +4577,7 @@ sub run_query {
 sub do_before_run_mysqltest($) {
   my $tinfo = shift;
 
+  $ENV{'MYSQL_CURRENT_TEST_DIR'} = dirname($tinfo->{'path'});
   # Remove old files produced by mysqltest
   my $base_file =
     mtr_match_extension($tinfo->{result_file}, "result");    # Trim extension
@@ -4863,6 +4932,15 @@ sub resfile_report_test ($) {
   resfile_test_info("variation", $tinfo->{combination})
     if $tinfo->{combination};
   resfile_test_info("start_time", isotime time);
+}
+
+sub error_logs_to_comment {
+  my $tinfo= shift;
+  foreach my $mysqld (mysqlds())
+  {
+    $tinfo->{comment}.= "\nServer " . $mysqld->{proc} . " log: ".
+      get_log_from_proc($mysqld->{proc}, $tinfo->{name});
+  }
 }
 
 # Extracts bootstrap options from opt file.
@@ -5362,6 +5440,8 @@ sub run_testcase ($) {
           goto SRVDIED;
         }
 
+        error_logs_to_comment($tinfo);
+
         # Test case failure reported by mysqltest
         report_failure_and_restart($tinfo);
       } else {
@@ -5476,8 +5556,9 @@ sub run_testcase ($) {
       if (-e $log_file_name) {
         $tinfo->{comment} .=
           "== $log_file_name == \n" .
-          mtr_lastlinesfromfile($log_file_name, 20) . "\n";
+          mtr_lastlinesfromfile($log_file_name, 500) . "\n";
       }
+      error_logs_to_comment($tinfo);
 
       # Mark as timeout
       $tinfo->{'timeout'} = testcase_timeout($tinfo);
@@ -6266,7 +6347,7 @@ sub report_failure_and_restart ($) {
           if (-e $log_file_name) {
             $tinfo->{comment} .=
               "The result from queries just before the failure was:" .
-              "\n< snip >\n" . mtr_lastlinesfromfile($log_file_name, 20) . "\n";
+              "\n< snip >\n" . mtr_lastlinesfromfile($log_file_name, 500) . "\n";
           }
         }
       } else {
@@ -7330,7 +7411,7 @@ sub start_mysqltest ($) {
 
   mtr_add_arg($args, "--test-file=%s", $tinfo->{'path'});
 
-  my $tail_lines = 20;
+  my $tail_lines = 500;
   if ($tinfo->{'full_result_diff'}) {
     # Use 10000 as an approximation for infinite output (same as maximum for
     # mysqltest --tail-lines).
@@ -7387,8 +7468,10 @@ sub start_mysqltest ($) {
 }
 
 sub create_debug_statement {
+  my $run = shift;
   my $args  = shift;
   my $input = shift;
+  my @params_to_quote = ("--plugin_load=", "--plugin_load_add=");
 
   # Put arguments into a single string and enclose values which
   # contain metacharacters in quotes
@@ -7416,7 +7499,7 @@ sub gdb_arguments {
   # Remove the old gdbinit file
   unlink($gdb_init_file);
 
-  my $runline = create_debug_statement($args, $input);
+  my $runline = create_debug_statement("run", $args, $input);
 
   # write init file for mysqld or client
   mtr_tofile($gdb_init_file, "break main\n" . $runline);
@@ -7431,9 +7514,16 @@ sub gdb_arguments {
   }
 
   $$args = [];
-  mtr_add_arg($$args, "-title");
-  mtr_add_arg($$args, "$type");
-  mtr_add_arg($$args, "-e");
+  if ($opt_gterm) {
+    mtr_add_arg($$args, "--title");
+    mtr_add_arg($$args, "$type");
+    mtr_add_arg($$args, "--wait");
+    mtr_add_arg($$args, "--");
+  } else {
+    mtr_add_arg($$args, "-title");
+    mtr_add_arg($$args, "$type");
+    mtr_add_arg($$args, "-e");
+  }
 
   if ($exe_libtool) {
     mtr_add_arg($$args, $exe_libtool);
@@ -7445,7 +7535,11 @@ sub gdb_arguments {
   mtr_add_arg($$args, "$gdb_init_file");
   mtr_add_arg($$args, "$$exe");
 
-  $$exe = "xterm";
+  if ($opt_gterm) {
+    $$exe = "gnome-terminal";
+  } else {
+    $$exe = "xterm";
+  }
 }
 
 # Modify the exe and args so that program is run in lldb
@@ -7497,7 +7591,7 @@ sub ddd_arguments {
   # Remove the old gdbinit file
   unlink($gdb_init_file);
 
-  my $runline = create_debug_statement($args, $input);
+  my $runline = create_debug_statement("run", $args, $input);
 
   # Write init file for mysqld or client
   mtr_tofile($gdb_init_file, "file $$exe\n" . "break main\n" . $runline);
@@ -7648,12 +7742,11 @@ sub valgrind_arguments {
   my $exe           = shift;
   my $report_prefix = shift;
 
-  my @tool_list = grep(/^--tool=(memcheck|callgrind|massif)/, @valgrind_args);
-
+  my @tool_list = grep(/^--tool=(memcheck|callgrind|massif|helgrind)/, @valgrind_args);
   if (@tool_list) {
     # Get the value of the last specified --tool=<> argument to valgrind
-    my ($tool_name) = $tool_list[-1] =~ /(memcheck|callgrind|massif)$/;
-    if ($tool_name =~ /memcheck/) {
+    my ($tool_name)= $tool_list[-1] =~ /(memcheck|callgrind|massif|helgrind)$/;
+    if ($tool_name=~ /memcheck/) {
       $daemonize_mysqld ? mtr_add_arg($args, "--leak-check=no") :
         mtr_add_arg($args, "--leak-check=yes");
     } else {
@@ -7663,6 +7756,9 @@ sub valgrind_arguments {
                   "--$tool_name-out-file=$opt_vardir/log/" .
                     "$report_prefix" . "_$tool_name.out.%%p");
     }
+    # Support statically-linked malloc libraries and
+    # dynamically-linked jemalloc
+    mtr_add_arg($args, "--soname-synonyms=somalloc=NONE,somalloc=*jemalloc*");
   }
 
   # Add valgrind options, can be overriden by user
@@ -7785,6 +7881,9 @@ sub run_ctest() {
   # Add vs-config option if needed
   $ctest_vs = "-C $opt_vs_config" if $opt_vs_config;
 
+  # Request Valgrind for unit tests if former was requested for other tests.
+  my $ctest_memcheck = $opt_valgrind_mysqld ? ' -T memcheck' : '';
+
   # Also silently ignore if we don't have ctest and didn't insist.
   # Special override: also ignore in Pushbuild, some platforms may
   # not have it. Now, run ctest and collect output.
@@ -7802,7 +7901,7 @@ sub run_ctest() {
     # Skip tests with label NDB
     $ctest_opts .= "-LE " . ((IS_WINDOWS) ? "^^NDB\$" : "^NDB\\\$");
   }
-  my $ctest_out = `ctest $ctest_opts --test-timeout $opt_ctest_timeout $ctest_vs 2>&1`;
+  my $ctest_out = `ctest $ctest_opts --test-timeout $opt_ctest_timeout $ctest_vs $ctest_memcheck 2>&1`;
   if ($? == $no_ctest && ($opt_ctest == -1 || defined $ENV{PB2WORKDIR})) {
     chdir($olddir);
     return;
@@ -7873,6 +7972,7 @@ Options to control what engine/variation to run
 
   combination=<opt>     Use at least twice to run tests with specified
                         options to mysqld.
+  only-combinations=<name>  Use only given combinations, separated by ",".
   compress              Use the compressed protocol between client and server.
   async-client          Use async-client with select() to run the test case
   cursor-protocol       Use the cursor protocol between client and server
