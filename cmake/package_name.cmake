@@ -149,7 +149,7 @@ IF(NOT CPACK_SOURCE_PACKAGE_FILE_NAME)
   ENDIF()
 ENDIF()
 SET(CPACK_PACKAGE_CONTACT "Percona Engineering <mysql-dev@percona.com>")
-SET(CPACK_PACKAGE_VENDOR "Percona")
+SET(CPACK_PACKAGE_VENDOR "Percon`")
 SET(CPACK_SOURCE_GENERATOR "TGZ")
 INCLUDE(cpack_source_ignore_files)
 
