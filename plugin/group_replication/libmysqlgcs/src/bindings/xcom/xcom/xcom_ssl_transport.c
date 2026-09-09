@@ -27,7 +27,6 @@
 #include <wolfssl_fix_namespace_pollution_pre.h>
 
 #include <openssl/dh.h>
-#include <openssl/evp.h>
 #include <openssl/opensslv.h>
 
 #include <wolfssl_fix_namespace_pollution.h>
@@ -292,20 +291,12 @@ static int configure_ssl_fips_mode(const uint fips_mode) {
   if (fips_mode > 2) {
     goto EXIT;
   }
-#if OPENSSL_VERSION_NUMBER < 0x30000000L
   fips_mode_old = FIPS_mode();
-#else
-  fips_mode_old = EVP_default_properties_is_fips_enabled(NULL);
-#endif
   if (fips_mode_old == fips_mode) {
     rc = 1;
     goto EXIT;
   }
-#if OPENSSL_VERSION_NUMBER < 0x30000000L
   if (!(rc = FIPS_mode_set(fips_mode))) {
-#else
-  if (!(rc = EVP_default_properties_enable_fips(NULL, fips_mode))) {
-#endif
     err_library = ERR_get_error();
     ERR_error_string_n(err_library, err_string, sizeof(err_string) - 1);
     err_string[sizeof(err_string) - 1] = '\0';
