@@ -140,7 +140,7 @@ ENDIF()
 # get a list of rocksdb library source files
 # run with env -i to avoid passing variables
 EXECUTE_PROCESS(
-  COMMAND env -i PATH=$ENV{PATH} ${CMAKE_CURRENT_SOURCE_DIR}/get_rocksdb_files.sh
+  COMMAND env -i ${CMAKE_CURRENT_SOURCE_DIR}/get_rocksdb_files.sh
   OUTPUT_VARIABLE SCRIPT_OUTPUT
   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
 )
