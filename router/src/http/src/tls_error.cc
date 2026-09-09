@@ -25,7 +25,6 @@
 #include "tls_error.h"
 
 #include <openssl/err.h>
-#include <openssl/opensslv.h>
 #include <openssl/ssl.h>
 
 #include <deque>
@@ -48,9 +47,7 @@ static std::string ossl_to_str(const std::string &prefix) {
       section.append("errcode=" + std::to_string(err) +
                      // comment to make clang-format happy
                      " (lib=" + std::to_string(ERR_GET_LIB(err)) + ")" +
-#if OPENSSL_VERSION_NUMBER < 0x30000000L
                      " (func=" + std::to_string(ERR_GET_FUNC(err)) + ")" +
-#endif
                      " (reason=" + std::to_string(ERR_GET_REASON(err)) + ")");
     }
     sections.push_front(section);
