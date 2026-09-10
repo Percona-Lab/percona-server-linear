@@ -199,3 +199,6 @@ innodb.tablespace_encrypt_8 : BUG#5102 work in progress
 innodb.temp_table_encrypt : BUG#5102 work in progress
 sys_vars.innodb_redo_log_encrypt_basic : BUG#5102 work in progress
 innodb.percona_log_encrypt_failure : BUG#5102 work in progress
+
+# PS-5363 merge MySQL 8.0.17
+main.percona_mysqlbinlog_ssl_compress : BUG#5363 temporarily disabled until the merge
