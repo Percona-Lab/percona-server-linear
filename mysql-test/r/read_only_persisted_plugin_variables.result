@@ -107,10 +107,15 @@ set @@persist_only.report_host=NULL;
 set @@persist_only.report_port=21000;
 set @@persist_only.report_password=NULL;
 set @@persist_only.report_user=NULL;
+call mtr.add_suppression('Default storage engine \\(InnoDB\\) is not the same as enforced storage engine \\(MyISAM\\)');
+set @@persist_only.encrypt_tmp_files=TRUE;
+set @@persist_only.enforce_storage_engine='MyISAM';
+set @@persist_only.binlog_space_limit=134217728;
+set @@persist_only.proxy_protocol_networks='*';
 # Must return 100 rows.
 SELECT count(*) from performance_schema.persisted_variables;
 count(*)
-94
+98
 # Restart server
 CALL mtr.add_suppression("Plugin audit_log reported *");
 # Both queries must return 101 rows.
@@ -119,6 +124,8 @@ VARIABLE_NAME	VARIABLE_VALUE
 back_log	80
 binlog_gtid_simple_recovery	ON
 disabled_storage_engines	
+encrypt_tmp_files	1
+enforce_storage_engine	MyISAM
 ft_max_word_len	84
 ft_min_word_len	4
 ft_query_expansion_limit	20
@@ -215,6 +222,8 @@ VARIABLE_NAME
 back_log
 binlog_gtid_simple_recovery
 disabled_storage_engines
+encrypt_tmp_files
+enforce_storage_engine
 ft_max_word_len
 ft_min_word_len
 ft_query_expansion_limit
