@@ -4137,7 +4137,7 @@ class Field_typed_array final : public Field_json {
                     uchar auto_flags_arg, const char *field_name_arg,
                     TABLE_SHARE *share, uint blob_pack_length,
                     const CHARSET_INFO *cs);
-  uint32 char_length() const override {
+  uint32 char_length() const noexcept override {
     return field_length / charset()->mbmaxlen;
   }
   void init(TABLE *table_arg) override;
