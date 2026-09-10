@@ -54,6 +54,8 @@ main.ds_mrr-big @solaris : BUG#14168107 Test leads to timeout on Solaris on slow
 main.internal_tmp_disk_storage_engine : BUG#26917416 Disabled it since it's failing on pb2.
 
 main.events_time_zone         : percona disabled because the test is fundamentally unstable https://jira.percona.com/browse/PS-2179
+main.pool_of_threads          : percona disabled for WIP PS-5044
+main.pool_of_threads_high_prio_tickets  : percona disabled for WIP PS-5044
 
 # max_parts suite tests
 max_parts.innodb-import-partition-1                         : BUG#27413612 Fails consistently on hudson jobs. Disabled until bug is fixed.
