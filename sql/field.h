@@ -4434,7 +4434,7 @@ class Field_typed_array : public Field_json {
     DBUG_ASSERT(elt_type != MYSQL_TYPE_STRING &&
                 elt_type != MYSQL_TYPE_VAR_STRING);
   }
-  uint32 char_length() const override {
+  uint32 char_length() const noexcept override {
     return field_length / charset()->mbmaxlen;
   }
   void init(TABLE *table_arg) override;
