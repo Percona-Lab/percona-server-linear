@@ -1840,6 +1840,7 @@ dberr_t srv_start(bool create_new_db) {
 
   fsp_init();
   pars_init();
+
   recv_sys_create();
   recv_sys_init();
   trx_sys_create();
@@ -2661,6 +2662,7 @@ void srv_pre_dd_shutdown() {
     ib::warn(ER_IB_MSG_1154, threads_count);
     std::this_thread::sleep_for(std::chrono::seconds(1));
   }
+
   /* Crash if some query threads are still alive. */
   ut_a(srv_conc_get_active_threads() == 0);
 
