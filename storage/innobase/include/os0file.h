@@ -590,8 +590,8 @@ class IORequest {
 
   void mark_page_zip_compressed() { m_is_page_zip_compressed = true; }
 
-  bool is_page_zip_compressed() const MY_ATTRIBUTE((warn_unused_result)) {
   MY_NODISCARD bool is_page_zip_compressed() const {
+    return m_is_page_zip_compressed;
   }
 
   ulint get_zip_page_physical_size() const { return m_zip_page_physical_size; }
