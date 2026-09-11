@@ -1,7 +1,7 @@
 /***********************************************************************
 
 Copyright (c) 1995, 2026, Oracle and/or its affiliates.
-Copyright (c) 2009, Percona Inc.
+Copyright (c) 2009, 2017, Percona Inc.
 
 Portions of this file contain modifications contributed and copyrighted
 by Percona Inc.. Those modifications are
@@ -215,9 +215,9 @@ enum os_file_create_t {
 
   OS_FILE_ON_ERROR_NO_EXIT = 128, /*!< do not exit on unknown errors */
   OS_FILE_ON_ERROR_SILENT = 256   /*!< don't print diagnostic messages to
-                                  the log unless it is a fatal error,
-                                  this flag is only used if
-                                  ON_ERROR_NO_EXIT is set */
+                            the log unless it is a fatal error,
+                            this flag is only used if
+                            ON_ERROR_NO_EXIT is set */
 };
 
 static const ulint OS_FILE_READ_ONLY = 333;
@@ -768,8 +768,7 @@ MY_COMPILER_DIAGNOSTIC_POP()
 @param[in]      operation_name  "open" or "create"; used in the diagnostic
                                 message
 @param[in]      on_error_silent if true then don't print any message to the log
-@return true if operation is success and false
-*/
+@return true if operation is success and false */
 bool os_file_set_nocache(int fd, const char *file_name,
                          const char *operation_name,
                          bool on_error_silent = false);

@@ -630,12 +630,6 @@ void ReadView::copy_complete() {
   m_creator_trx_id = 0;
 }
 
-/** Clones the oldest view and stores it in view. No need to
-call view_close(). The caller owns the view that is passed in.
-It will also move the closed views from the m_views list to the
-m_free list. This function is called by Purge to determine whether it should
-purge the delete marked record or not.
-@param view             Preallocated view, owned by the caller */
 /**
 Clones a read view object. The resulting read view has identical change
 visibility as the donor read view
@@ -685,6 +679,12 @@ void ReadView::clone(ReadView *&result, trx_t *from_trx) const {
   result->m_closed = false;
 }
 
+/** Clones the oldest view and stores it in view. No need to
+call view_close(). The caller owns the view that is passed in.
+It will also move the closed views from the m_views list to the
+m_free list. This function is called by Purge to determine whether it should
+purge the delete marked record or not.
+@param view             Preallocated view, owned by the caller */
 void MVCC::clone_oldest_view(ReadView *view) {
   trx_sys_mutex_enter();
 

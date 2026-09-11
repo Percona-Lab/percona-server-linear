@@ -4299,6 +4299,12 @@ const CHARSET_INFO *get_sql_field_charset(const Create_field *sql_field,
   if (sql_field->is_array || cs == &my_charset_bin) return cs;
 
   /*
+    Temporal types always use my_charset_numeric.
+    Ensure that it is not changed when altering table charset.
+  */
+  if (is_temporal_real_type(sql_field->sql_type)) return &my_charset_numeric;
+
+  /*
     table_charset is set only in ALTER TABLE t1 CONVERT TO CHARACTER SET csname
     when we want to change character set for all varchar/char columns.
   */
@@ -9126,6 +9132,19 @@ static bool create_table_impl(
   DBUG_TRACE;
   DBUG_PRINT("enter", ("db: '%s'  table: '%s'  tmp: %d", db, table_name,
                        internal_tmp_table));
+
+  // Check that we have at least one visible column.
+  bool has_visible_column = false;
+  for (const Create_field &create_field : alter_info->create_list) {
+    if (create_field.hidden == dd::Column::enum_hidden_type::HT_VISIBLE) {
+      has_visible_column = true;
+      break;
+    }
+  }
+  if (!has_visible_column) {
+    my_error(ER_TABLE_MUST_HAVE_A_VISIBLE_COLUMN, MYF(0));
+    return true;
+  }
 
   if (check_engine(thd, db, table_name, create_info, alter_info)) return true;
 

@@ -491,4 +491,5 @@ static inline bool pfs_os_file_delete_if_exists_func(
 
   return (result);
 }
+
 #endif /* UNIV_PFS_IO */
