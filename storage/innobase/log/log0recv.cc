@@ -425,6 +425,7 @@ void recv_sys_close() {
   if (recv_sys->flush_end != nullptr) {
     os_event_destroy(recv_sys->flush_end);
   }
+
 #endif /* !UNIV_HOTBACKUP */
 
   ut::delete_(recv_sys->dblwr);
@@ -1233,7 +1234,18 @@ void recv_apply_hashed_log_recs(log_t &log, bool allow_ibuf) {
     TBD: why is it important to wait for BUF_FLUSH_LRU to finish here? */
     buf_flush_await_no_flushing(nullptr, BUF_FLUSH_LRU);
 
+    os_event_reset(recv_sys->flush_end);
+
+    recv_sys->flush_type = BUF_FLUSH_LIST;
+
+    os_event_set(recv_sys->flush_start);
+
+    os_event_wait(recv_sys->flush_end);
+
     buf_pool_invalidate();
+
+    /* Allow batches from recv_writer thread. */
+    mutex_exit(&recv_sys->writer_mutex);
 
     ut_d(log.disable_redo_writes = false);
 
