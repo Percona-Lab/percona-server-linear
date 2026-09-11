@@ -316,6 +316,10 @@ IF(MY_COMPILER_IS_GNU AND NOT CMAKE_CXX_COMPILER_VERSION VERSION_LESS 12)
   ADD_COMPILE_FLAGS(regexp_engine-t.cc COMPILE_FLAGS "-Wno-restrict")
 ENDIF()
 
+IF(MY_COMPILER_IS_GNU AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 8)
+  ADD_COMPILE_FLAGS(hypergraph_optimizer-t.cc connect_joins-t.cc COMPILE_FLAGS "-Wno-unused-variable")
+ENDIF()
+
 IF(WIN32)
   LIST(APPEND SERVER_TESTS win_tests)
 ENDIF()
@@ -324,6 +328,17 @@ ENDIF()
 MY_CHECK_CXX_COMPILER_WARNING("format-overflow" HAS_WARN_FLAG)
 IF(HAS_WARN_FLAG)
   ADD_COMPILE_FLAGS(segfault-t.cc COMPILE_FLAGS ${HAS_WARN_FLAG})
+ENDIF()
+
+# Suppress warnings for gcc-10 or newer
+IF(CMAKE_COMPILER_IS_GNUCXX AND NOT CMAKE_CXX_COMPILER_VERSION VERSION_LESS 10.0)
+  ADD_CXX_COMPILE_FLAGS_TO_FILES(-Wno-stringop-overflow FILES integer_digits-t.cc)
+ENDIF()
+
+# Avoid 'requires dynamic R_X86_64_PC32 reloc' linker error for dd_sdi-t.cc
+# when built with ASAN
+IF(WITH_ASAN)
+  ADD_CXX_COMPILE_FLAGS_TO_FILES(-fPIC FILES dd_sdi-t.cc)
 ENDIF()
 
 # Warnings about missing PGO profile data are not useful for unit tests.
