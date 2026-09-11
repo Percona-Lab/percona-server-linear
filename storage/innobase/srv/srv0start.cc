@@ -3119,6 +3119,7 @@ void srv_pre_dd_shutdown() {
     ib::warn(ER_IB_MSG_1154, ulonglong{threads_count});
     os_thread_sleep(1000000);  // 1s
   }
+
   /* Crash if some query threads are still alive. */
   ut_a(srv_conc_get_active_threads() == 0);
 
