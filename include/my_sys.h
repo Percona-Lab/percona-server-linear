@@ -497,7 +497,7 @@ inline bool my_b_inited(const IO_CACHE *info) {
 constexpr int my_b_EOF = INT_MIN;
 
 inline int my_b_read(IO_CACHE *info, uchar *buffer, size_t count) {
-  if (info->read_pos + count <= info->read_end) {
+  if ((size_t)(info->read_end - info->read_pos) >= count) {
     memcpy(buffer, info->read_pos, count);
     info->read_pos += count;
     return 0;
@@ -506,7 +506,7 @@ inline int my_b_read(IO_CACHE *info, uchar *buffer, size_t count) {
 }
 
 inline int my_b_write(IO_CACHE *info, const uchar *buffer, size_t count) {
-  if (info->write_pos + count <= info->write_end) {
+  if ((size_t)(info->write_end - info->write_pos) >= count) {
     memcpy(info->write_pos, buffer, count);
     info->write_pos += count;
     return 0;
@@ -529,14 +529,17 @@ inline my_off_t my_b_tell(const IO_CACHE *info) {
   return info->pos_in_file + *info->current_pos - info->request_pos;
 }
 
+MY_NODISCARD
 inline uchar *my_b_get_buffer_start(const IO_CACHE *info) {
   return info->request_pos;
 }
 
+MY_NODISCARD
 inline size_t my_b_get_bytes_in_buffer(const IO_CACHE *info) {
   return info->read_end - my_b_get_buffer_start(info);
 }
 
+MY_NODISCARD
 inline my_off_t my_b_get_pos_in_file(const IO_CACHE *info) {
   return info->pos_in_file;
 }
@@ -544,6 +547,7 @@ inline my_off_t my_b_get_pos_in_file(const IO_CACHE *info) {
 /* tell write offset in the SEQ_APPEND cache */
 int my_b_copy_to_file(IO_CACHE *cache, FILE *file);
 
+MY_NODISCARD
 inline size_t my_b_bytes_in_cache(const IO_CACHE *info) {
   return *info->current_end - *info->current_pos;
 }
@@ -744,9 +748,11 @@ extern int init_io_cache_ext(IO_CACHE *info, File file, size_t cachesize,
                              enum cache_type type, my_off_t seek_offset,
                              bool use_async_io, myf cache_myflags,
                              PSI_file_key file_key);
+MY_NODISCARD
 extern int init_io_cache(IO_CACHE *info, File file, size_t cachesize,
                          enum cache_type type, my_off_t seek_offset,
                          bool use_async_io, myf cache_myflags);
+MY_NODISCARD
 extern bool reinit_io_cache(IO_CACHE *info, enum cache_type type,
                             my_off_t seek_offset, bool use_async_io,
                             bool clear_cache);
