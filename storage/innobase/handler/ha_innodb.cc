@@ -5331,7 +5331,6 @@ static int innodb_init_params() {
   inside InnoDB: this is the 'sync wait array' size, as well as the
   maximum number of threads that can wait in the 'srv_conc array' for
   their time to enter InnoDB. */
-
   srv_max_n_threads = 100 * 1024;
 
   /* This is the first time univ_page_size is used.
@@ -5823,9 +5822,10 @@ static int innodb_init(void *p) {
       HTON_SUPPORTS_ATOMIC_DDL | HTON_CAN_RECREATE |
       HTON_SUPPORTS_SECONDARY_ENGINE | HTON_SUPPORTS_TABLE_ENCRYPTION |
       HTON_SUPPORTS_GENERATED_INVISIBLE_PK | HTON_SUPPORTS_BULK_LOAD |
+      // TODO(WL9440): to be enabled when distance scan is implemented in
+      // innodb.
+      //| HTON_SUPPORTS_DISTANCE_SCAN;
       HTON_SUPPORTS_ONLINE_BACKUPS | HTON_SUPPORTS_COMPRESSED_COLUMNS;
-  // TODO(WL9440): to be enabled when distance scan is implemented in innodb.
-  //| HTON_SUPPORTS_DISTANCE_SCAN;
 
   innobase_hton->replace_native_transaction_in_thd = innodb_replace_trx_in_thd;
   innobase_hton->file_extensions = ha_innobase_exts;
@@ -8071,6 +8071,7 @@ int ha_innobase::open(const char *name, int, uint open_flags,
       ib_table->ibd_file_missing && !dict_table_is_discarded(ib_table)) {
     /* Mark this table as corrupted, so the drop table
     or force recovery can still use it, but not others. */
+
     dict_table_close(ib_table, false, false);
     ib_table = nullptr;
 

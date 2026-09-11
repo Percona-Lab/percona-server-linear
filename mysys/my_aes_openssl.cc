@@ -25,13 +25,12 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
   @file mysys/my_aes_openssl.cc
 */
 
-#include <assert.h>
-#include <openssl/aes.h>
 #include <cassert>
 #include <cstddef>
 #include <memory>
 #include <utility>
 
+#include <openssl/aes.h>
 #include <openssl/bio.h>
 #include <openssl/err.h>
 #include <openssl/evp.h>

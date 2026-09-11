@@ -979,14 +979,10 @@ IF(NOT WITH_AUTHENTICATION_WEBAUTHN AND
   SET(WITH_FIDO "none" CACHE STRING "fido2 is disabled")
 ENDIF()
 
-IF(WITH_INTERNAL)
-  IF(UNIX)
-    SET(WITH_CURL_DEFAULT "system")
-  ELSE()
-    SET(WITH_CURL_DEFAULT "bundled")
-  ENDIF()
+IF(UNIX)
+  SET(WITH_CURL_DEFAULT "system")
 ELSE()
-  SET(WITH_CURL_DEFAULT "none")
+  SET(WITH_CURL_DEFAULT "bundled")
 ENDIF()
 
 OPTION(WITH_LOCK_ORDER
@@ -1246,6 +1242,8 @@ IF(CMAKE_C_FLAGS MATCHES "-fsanitize" OR CMAKE_CXX_FLAGS MATCHES "-fsanitize")
   SET(CMAKE_COMPILER_FLAG_WITH_SANITIZE 1)
 ENDIF()
 
+# Older versions of ccache must be disabled: export CCACHE_DISABLE=1
+# See https://gitlab.kitware.com/cmake/community/-/wikis/doc/ctest/Coverage
 OPTION(ENABLE_GCOV "Enable gcov (debug, Linux builds only)" OFF)
 IF (ENABLE_GCOV AND NOT WIN32 AND NOT APPLE)
   SET(GCOV_COMPILER_OPTIONS
