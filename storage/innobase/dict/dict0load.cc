@@ -1384,8 +1384,7 @@ TODO - This function is to be removed by WL#16210
     and tablespaces that already are in the tablespace cache. */
     if (fsp_is_system_or_temp_tablespace(space_id) ||
         fsp_is_undo_tablespace(space_id) ||
-        !fsp_is_shared_tablespace(fsp_flags) ||
-        fil_space_exists_in_mem(space_id, space_name, false, true)) {
+        !fsp_is_shared_tablespace(fsp_flags)) {
       continue;
     }
 
@@ -2522,7 +2521,9 @@ static dict_table_t *dict_load_table_one(table_name_t &name, bool cached,
       table->id = table->id + DICT_MAX_DD_TABLES;
     }
     if (cached) {
-      dict_table_add_to_cache(table, true);
+      auto can_be_evicted =
+          dict_load_is_system_table(table->name.m_name) ? false : true;
+      dict_table_add_to_cache(table, can_be_evicted);
     }
   }
 
