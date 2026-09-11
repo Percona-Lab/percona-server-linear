@@ -328,23 +328,6 @@ void trx_sys_update_mysql_binlog_offset(trx_t *trx, mtr_t *mtr) {
   write_binlog_position(file_name, offset, binlog_pos, mtr);
 }
 
-/** Find the page number in the TRX_SYS page for a given slot/rseg_id
-@param[in]      rseg_id         slot number in the TRX_SYS page rseg array
-@return page number from the TRX_SYS page rseg array */
-page_no_t trx_sysf_rseg_find_page_no(ulint rseg_id) {
-  page_no_t page_no;
-  mtr_t mtr;
-  mtr.start();
-
-  trx_sysf_t *sys_header = trx_sysf_get(&mtr);
-
-  page_no = trx_sysf_rseg_get_page_no(sys_header, rseg_id, &mtr);
-
-  mtr.commit();
-
-  return (page_no);
-}
-
 #ifdef UNIV_DEBUG
 void trx_sys_print_mysql_binlog_offset(void) {
   trx_sysf_t *sys_header;
@@ -378,6 +361,23 @@ void trx_sys_print_mysql_binlog_offset(void) {
   mtr_commit(&mtr);
 }
 #endif
+
+/** Find the page number in the TRX_SYS page for a given slot/rseg_id
+@param[in]      rseg_id         slot number in the TRX_SYS page rseg array
+@return page number from the TRX_SYS page rseg array */
+page_no_t trx_sysf_rseg_find_page_no(ulint rseg_id) {
+  page_no_t page_no;
+  mtr_t mtr;
+  mtr.start();
+
+  trx_sysf_t *sys_header = trx_sysf_get(&mtr);
+
+  page_no = trx_sysf_rseg_get_page_no(sys_header, rseg_id, &mtr);
+
+  mtr.commit();
+
+  return (page_no);
+}
 
 /** Look for a free slot for a rollback segment in the trx system file copy.
 @param[in,out]  mtr             mtr

@@ -1,7 +1,6 @@
 /***********************************************************************
 
 Copyright (c) 1995, 2026, Oracle and/or its affiliates.
-Copyright (c) 2009, Percona Inc.
 Copyright (c) 2009, 2016, Percona Inc.
 
 Portions of this file contain modifications contributed and copyrighted
@@ -7199,9 +7198,8 @@ try_again:
 
   auto array = AIO::select_slot_array(type, read_only, aio_mode);
 
-  auto slot =
-      array->reserve_slot(type, m1, m2, file, name, buf, offset, n, e_block,
-                          space_id);
+  auto slot = array->reserve_slot(type, m1, m2, file, name, buf, offset, n,
+                                  e_block, space_id);
 
   if (type.is_read()) {
     trx_stats::bump_io_read(trx, n);
