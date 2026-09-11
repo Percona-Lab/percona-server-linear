@@ -3097,6 +3097,7 @@ bool srv_enable_undo_encryption(THD *thd, bool is_boot) {
     log_free_check();
 
     mtr_t mtr;
+
     mtr_start(&mtr);
     mtr_x_lock_space(space, &mtr);
 

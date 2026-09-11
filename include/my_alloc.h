@@ -32,6 +32,7 @@
 
 #include <string.h>
 
+#include <cstdint>  // std::uintptr_t
 #include <memory>
 #include <new>
 #include <type_traits>
@@ -153,6 +154,14 @@ struct MEM_ROOT {
     }
 
     return AllocSlow(length);
+  }
+
+  void *Alloc_aligned(size_t length, size_t alignment) MY_ATTRIBUTE((malloc)) {
+    void *ptr = Alloc(length + alignment);
+    if (!ptr) return nullptr;
+    ptr = reinterpret_cast<void *>(
+        MY_ALIGN(reinterpret_cast<std::uintptr_t>(ptr), alignment));
+    return ptr;
   }
 
   /**
