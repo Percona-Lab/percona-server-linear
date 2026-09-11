@@ -1162,37 +1162,38 @@ bool Log_event::need_checksum() {
             static_cast<enum_binlog_checksum_alg>(binlog_checksum_options)
             : mysql::binlog::event::BINLOG_CHECKSUM_ALG_OFF;
 
-  assert(!ret ||
-         ((common_footer->checksum_alg ==
-               static_cast<enum_binlog_checksum_alg>(binlog_checksum_options) ||
-           /*
-              Stop event closes the relay-log and its checksum alg
-              preference is set by the caller can be different
-              from the server's binlog_checksum_options.
-           */
-           get_type_code() == mysql::binlog::event::STOP_EVENT ||
-           /*
-              Rotate:s can be checksummed regardless of the server's
-              binlog_checksum_options. That applies to both
-              the local RL's Rotate and the master's Rotate
-              which IO thread instantiates via queue_binlog_ver_3_event.
-           */
-           get_type_code() == mysql::binlog::event::ROTATE_EVENT ||
-           /*
-              The previous event has its checksum option defined
-              according to the format description event.
-           */
-           get_type_code() == mysql::binlog::event::PREVIOUS_GTIDS_LOG_EVENT ||
-           /* FD is always checksummed */
-           get_type_code() == mysql::binlog::event::FORMAT_DESCRIPTION_EVENT ||
-           /*
-              View_change_log_event is queued into relay log by the
-              local member, which may have a different checksum algorithm
-              than the one of the event source.
-           */
-           get_type_code() == mysql::binlog::event::VIEW_CHANGE_EVENT) &&
-          common_footer->checksum_alg !=
-              mysql::binlog::event::BINLOG_CHECKSUM_ALG_OFF));
+  assert(
+      !ret ||
+      ((common_footer->checksum_alg ==
+            static_cast<enum_binlog_checksum_alg>(binlog_checksum_options) ||
+        /*
+           Stop event closes the relay-log and its checksum alg
+           preference is set by the caller can be different
+           from the server's binlog_checksum_options.
+        */
+        get_type_code() == mysql::binlog::event::STOP_EVENT ||
+        /*
+           Rotate:s can be checksummed regardless of the server's
+           binlog_checksum_options. That applies to both
+           the local RL's Rotate and the master's Rotate
+           which IO thread instantiates via queue_binlog_ver_3_event.
+        */
+        get_type_code() == mysql::binlog::event::ROTATE_EVENT ||
+        /*
+           The previous event has its checksum option defined
+           according to the format description event.
+        */
+        get_type_code() == mysql::binlog::event::PREVIOUS_GTIDS_LOG_EVENT ||
+        /* FD is always checksummed */
+        get_type_code() == mysql::binlog::event::FORMAT_DESCRIPTION_EVENT ||
+        /*
+           View_change_log_event is queued into relay log by the
+           local member, which may have a different checksum algorithm
+           than the one of the event source.
+        */
+        get_type_code() == mysql::binlog::event::VIEW_CHANGE_EVENT) &&
+       common_footer->checksum_alg !=
+           mysql::binlog::event::BINLOG_CHECKSUM_ALG_OFF));
 
   assert(common_footer->checksum_alg !=
          mysql::binlog::event::BINLOG_CHECKSUM_ALG_UNDEF);
@@ -4688,29 +4689,19 @@ int Query_log_event::do_apply_event(Relay_log_info const *rli,
         }
 
         if (sqlcom_can_generate_row_events(thd->lex->sql_command) &&
-            thd->get_row_count_func() > 0) {
-          for (Table_ref *tbl = thd->lex->query_tables; tbl;
-               tbl = tbl->next_global) {
-            if (!tbl->is_placeholder() && tbl->table->file) {
-              if (!tbl->table->file->rpl_can_handle_stm_event()) {
-                String message;
-                message.append(
-                    "Masters binlog format is not ROW and storage "
-                    "engine can not handle non-ROW events at this "
-                    "time. Table: '");
-                message.append(tbl->get_db_name());
-                message.append(".");
-                message.append(tbl->get_table_name());
-                message.append("' Query: '");
-                message.append(thd->query().str);
-                message.append("'");
-                rli->report(ERROR_LEVEL, ER_REPLICA_FATAL_ERROR,
-                            ER_THD(thd, ER_REPLICA_FATAL_ERROR), message.c_ptr());
-                thd->is_slave_error = true;
-                goto end;
-              }
-            }
-          }
+            thd->get_row_count_func() > 0 &&
+            !thd->get_rpl_stmt_event_format_used()) {
+          String message;
+          message.append(
+              "Masters binlog format is not ROW and storage "
+              "engine can not handle non-ROW events at this "
+              "time. Query: '");
+          message.append(thd->query().str);
+          message.append("'");
+          rli->report(ERROR_LEVEL, ER_REPLICA_FATAL_ERROR,
+                      ER_THD(thd, ER_REPLICA_FATAL_ERROR), message.c_ptr());
+          thd->is_slave_error = true;
+          goto end;
         }
 
         /*
@@ -7048,8 +7039,9 @@ int Append_block_log_event::do_apply_event(Relay_log_info const *rli) {
       if the table will be filtered-out or not. So we postpone error
       generation until then, and just silently skip writing the file here.
   */
-  if (!is_load_data_file_allowed(thd, rli)) return 0;
-
+  if (DBUG_EVALUATE_IF("skip_the_priv_check_in_begin_load", false, true)) {
+    if (!is_load_data_file_allowed(thd, rli)) return 0;
+  }
 #ifndef NDEBUG
   else {  // Let's ensure that we actually skipped the privilege check since the
           // error code caugth in test scripts would be the same as the no-skip
