@@ -1,0 +1,4 @@
+!include suite/rpl/t/rpl_row_img.cnf
+
+[mysqld]
+replica_parallel_workers=1
