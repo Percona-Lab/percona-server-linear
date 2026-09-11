@@ -496,6 +496,8 @@ struct OSMutex {
     ut_d(m_freed = false);
   }
 
+  OSMutex &operator=(const OSMutex &) = default;
+
   /** Destructor */
   ~OSMutex() = default;
 
@@ -1136,7 +1138,6 @@ struct dict_sync_check : public sync_check_functor_t {
     if (!m_dict_mutex_allowed ||
         (level != SYNC_DICT && level != SYNC_UNDO_SPACES &&
          level != SYNC_FTS_CACHE && level != SYNC_DICT_OPERATION &&
-         /* This only happens in recv_apply_hashed_log_recs. */
          level != SYNC_RECV_WRITER && level != SYNC_NO_ORDER_CHECK)) {
       m_result = true;
 #ifdef UNIV_NO_ERR_MSGS
