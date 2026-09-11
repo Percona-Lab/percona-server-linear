@@ -50,6 +50,7 @@
 
 #include "my_bitmap.h"
 
+#include <assert.h>
 #include <string.h>
 #include <sys/types.h>
 #include <bit>
@@ -415,21 +416,21 @@ bool bitmap_is_valid(const MY_BITMAP *map) {
   return map->last_word_mask == copy.last_word_mask;
 }
 
-void bitmap_intersect(MY_BITMAP *to, const MY_BITMAP *from) {
-  assert(to->bitmap && from->bitmap);
+void bitmap_intersect(MY_BITMAP *map, const MY_BITMAP *map2) {
+  my_bitmap_map *to = map->bitmap, *from = map2->bitmap, *end;
+  const uint len = no_words_in_map(map), len2 = no_words_in_map(map2);
 
-  const uint to_length = no_words_in_map(to);
-  const uint from_length = no_words_in_map(from);
-  uint min_length = std::min(to_length, from_length);
+  assert(map->bitmap && map2->bitmap);
 
-  // Clear bits in 'to' not set in 'from'
-  for (uint i = 0; i < min_length; i++) to->bitmap[i] &= from->bitmap[i];
+  end = to + std::min(len, len2);
+  for (; to < end; to++, from++) *to &= *from;
 
-  if (to_length >= from_length)
-    to->bitmap[from_length - 1] &= ~from->last_word_mask;
+  if (len >= len2) map->bitmap[len2 - 1] &= ~map2->last_word_mask;
 
-  // Clear bits in 'to' where no corresponding bits exist in 'from'
-  for (uint i = min_length; i < to_length; i++) to->bitmap[i] = 0;
+  if (len2 < len) {
+    end += len - len2;
+    for (; to < end; to++) *to = 0;
+  }
 }
 
 /*
@@ -452,7 +453,7 @@ void bitmap_intersect(MY_BITMAP *to, const MY_BITMAP *from) {
     void
 */
 
-void bitmap_set_above(MY_BITMAP *map, uint from_byte, bool use_bit) {
+void bitmap_set_above(MY_BITMAP *map, uint from_byte, uint use_bit) {
   const uchar use_byte = use_bit ? 0xff : 0;
   uchar *to = (uchar *)map->bitmap + from_byte;
   uchar *end = (uchar *)map->bitmap + (map->n_bits + 7) / 8;
