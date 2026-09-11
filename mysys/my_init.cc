@@ -93,6 +93,8 @@ extern void my_main_thread_end();
 
 bool my_init_done = false;
 ulong my_thread_stack_size = 65536;
+MYSQL_FILE *mysql_stdin = NULL;
+static MYSQL_FILE instrumented_stdin;
 
 static ulong atoi_octal(const char *str) {
   long int tmp;
@@ -150,6 +152,10 @@ bool my_init() {
   /* Default creation of new dir's */
   if ((str = getenv("UMASK_DIR")) != nullptr)
     my_umask_dir = (int)(atoi_octal(str) | 0700);
+
+  instrumented_stdin.m_file = stdin;
+  instrumented_stdin.m_psi = NULL; /* not yet instrumented */
+  mysql_stdin = &instrumented_stdin;
 
   if (my_thread_global_init()) return true;
 
