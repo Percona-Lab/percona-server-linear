@@ -259,16 +259,16 @@ Warning	1287	'@@sync_relay_log_info' is deprecated and will be removed in a futu
 Warning	1287	'@@sync_relay_log_info' is deprecated and will be removed in a future release.
 SET PERSIST_ONLY sync_source_info = @@GLOBAL.sync_source_info;
 
-include/assert.inc [Expect 99 persisted variables in persisted_variables table.]
+include/assert.inc [Expect 102 persisted variables in persisted_variables table.]
 
 ############################################################
 # 2. Restart server, it must preserve the persisted variable
 #    settings. Verify persisted configuration.
 # restart
 
-include/assert.inc [Expect 99 persisted variables in persisted_variables table.]
-include/assert.inc [Expect 99 persisted variables shown as PERSISTED in variables_info table.]
-include/assert.inc [Expect 99 persisted variables with matching persisted and global values.]
+include/assert.inc [Expect 102 persisted variables in persisted_variables table.]
+include/assert.inc [Expect 102 persisted variables shown as PERSISTED in variables_info table.]
+include/assert.inc [Expect 102 persisted variables with matching persisted and global values.]
 
 ############################################################
 # 3. Test RESET PERSIST. Verify persisted variable settings
