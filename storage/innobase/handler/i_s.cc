@@ -7501,3 +7501,4 @@ struct st_mysql_plugin i_s_innodb_session_temp_tablespaces = {
     /* unsigned long */
     STRUCT_FLD(flags, 0UL),
 };
+

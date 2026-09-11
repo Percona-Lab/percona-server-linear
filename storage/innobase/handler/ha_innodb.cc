@@ -767,7 +767,6 @@ static PSI_mutex_info all_innodb_mutexes[] = {
     PSI_MUTEX_KEY(dblwr_mutex, 0, 0, PSI_DOCUMENT_ME),
     PSI_MUTEX_KEY(purge_sys_pq_mutex, 0, 0, PSI_DOCUMENT_ME),
     PSI_MUTEX_KEY(recv_sys_mutex, 0, 0, PSI_DOCUMENT_ME),
-    PSI_MUTEX_KEY(recv_writer_mutex, 0, 0, PSI_DOCUMENT_ME),
     PSI_MUTEX_KEY(temp_space_rseg_mutex, 0, 0, PSI_DOCUMENT_ME),
     PSI_MUTEX_KEY(undo_space_rseg_mutex, 0, 0, PSI_DOCUMENT_ME),
     PSI_MUTEX_KEY(trx_sys_rseg_mutex, 0, 0, PSI_DOCUMENT_ME),
@@ -881,8 +880,6 @@ static PSI_thread_info all_innodb_threads[] = {
     PSI_THREAD_KEY(log_flush_notifier_thread, "ib_log_fl_notif",
                    PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME),
     PSI_THREAD_KEY(buf_lru_manager_thread, "ib_buf_lru", 0, 0, PSI_DOCUMENT_ME),
-    PSI_THREAD_KEY(recv_writer_thread, "ib_recv_write", PSI_FLAG_SINGLETON, 0,
-                   PSI_DOCUMENT_ME),
     PSI_THREAD_KEY(srv_error_monitor_thread, "ib_srv_err", PSI_FLAG_SINGLETON,
                    0, PSI_DOCUMENT_ME),
     PSI_THREAD_KEY(srv_lock_timeout_thread, "ib_srv_lock_to",
@@ -5402,7 +5399,6 @@ static int innodb_init_params() {
   inside InnoDB: this is the 'sync wait array' size, as well as the
   maximum number of threads that can wait in the 'srv_conc array' for
   their time to enter InnoDB. */
-
   srv_max_n_threads = 100 * 1024;
 
   /* This is the first time univ_page_size is used.
@@ -7857,6 +7853,7 @@ int ha_innobase::open(const char *name, int, uint open_flags,
       ib_table->ibd_file_missing && !dict_table_is_discarded(ib_table)) {
     /* Mark this table as corrupted, so the drop table
     or force recovery can still use it, but not others. */
+
     dict_table_close(ib_table, false, false);
     ib_table = nullptr;
 
