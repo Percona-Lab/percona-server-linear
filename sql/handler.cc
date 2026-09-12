@@ -2917,7 +2917,7 @@ int handler::ha_rnd_init(bool scan) {
   DBUG_ASSERT(table_share->tmp_table != NO_TMP_TABLE || m_lock_type != F_UNLCK);
   DBUG_ASSERT(inited == NONE || (inited == RND && scan));
   if (scan && is_using_prohibited_gap_locks(table, false)) {
-    DBUG_RETURN(HA_ERR_LOCK_DEADLOCK);
+    return HA_ERR_LOCK_DEADLOCK;
   }
   inited = (result = rnd_init(scan)) ? NONE : RND;
   end_range = NULL;
@@ -3233,7 +3233,7 @@ int handler::ha_index_read_map(uchar *buf, const uchar *key,
   if (is_using_prohibited_gap_locks(
           table,
           is_using_full_unique_key(active_index, keypart_map, find_flag))) {
-    DBUG_RETURN(HA_ERR_LOCK_DEADLOCK);
+    return HA_ERR_LOCK_DEADLOCK;
   }
 
   // Set status for the need to update generated fields
@@ -3264,7 +3264,7 @@ int handler::ha_index_read_last_map(uchar *buf, const uchar *key,
   DBUG_ASSERT(!pushed_idx_cond || buf == table->record[0]);
 
   if (is_using_prohibited_gap_locks(table, false)) {
-    DBUG_RETURN(HA_ERR_LOCK_DEADLOCK);
+    return HA_ERR_LOCK_DEADLOCK;
   }
 
   // Set status for the need to update generated fields
@@ -3302,7 +3302,7 @@ int handler::ha_index_read_idx_map(uchar *buf, uint index, const uchar *key,
 
   if (is_using_prohibited_gap_locks(
           table, is_using_full_unique_key(index, keypart_map, find_flag))) {
-    DBUG_RETURN(HA_ERR_LOCK_DEADLOCK);
+    return HA_ERR_LOCK_DEADLOCK;
   }
 
   // Set status for the need to update generated fields
@@ -3427,7 +3427,7 @@ int handler::ha_index_first(uchar *buf) {
   DBUG_ASSERT(!pushed_idx_cond || buf == table->record[0]);
 
   if (is_using_prohibited_gap_locks(table, false)) {
-    DBUG_RETURN(HA_ERR_LOCK_DEADLOCK);
+    return HA_ERR_LOCK_DEADLOCK;
   }
 
   // Set status for the need to update generated fields
@@ -3467,7 +3467,7 @@ int handler::ha_index_last(uchar *buf) {
   DBUG_ASSERT(!pushed_idx_cond || buf == table->record[0]);
 
   if (is_using_prohibited_gap_locks(table, false)) {
-    DBUG_RETURN(HA_ERR_LOCK_DEADLOCK);
+    return HA_ERR_LOCK_DEADLOCK;
   }
 
   // Set status for the need to update generated fields
