@@ -32,7 +32,10 @@ leak:Perl_pmruntime
 leak:/usr/bin/perl
 leak:/lib64/libperl.so.*
 leak:/bin/bash
+leak:/usr/bin/sed
+leak:/usr/bin/python2.7
 leak:/usr/bin/zip
+
 # OpenLDAP bug 9081
 # Fixed in 2.4.49, we build with 2.4.48
 leak:ldap_initialize
