@@ -6934,7 +6934,7 @@ static bool prepare_key(THD *thd, HA_CREATE_INFO *create_info,
                     ER_ILLEGAL_HA_CREATE_OPTION, MYF(0),
                     ha_resolve_storage_engine_name(subpart_elem->engine_type),
                     "CLUSTERING");
-                DBUG_RETURN(true);
+		return true;
               }
             }
           } else if (unlikely(!ha_check_storage_engine_flag(
@@ -6943,14 +6943,14 @@ static bool prepare_key(THD *thd, HA_CREATE_INFO *create_info,
             my_error(ER_ILLEGAL_HA_CREATE_OPTION, MYF(0),
                      ha_resolve_storage_engine_name(part_elem->engine_type),
                      "CLUSTERING");
-            DBUG_RETURN(true);
+	    return true;
           }
         }
       } else if (unlikely(!ha_check_storage_engine_flag(
                      file->ht, HTON_SUPPORTS_CLUSTERED_KEYS))) {
         my_error(ER_ILLEGAL_HA_CREATE_OPTION, MYF(0),
                  ha_resolve_storage_engine_name(file->ht), "CLUSTERING");
-        DBUG_RETURN(true);
+	return true;
       }
       if (key->type & KEYTYPE_UNIQUE)
         key_info->flags = HA_NOSAME;

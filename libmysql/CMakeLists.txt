@@ -329,8 +329,8 @@ IF(UNIX)
       PROPERTIES LINK_FLAGS "${libmysql_link_flags}")
   ENDIF() 
   # clean direct output needs to be set several targets have the same name
-  #(mysqlclient in this case)
-  SET_TARGET_PROPERTIES(mysqlclient PROPERTIES CLEAN_DIRECT_OUTPUT 1)
+  #(perconaserverclient in this case)
+  SET_TARGET_PROPERTIES(perconaserverclient PROPERTIES CLEAN_DIRECT_OUTPUT 1)
   SET_TARGET_PROPERTIES(libmysql PROPERTIES CLEAN_DIRECT_OUTPUT 1)
 
 ENDIF()
