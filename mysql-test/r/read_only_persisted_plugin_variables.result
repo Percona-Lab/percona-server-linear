@@ -127,7 +127,7 @@ back_log	80
 binlog_gtid_simple_recovery	ON
 binlog_space_limit	134217728
 disabled_storage_engines	
-encrypt_tmp_files	1
+encrypt_tmp_files	ON
 enforce_storage_engine	MyISAM
 ft_max_word_len	84
 ft_min_word_len	4
