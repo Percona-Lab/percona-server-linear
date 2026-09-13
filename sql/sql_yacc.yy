@@ -1381,7 +1381,7 @@ void warn_about_deprecated_binary(THD *thd)
 /*
    Tokens from Percona Server 5.7 and older
 */
-%token CLUSTERING_SYM
+%token CLUSTERING_SYM 1302
 
 /*
   Resolve column attribute ambiguity -- force precedence of "UNIQUE KEY" against
