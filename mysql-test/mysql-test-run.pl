@@ -702,14 +702,17 @@ sub main {
 
   # Also read from plugin.defs files in internal and internal/cloud if they exist
 
-  my $plugin_def = "$basedir/internal/mysql-test/include/plugin.defs"
+  my $plugin_def = "";
+  $plugin_def = "$basedir/internal/mysql-test/include/plugin.defs"
     if (-e "$basedir/internal/mysql-test/include/plugin.defs");
 
   $plugin_def = $plugin_def." "."$basedir/internal/cloud/mysql-test/include/plugin.defs"
     if (-e "$basedir/internal/cloud/mysql-test/include/plugin.defs");
 
-  for (glob $plugin_def) {
-    read_plugin_defs($_);
+  if ($plugin_def ne "") {
+    for (glob $plugin_def) {
+      read_plugin_defs($_);
+    }
   }
 
   # Simplify reference to semisync plugins
