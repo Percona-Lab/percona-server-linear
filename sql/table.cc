@@ -2224,7 +2224,7 @@ static int open_binary_frm(THD *thd, TABLE_SHARE *share,
           the primary key, then we can use any key to find this column
         */
         if (field->key_length() == key_part->length &&
-            !(field->flags & BLOB_FLAG))
+            !field->is_flag_set(BLOB_FLAG))
           field->part_of_key = share->keys_in_use;
         if (field->part_of_sortkey.is_set(primary_key))
           field->part_of_sortkey = share->keys_in_use;
