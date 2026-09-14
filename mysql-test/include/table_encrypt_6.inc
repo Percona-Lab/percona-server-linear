@@ -1,18 +1,31 @@
+#
+# Test negative scenarios, lifted from other table_encrypt tests
+#
+# Create a table with encryption, should fail since keyring is not
+# loaded
+
+--source include/have_debug.inc
+
 call mtr.add_suppression(".*Encryption can't find master key.*");
 call mtr.add_suppression(".*Encryption information in datafile.*");
+
+--error ER_CANNOT_FIND_KEY_IN_KEYRING
 CREATE TABLE t1(c1 INT, c2 char(20)) ENCRYPTION="Y" ENGINE = InnoDB;
-ERROR HY000: Can't find master key from keyring, please check in the server log if a keyring is loaded and initialized successfully.
+
 CREATE TABLE t1(c1 INT, c2 char(20)) ENGINE = InnoDB;
+
+--error ER_CANNOT_FIND_KEY_IN_KEYRING
 ALTER TABLE t1 ENCRYPTION="Y", algorithm=copy;
-ERROR HY000: Can't find master key from keyring, please check in the server log if a keyring is loaded and initialized successfully.
+
 DROP TABLE t1;
+
+--let $restart_parameters = $keyring_restart_param
+--source include/restart_mysqld_no_echo.inc
+
+# Create a table with encryption
 CREATE TABLE t1(c1 INT, c2 char(20)) ENCRYPTION="Y" ENGINE = InnoDB;
+
 SHOW CREATE TABLE t1;
-Table	Create Table
-t1	CREATE TABLE `t1` (
-  `c1` int DEFAULT NULL,
-  `c2` char(20) DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci ENCRYPTION='Y'
 INSERT INTO t1 VALUES(0, "aaaaa");
 INSERT INTO t1 VALUES(1, "bbbbb");
 INSERT INTO t1 VALUES(2, "ccccc");
@@ -29,30 +42,31 @@ INSERT INTO t1 select * from t1;
 INSERT INTO t1 select * from t1;
 INSERT INTO t1 select * from t1;
 INSERT INTO t1 select * from t1;
+
 SELECT * FROM t1 ORDER BY c1 LIMIT 10;
-c1	c2
-0	aaaaa
-0	aaaaa
-0	aaaaa
-0	aaaaa
-0	aaaaa
-0	aaaaa
-0	aaaaa
-0	aaaaa
-0	aaaaa
-0	aaaaa
+
+--disable_query_log
+SET DEBUG='+d,os_block_cache_busy';
+--enable_query_log
+
+# Restart without key ring to check the encrypted table can't be open.
+--let $restart_parameters = restart:
+--source include/restart_mysqld_no_echo.inc
+
+--error ER_CANNOT_FIND_KEY_IN_KEYRING
 SELECT * FROM t1 ORDER BY c1 LIMIT 10;
-ERROR HY000: Can't find master key from keyring, please check in the server log if a keyring is loaded and initialized successfully.
+
+# Restart with keyring to check that we can now open the table
+--let $restart_parameters = $keyring_restart_param
+--source include/restart_mysqld_no_echo.inc
+
+--disable_query_log
+SET DEBUG='-d,os_block_cache_busy';
+--enable_query_log
+
 SELECT * FROM t1 ORDER BY c1 LIMIT 10;
-c1	c2
-0	aaaaa
-0	aaaaa
-0	aaaaa
-0	aaaaa
-0	aaaaa
-0	aaaaa
-0	aaaaa
-0	aaaaa
-0	aaaaa
-0	aaaaa
+
 DROP TABLE t1;
+
+--let $restart_parameters = restart:
+--source include/restart_mysqld_no_echo.inc
