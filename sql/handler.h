@@ -45,6 +45,7 @@
 #include "lex_string.h"
 #include "m_ctype.h"
 #include "map_helpers.h"
+#include "mem_root_deque.h"
 #include "my_alloc.h"
 #include "my_base.h"
 #include "my_bitmap.h"
@@ -6122,15 +6123,17 @@ public:
     @brief Offload an update to the storage engine. See handler::fast_update()
     for details.
   */
-  MY_NODISCARD int ha_fast_update(THD *thd, List<Item> &update_fields,
-                                  List<Item> &update_values, Item *conds);
+  MY_NODISCARD int ha_fast_update(THD *thd,
+                                  mem_root_deque<Item *> &update_fields,
+                                  mem_root_deque<Item *> &update_values,
+                                  Item *conds);
 
   /**
     @brief Offload an upsert to the storage engine. See handler::upsert()
     for details.
   */
-  MY_NODISCARD int ha_upsert(THD *thd, List<Item> &update_fields,
-                             List<Item> &update_values);
+  MY_NODISCARD int ha_upsert(THD *thd, mem_root_deque<Item *> &update_fields,
+                             mem_root_deque<Item *> &update_values);
 
  private:
   /**
@@ -6152,8 +6155,8 @@ public:
     @note HA_READ_BEFORE_WRITE_REMOVAL flag doesn not fit there because
     handler::ha_update_row(...) does not accept conditions.
   */
-  MY_NODISCARD virtual int fast_update(THD *, List<Item> &, List<Item> &,
-                                       Item *) {
+  MY_NODISCARD virtual int fast_update(THD *, mem_root_deque<Item *> &,
+                                       mem_root_deque<Item *> &, Item *) {
     return ENOTSUP;
   }
 
@@ -6173,7 +6176,8 @@ public:
 
     @return an error if the insert should be terminated.
   */
-  MY_NODISCARD virtual int upsert(THD *, List<Item> &, List<Item> &) {
+  MY_NODISCARD virtual int upsert(THD *, mem_root_deque<Item *> &,
+                                  mem_root_deque<Item *> &) {
     return ENOTSUP;
   }
 

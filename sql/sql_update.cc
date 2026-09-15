@@ -819,7 +819,7 @@ bool Sql_cmd_update::update_single_table(THD *thd) {
 
     uint dup_key_found;
 
-    error = table->file->ha_fast_update(thd, *update_field_list,
+    error = table->file->ha_fast_update(thd, query_block->fields,
                                         *update_value_list, conds);
     if (error == 0)
       error = -1;  // error < 0 means really no error at all (see below)
