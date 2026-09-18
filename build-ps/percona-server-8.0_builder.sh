@@ -360,6 +360,7 @@ install_deps() {
             yum -y install libasan libicu-devel libtool libzstd-devel lz4-devel make pkg-config
             yum -y install re2-devel redhat-lsb-core lz4-static
             source /opt/rh/devtoolset-8/enable
+            yum -y install cyrus-sasl-devel cyrus-sasl-scram krb5-devel
         else
 	    yum -y install perl.x86_64
             yum -y install binutils gcc gcc-c++ tar rpm-build rsync bison glibc glibc-devel libstdc++-devel make openssl-devel pam-devel perl perl-JSON perl-Memoize pkg-config
@@ -367,6 +368,21 @@ install_deps() {
 	    yum -y install libaio-devel ncurses-devel numactl-devel readline-devel time
             wget https://rpmfind.net/linux/fedora/linux/releases/29/Everything/x86_64/os/Packages/r/rpcgen-1.4-1.fc29.x86_64.rpm
             yum -y install rpcgen-1.4-1.fc29.x86_64.rpm
+	    yum -y install zstd libzstd libzstd-devel
+	    yum -y install cmake
+            yum -y install cyrus-sasl-devel cyrus-sasl-scram krb5-devel
+        fi
+        if [ "x${RHEL}" = "x8" ]; then
+            yum -y install centos-release-stream
+            yum -y install git gcc-toolset-10-gcc gcc-toolset-10-gcc-c++ gcc-toolset-10-annobin
+            source /opt/rh/gcc-toolset-10/enable
+        fi
+        if [ "x${RHEL}" = "x7" ]; then
+            yum -y install devtoolset-10
+            source /opt/rh/devtoolset-10/enable
+        fi
+	if [ "x${RHEL}" = "x6" ]; then
+            source /opt/rh/devtoolset-8/enable
         fi
         if [ "x$RHEL" = "x6" ]; then
             rm -f /usr/bin/cmake
@@ -398,6 +414,13 @@ install_deps() {
         apt-get -y install curl bison cmake perl libssl-dev gcc g++ libaio-dev libldap2-dev libwrap0-dev gdb unzip gawk
         apt-get -y install lsb-release libmecab-dev libncurses5-dev libreadline-dev libpam-dev zlib1g-dev libcurl4-gnutls-dev
         apt-get -y install libldap2-dev libnuma-dev libjemalloc-dev libc6-dbg valgrind libjson-perl python-mysqldb libsasl2-dev
+        if [ x"${DIST}" = xbionic ]; then
+            apt-get -y install gcc-8 g++-8
+            update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-7 700 --slave /usr/bin/g++ g++ /usr/bin/g++-7
+            update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-8 800 --slave /usr/bin/g++ g++ /usr/bin/g++-8
+        else
+            apt-get -y install gcc g++
+        fi
         apt-get -y install libeatmydata
         apt-get -y install dh-apparmor
         apt-get -y install libmecab2 mecab mecab-ipadic
@@ -412,7 +435,7 @@ install_deps() {
         else
             apt-get -y install libzstd1-dev
         fi
-
+        apt-get install -y libsasl2-dev libsasl2-modules-gssapi-mit libkrb5-dev
     fi
     if [ ! -d /usr/local/percona-subunit2junitxml ]; then
         cd /usr/local
@@ -528,7 +551,7 @@ build_mecab_lib(){
     rm -rf ${MECAB_DIR}
     rm -rf ${MECAB_INSTALL_DIR}
     mkdir ${MECAB_INSTALL_DIR}
-    wget ${MECAB_LINK}
+    wget --no-check-certificate ${MECAB_LINK}
     tar xf ${MECAB_TARBAL}
     if [ x"$ARCH" = "xaarch64" ]; then
         git clone git://git.savannah.gnu.org/config.git
