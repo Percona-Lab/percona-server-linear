@@ -169,12 +169,12 @@ message(STATUS "MyRocks compile definitions: ${COMPILE_DEFINITIONS}")
 
 # Suppress warnings for all compilers
 append_cflags_if_supported(-Wno-unused-parameter -Wno-suggest-override)
-# "cmake/maintainer.cmake" sets "-Wcast-qual -Wundef" which cause warnings with RocksDB
-remove_compile_flags(-Wcast-qual -Wundef)
+# "cmake/maintainer.cmake" sets "-Wcast-qual -Wundef -Wextra-semi" which cause warnings with RocksDB
+remove_compile_flags(-Wcast-qual -Wundef -Wextra-semi)
 
 # Suppress warnings for all clang versions
 IF(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-  remove_compile_flags(-Wdeprecated -Winconsistent-missing-destructor-override -Wextra-semi -Wnon-virtual-dtor)
+  remove_compile_flags(-Wdeprecated -Winconsistent-missing-destructor-override -Wnon-virtual-dtor)
   ADD_CXX_COMPILE_FLAGS_TO_FILES(-Wno-shadow-field FILES ha_rocksdb.cc rocksdb/memtable/hash_skiplist_rep.cc)
   ADD_CXX_COMPILE_FLAGS_TO_FILES(-Wno-conditional-uninitialized FILES ha_rocksdb.cc rdb_datadic.cc rocksdb/db/db_impl/db_impl.cc rocksdb/db/write_thread.cc rocksdb/env/env_posix.cc rocksdb/env/fs_posix.cc)
 ENDIF()
@@ -228,9 +228,7 @@ IF(BUILD_BUNDLED_ZSTD)
 ENDIF()
 
 # add bundled compression code
-SET(ZSTD_SOURCES
-  ${CMAKE_SOURCE_DIR}/extra/lz4/xxhash.c
-)
+SET(ZSTD_SOURCES ${BUNDLED_LZ4_PATH}/xxhash.c)
 
 IF(DEFINED WITH_UBSAN)
   add_definitions(-DROCKSDB_UBSAN_RUN)
@@ -297,10 +295,8 @@ IF (NOT HAVE_EXTERNAL_ROCKSDB)
     MYSQL_ADD_EXECUTABLE(zenfs ${CMAKE_CURRENT_SOURCE_DIR}/rocksdb_plugins/zenfs/util/zenfs.cc ${ROCKSDB_LIB_SOURCES} ${ZENFS_PLUGIN_SOURCES} ${ZSTD_SOURCES})
     TARGET_LINK_LIBRARIES(zenfs ${rocksdb_static_libs} "-lgflags")
 
-    EXECUTE_PROCESS(
-      COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_BINARY_DIR}/tmp_gen/rocksdb/plugin"
-      COMMAND ${CMAKE_COMMAND} -E create_symlink "${CMAKE_CURRENT_SOURCE_DIR}/rocksdb_plugins/zenfs" "${CMAKE_CURRENT_BINARY_DIR}/tmp_gen/rocksdb/plugin/zenfs"
-    )
+    EXECUTE_PROCESS(COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_BINARY_DIR}/tmp_gen/rocksdb/plugin")
+    EXECUTE_PROCESS(COMMAND ${CMAKE_COMMAND} -E create_symlink "${CMAKE_CURRENT_SOURCE_DIR}/rocksdb_plugins/zenfs" "${CMAKE_CURRENT_BINARY_DIR}/tmp_gen/rocksdb/plugin/zenfs")
     TARGET_INCLUDE_DIRECTORIES(zenfs SYSTEM PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/tmp_gen")
   ENDIF()
 ENDIF()
