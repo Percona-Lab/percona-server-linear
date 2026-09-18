@@ -276,6 +276,7 @@ get_sources(){
     rsync -av storage/rocksdb/third_party/lz4/ ${PSDIR}/storage/rocksdb/third_party/lz4 --exclude .git
     rsync -av storage/rocksdb/third_party/zstd/ ${PSDIR}/storage/rocksdb/third_party/zstd --exclude .git
     rsync -av extra/coredumper/ ${PSDIR}/extra/coredumper --exclude .git
+    rsync -av extra/libzbd/ ${PSDIR}/extra/libzbd --exclude .git
     rsync -av storage/rocksdb/rocksdb_plugins/ ${PSDIR}/storage/rocksdb/rocksdb_plugins --exclude .git
     #
     cd ${PSDIR}
@@ -313,17 +314,12 @@ enable_zenfs() {
     source $WORKDIR/percona-server-8.0.properties
 
     if [[ $mode == "tarball" ]]; then
-        rm build-ps/build-binary.sh
-        curl https://raw.githubusercontent.com/Sudokamikaze/percona-server/PS-7836-rework/build-ps/build-binary.sh --output build-ps/build-binary.sh
-        chmod +x build-ps/build-binary.sh
+        echo "mode tarball selected"
     elif [[ $mode == "debian" ]]; then
-        rm -rf debian
-        mv build-ps/debian-zenfs debian
+        sed -i 's:\.\.:$(ZENFS_OPTS_DEFAULT) \.\.:g' debian/rules
+        sed -i '51s:percona-server:libgflags2.2, percona-server:' debian/control
+        echo "usr/bin/zenfs" >> debian/percona-server-rocksdb.install
         dch -D unstable --force-distribution -v "${VERSION}-${RELEASE}-${DEB_RELEASE}" "Update to new upstream release Percona Server ${VERSION}-${RELEASE}-1"
-
-        sed -i "s:@@PERCONA_VERSION_EXTRA@@:${MYSQL_VERSION_EXTRA#-}:g" debian/rules
-        sed -i "s:@@REVISION@@:${REVISION}:g" debian/rules
-        sed -i "s:@@TOKUDB_BACKUP_VERSION@@:${TOKUDB_VERSION}:g" debian/rules
     fi
     return
 }
@@ -380,6 +376,7 @@ install_deps() {
             yum -y install libasan libicu-devel libtool libzstd-devel lz4-devel make pkg-config
             yum -y install re2-devel redhat-lsb-core lz4-static
             source /opt/rh/devtoolset-8/enable
+            yum -y install cyrus-sasl-devel cyrus-sasl-scram krb5-devel
         else
 	    yum -y install perl.x86_64
             yum -y install binutils gcc gcc-c++ tar rpm-build rsync bison glibc glibc-devel libstdc++-devel make openssl-devel pam-devel perl perl-JSON perl-Memoize pkg-config
@@ -388,6 +385,7 @@ install_deps() {
 	    yum -y install rpcgen re2-devel libtirpc-devel
 	    yum -y install zstd libzstd libzstd-devel
 	    yum -y install cmake
+            yum -y install cyrus-sasl-devel cyrus-sasl-scram krb5-devel
         fi
         if [ "x${RHEL}" = "x8" ]; then
             yum -y install centos-release-stream
@@ -451,6 +449,13 @@ install_deps() {
         else
             apt-get -y install python-mysqldb
         fi
+        if [ x"${DIST}" = xbionic ]; then
+            apt-get -y install gcc-8 g++-8
+            update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-7 700 --slave /usr/bin/g++ g++ /usr/bin/g++-7
+            update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-8 800 --slave /usr/bin/g++ g++ /usr/bin/g++-8
+        else
+            apt-get -y install gcc g++
+        fi
         apt-get -y install libeatmydata
         apt-get -y install dh-apparmor
         apt-get -y install libmecab2 mecab mecab-ipadic
@@ -468,15 +473,10 @@ install_deps() {
         if [ x${DIST} = xhirsute ]; then
             apt-get -y install libzbd-dev clang-12 pkg-config make libgflags-dev nvme-cli util-linux fio zbd-utils
         fi
-        if [ x${DIST} = xfocal ]; then
-            apt-get -y install clang-12 pkg-config make libgflags-dev nvme-cli util-linux fio
-            curl http://ua.archive.ubuntu.com/pool/universe/libz/libzbd/libzbd-dev_1.2.0-1_amd64.deb --output /tmp/libzbd-dev.deb
-            curl http://ua.archive.ubuntu.com/pool/universe/libz/libzbd/libzbd1_1.2.0-1_amd64.deb --output /tmp/libzbd1.deb
-            curl http://ua.archive.ubuntu.com/pool/universe/libz/libzbd/zbd-utils_1.2.0-1_amd64.deb --output /tmp/zbd-utils.deb
-            dpkg -i /tmp/libzbd-dev.deb /tmp/libzbd1.deb /tmp/zbd-utils.deb || true
-            apt-get install -fy
-            rm -f /tmp/libzbd-dev.deb /tmp/libzbd1.deb /tmp/zbd-utils.deb
-        fi  
+	if [[ ${DIST} == 'focal' ]] || [[ ${DIST} == 'hirsute' ]] || [[ ${DIST} == 'bullseye' ]]; then
+            apt-get -y install libgflags-dev
+	fi
+        apt-get install -y libsasl2-dev libsasl2-modules-gssapi-mit libkrb5-dev
     fi
     if [ ! -d /usr/local/percona-subunit2junitxml ]; then
         cd /usr/local
@@ -591,7 +591,7 @@ build_mecab_lib(){
     rm -rf ${MECAB_DIR}
     rm -rf ${MECAB_INSTALL_DIR}
     mkdir ${MECAB_INSTALL_DIR}
-    wget ${MECAB_LINK}
+    wget --no-check-certificate ${MECAB_LINK}
     tar xf ${MECAB_TARBAL}
     cd ${MECAB_DIR}
     ./configure --with-pic --prefix=/usr
@@ -809,7 +809,7 @@ build_deb(){
     fi
     dch -b -m -D "$DEBIAN_VERSION" --force-distribution -v "${VERSION}-${RELEASE}-${DEB_RELEASE}.${DEBIAN_VERSION}" 'Update distribution'
 
-    if [ ${DEBIAN_VERSION} != trusty -a ${DEBIAN_VERSION} != xenial -a ${DEBIAN_VERSION} != jessie -a ${DEBIAN_VERSION} != stretch -a ${DEBIAN_VERSION} != artful -a ${DEBIAN_VERSION} != bionic -a ${DEBIAN_VERSION} != focal -a "${DEBIAN_VERSION}" != disco -a "${DEBIAN_VERSION}" != buster -a "${DEBIAN_VERSION}" != hirsute ]; then
+    if [ ${DEBIAN_VERSION} != trusty -a ${DEBIAN_VERSION} != xenial -a ${DEBIAN_VERSION} != jessie -a ${DEBIAN_VERSION} != stretch -a ${DEBIAN_VERSION} != artful -a ${DEBIAN_VERSION} != bionic -a ${DEBIAN_VERSION} != focal -a "${DEBIAN_VERSION}" != disco -a "${DEBIAN_VERSION}" != buster -a "${DEBIAN_VERSION}" != hirsute -a "${DEBIAN_VERSION}" != bullseye ]; then
         gcc47=$(which gcc-4.7 2>/dev/null || true)
         if [ -x "${gcc47}" ]; then
             export CC=gcc-4.7
@@ -827,7 +827,7 @@ build_deb(){
         sed -i 's/export CXXFLAGS=/export CXXFLAGS=-Wno-error=date-time /' debian/rules
     fi
 
-    if [ ${DEBIAN_VERSION} = "stretch" -o ${DEBIAN_VERSION} = "bionic" -o ${DEBIAN_VERSION} = "focal" -o ${DEBIAN_VERSION} = "buster" -o ${DEBIAN_VERSION} = "disco" ]; then
+    if [ ${DEBIAN_VERSION} = "stretch" -o ${DEBIAN_VERSION} = "bionic" -o ${DEBIAN_VERSION} = "focal" -o ${DEBIAN_VERSION} = "buster" -o ${DEBIAN_VERSION} = "disco"  -o ${DEBIAN_VERSION} = "bullseye" ]; then
         sed -i 's/export CFLAGS=/export CFLAGS=-Wno-error=deprecated-declarations -Wno-error=unused-function -Wno-error=unused-variable -Wno-error=unused-parameter -Wno-error=date-time /' debian/rules
         sed -i 's/export CXXFLAGS=/export CXXFLAGS=-Wno-error=deprecated-declarations -Wno-error=unused-function -Wno-error=unused-variable -Wno-error=unused-parameter -Wno-error=date-time /' debian/rules
     fi
@@ -954,7 +954,7 @@ RPM_RELEASE=1
 DEB_RELEASE=1
 DEBUG=0
 REVISION=0
-BRANCH="release-8.0.22-13"
+BRANCH="release-8.0.26-16"
 RPM_RELEASE=1
 DEB_RELEASE=1
 MECAB_INSTALL_DIR="${WORKDIR}/mecab-install"
@@ -962,9 +962,9 @@ REPO="git://github.com/percona/percona-server.git"
 PRODUCT=Percona-Server-8.0
 MYSQL_VERSION_MAJOR=8
 MYSQL_VERSION_MINOR=0
-MYSQL_VERSION_PATCH=22
-MYSQL_VERSION_EXTRA=-13
-PRODUCT_FULL=Percona-Server-8.0.22
+MYSQL_VERSION_PATCH=26
+MYSQL_VERSION_EXTRA=-16
+PRODUCT_FULL=Percona-Server-8.0.26
 BOOST_PACKAGE_NAME=boost_1_73_0
 PERCONAFT_BRANCH=Percona-Server-8.0.22-13
 TOKUBACKUP_BRANCH=Percona-Server-8.0.22-13
