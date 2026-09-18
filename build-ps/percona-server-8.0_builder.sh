@@ -282,6 +282,7 @@ get_sources(){
     rsync -av storage/rocksdb/third_party/lz4/ ${PSDIR}/storage/rocksdb/third_party/lz4 --exclude .git
     rsync -av storage/rocksdb/third_party/zstd/ ${PSDIR}/storage/rocksdb/third_party/zstd --exclude .git
     rsync -av extra/coredumper/ ${PSDIR}/extra/coredumper --exclude .git
+    rsync -av extra/libkmip/ ${PSDIR}/extra/libkmip/ --exclude .git
     #
     cd ${PSDIR}
     # set tokudb version - can be seen with show variables like '%version%'
@@ -379,6 +380,7 @@ install_deps() {
         fi
         if [ "x${RHEL}" = "x7" ]; then
             yum -y install devtoolset-10
+            yum -y install cyrus-sasl-gssapi cyrus-sasl-gs2 cyrus-sasl-md5 cyrus-sasl-plain
             source /opt/rh/devtoolset-10/enable
         fi
 	if [ "x${RHEL}" = "x6" ]; then
@@ -424,6 +426,7 @@ install_deps() {
         apt-get -y install libeatmydata
         apt-get -y install dh-apparmor
         apt-get -y install libmecab2 mecab mecab-ipadic
+        apt-get -y install libudev-dev
         apt-get -y install build-essential devscripts doxygen doxygen-gui graphviz rsync
         apt-get -y install cmake autotools-dev autoconf automake build-essential devscripts debconf debhelper fakeroot libaio-dev
         apt-get -y install ccache libevent-dev libgsasl7 liblz4-dev libre2-dev libtool po-debconf
@@ -916,7 +919,7 @@ BRANCH="8.0"
 RPM_RELEASE=1
 DEB_RELEASE=1
 MECAB_INSTALL_DIR="${WORKDIR}/mecab-install"
-REPO="git://github.com/percona/percona-server.git"
+REPO="https://github.com/percona/percona-server.git"
 PRODUCT=Percona-Server-8.0
 MYSQL_VERSION_MAJOR=8
 MYSQL_VERSION_MINOR=0
