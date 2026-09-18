@@ -6,7 +6,7 @@
 	url = https://github.com/percona/Percona-TokuBackup.git
 [submodule "storage/rocksdb/rocksdb"]
 	path = storage/rocksdb/rocksdb
-	url = https://github.com/facebook/rocksdb.git
+	url = https://github.com/percona/rocksdb.git
 [submodule "extra/coredumper"]
 	path = extra/coredumper
 	url = https://github.com/Percona-Lab/coredumper.git
@@ -16,3 +16,6 @@
 [submodule "extra/libzbd"]
 	path = extra/libzbd
 	url = https://github.com/westerndigitalcorporation/libzbd.git
+[submodule "extra/libkmip"]
+	path = extra/libkmip
+	url = https://github.com/Percona-Lab/libkmip.git
