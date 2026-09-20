@@ -115,7 +115,7 @@ set @@persist_only.proxy_protocol_networks='*';
 # Must return 100 rows.
 SELECT count(*) from performance_schema.persisted_variables;
 count(*)
-100
+98
 # Restart server
 CALL mtr.add_suppression("Plugin audit_log reported *");
 # Both queries must return 101 rows.
@@ -123,6 +123,7 @@ SELECT * FROM performance_schema.persisted_variables ORDER BY VARIABLE_NAME;
 VARIABLE_NAME	VARIABLE_VALUE
 back_log	80
 binlog_gtid_simple_recovery	ON
+binlog_space_limit	134217728
 disabled_storage_engines	
 encrypt_tmp_files	ON
 enforce_storage_engine	MyISAM
@@ -203,6 +204,7 @@ performance_schema_session_connect_attrs_size	512
 performance_schema_setup_actors_size	-1
 performance_schema_setup_objects_size	-1
 performance_schema_users_size	-1
+proxy_protocol_networks	*
 relay_log_recovery	OFF
 relay_log_space_limit	0
 replica_type_conversions	
@@ -221,6 +223,7 @@ SELECT VARIABLE_NAME FROM performance_schema.variables_info WHERE VARIABLE_SOURC
 VARIABLE_NAME
 back_log
 binlog_gtid_simple_recovery
+binlog_space_limit
 disabled_storage_engines
 encrypt_tmp_files
 enforce_storage_engine
@@ -301,6 +304,7 @@ performance_schema_session_connect_attrs_size
 performance_schema_setup_actors_size
 performance_schema_setup_objects_size
 performance_schema_users_size
+proxy_protocol_networks
 relay_log_recovery
 relay_log_space_limit
 replica_type_conversions
