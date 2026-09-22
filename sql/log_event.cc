@@ -4850,8 +4850,8 @@ int Query_log_event::do_apply_event(Relay_log_info const *rli,
                 message.append("' Query: '");
                 message.append(thd->query().str);
                 message.append("'");
-                rli->report(ERROR_LEVEL, ER_SLAVE_FATAL_ERROR,
-                            ER_THD(thd, ER_SLAVE_FATAL_ERROR), message.c_ptr());
+                rli->report(ERROR_LEVEL, ER_REPLICA_FATAL_ERROR,
+                            ER_THD(thd, ER_REPLICA_FATAL_ERROR), message.c_ptr());
                 thd->is_slave_error = true;
                 goto end;
               }
