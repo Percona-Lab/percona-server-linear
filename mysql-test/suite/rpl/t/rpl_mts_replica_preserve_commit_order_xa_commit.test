@@ -105,7 +105,6 @@ COMMIT;
 
 --source include/rpl/connection_replica.inc
 
-#SELECT * FROM INFORMATION_SCHEMA.PROCESSLIST;
 --let $wait_condition = SELECT count(*) = 1 FROM INFORMATION_SCHEMA.PROCESSLIST WHERE state like 'debug sync point: now%'
 --source include/wait_condition.inc
 
@@ -138,7 +137,6 @@ SET DEBUG_SYNC= 'RESET';
 
 --source include/rpl/connection_source.inc
 
---source include/rpl_connection_master.inc
 DROP TABLE t1;
 DROP TABLE t2;
 
