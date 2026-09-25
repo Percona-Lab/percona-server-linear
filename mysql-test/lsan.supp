@@ -91,3 +91,7 @@ leak:ndb_select_all
 leak:ndb_select_count
 leak:ndb_show_tables
 leak:ndb_sign_keys
+
+# The following line is needed to suppress memory leaks coming from standard /usr/bin/grep
+# utility on Ubuntu 22.04 Jammy
+leak:re_compile_internal
