@@ -6,7 +6,7 @@ Note	####	Storing MySQL user name or password information in the connection meta
 CREATE TABLE t1(a INT);
 DROP TABLE t1;
 connection slave
-include/sync_slave_sql_with_master.inc
+include/rpl/sync_to_replica.inc
 SET @start_max_connections= @@global.max_connections;
 SET @start_init_replica= @@global.init_replica;
 SET NAMES utf8mb3;
