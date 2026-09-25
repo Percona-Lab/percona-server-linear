@@ -40,7 +40,7 @@ CREATE TABLE t2(c1 INT PRIMARY KEY) ENGINE = InnoDB;
 --source include/rpl/sync_to_replica.inc
 
 # switched to slave connection
---source include/only_mts_replica_parallel_type_logical_clock.inc
+--source include/have_replica_parallel_type_logical_clock.inc
 
 --echo #
 --echo # 2. Initial setup on Slave.

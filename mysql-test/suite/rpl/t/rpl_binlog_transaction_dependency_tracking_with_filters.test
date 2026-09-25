@@ -21,6 +21,9 @@
 --source include/have_binlog_format_row.inc
 
 --source include/rpl/connection_replica.inc
+--source include/not_replica_parallel_workers.inc
+
+--source include/rpl/connection_replica.inc
 # Set filter rule.
 --source include/rpl/stop_replica.inc
 CHANGE REPLICATION FILTER REPLICATE_REWRITE_DB=((db1,db2)),
