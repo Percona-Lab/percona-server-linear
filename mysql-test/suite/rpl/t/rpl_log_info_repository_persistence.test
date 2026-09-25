@@ -4,12 +4,7 @@
 # PRIVILEGE_CHECKS_USERNAME, and PRIVILEGE_CHECKS_HOSTNAME
 #
 # ==== Requirements =====
-#
-# File type repo:
-# -------------------
-# R.P.F1: CHANGE REPLICATION SOURCE sets the PRIVILEGE_CHECKS_USER correctly.
-# R.P.F2: PRIVILEGE_CHECKS_USER persists after restarting the server.
-#
+
 # TABLE type repo:
 # -------------------
 # R.P.T1: CHANGE REPLICATION SOURCE sets the PRIVILEGE_CHECKS_USER correctly.
@@ -248,161 +243,10 @@ CALL mtr.add_suppression("Replica SQL for channel 'ch1': Replica failed to initi
 CREATE USER 'replication_applier'@'localhost' IDENTIFIED BY 'password';
 GRANT REPLICATION_APPLIER ON * . * TO 'replication_applier'@'localhost';
 
---echo #
---echo # TC.P.F1: CHANGE REPLICATION SOURCE sets the PRIVILEGE_CHECKS_USER correctly.
---echo #
-#  1. issue change replication source for default channel "" to set privilege_checks_user.
-STOP SLAVE;
-# NULL value is accepted
-CHANGE REPLICATION SOURCE TO SOURCE_HOST="localhost", SOURCE_PORT=10, PRIVILEGE_CHECKS_USER=NULL;
-# and NON-NULL value is accepted
-CHANGE REPLICATION SOURCE TO SOURCE_HOST="localhost", SOURCE_PORT=10, PRIVILEGE_CHECKS_USER='replication_applier'@'localhost';
-FLUSH RELAY LOGS;
-START SLAVE;
-#   2. verify that pfs table has correct PRIVILEGE_CHECKS_USER
---source $MYSQL_TMP_DIR/assert_default_channel_config_with_file_repo.inc
-#   3. also verify privlege_checks_user info in repo file relay_info.log.
---let $priv_checks_username = replication_applier
---let $priv_checks_hostname = localhost
---source $MYSQL_TMP_DIR/verify_priv_check_user_config_in_repo_file.inc
-
---echo #
---echo # TC.P.F2: PRIVILEGE_CHECKS_USER persists after restarting the server.
---echo #
-#   1. restart the slave server.
---let $rpl_server_number = 2
---let $explicit_default_wait_counter = 15000
---source include/rpl_restart_server.inc
-#   2. verify that pfs table has correct PRIVILEGE_CHECKS_USER
---source $MYSQL_TMP_DIR/assert_default_channel_config_with_file_repo.inc
---let $priv_checks_username = replication_applier
---let $priv_checks_hostname = localhost
-#   3. also verify privlege_checks_user info in repo file relay_info.log.
---source $MYSQL_TMP_DIR/verify_priv_check_user_config_in_repo_file.inc
-
-STOP SLAVE FOR CHANNEL "";
-
---echo #
---echo # TC.E.F1: privilege_checks_username has more than 32 length.
---echo #
-#      a. CHANGE REPLICATION SOURCE will result in ER_CLIENT_PRIVILEGE_CHECKS_USER_CORRUPT.
---error ER_WRONG_STRING_LENGTH
-CHANGE REPLICATION SOURCE TO SOURCE_HOST="localhost", SOURCE_PORT=10, PRIVILEGE_CHECKS_USER='repli_priv_checks_user_more_than_32'@'localhost' FOR CHANNEL "";
-#      b. server start will result in ER_LOG_WARN_PRIVILEGE_CHECKS_USER_CORRUPT.
---let $debug_point = simulate_priv_check_username_above_limit
---let $slave_server_num = 2
---source $MYSQL_TMP_DIR/restart_slave_with_debug_point.inc
---source $MYSQL_TMP_DIR/assert_default_channel_invalid_config_with_file_repo.inc
---source include/remove_debug_point.inc
-#      c. SLAVE START will result in failure due to invalid config.
---error ER_REPLICA_AM_INIT_REPOSITORY
-START SLAVE FOR CHANNEL "";
-
-# Restore the correct channel config after error test case.
-RESET SLAVE FOR CHANNEL "";
+STOP REPLICA FOR CHANNEL "";
 CHANGE REPLICATION SOURCE TO SOURCE_HOST="localhost", SOURCE_PORT=10, PRIVILEGE_CHECKS_USER='replication_applier'@'localhost';
 
---echo #
---echo # TC.E.F2: privilege_checks_hostname has more than 255 length.
---echo #
-#      a. CHANGE REPLICATION SOURCE will result in ER_CLIENT_PRIVILEGE_CHECKS_USER_CORRUPT.
---error ER_WRONG_STRING_LENGTH
-CHANGE REPLICATION SOURCE TO SOURCE_HOST="localhost", SOURCE_PORT=12, PRIVILEGE_CHECKS_USER='replication_applier'@'replication_privilege_checks_hostname_more_than_255_replication_privilege_checks_hostname_more_than_255_replication_privilege_checks_hostname_more_than_255_replication_privilege_checks_hostname_more_than_255_replication_privilege_checks_hostname_more_than255' FOR CHANNEL "" ;
-#      b. server start will result in ER_LOG_WARN_PRIVILEGE_CHECKS_USER_CORRUPT.
---let $debug_point = simulate_priv_check_hostname_above_limit
---source $MYSQL_TMP_DIR/restart_slave_with_debug_point.inc
---source $MYSQL_TMP_DIR/assert_default_channel_invalid_config_with_file_repo.inc
---source include/remove_debug_point.inc
-#      c. SLAVE START will result in failure due to invalid config.
---error ER_REPLICA_AM_INIT_REPOSITORY
-START SLAVE FOR CHANNEL "";
-
---let $debug_point =
-# Restore the correct channel config after error test case.
-RESET SLAVE FOR CHANNEL "";
-CHANGE REPLICATION SOURCE TO SOURCE_HOST="localhost", SOURCE_PORT=10, PRIVILEGE_CHECKS_USER='replication_applier'@'localhost';
-
---echo #
---echo # TC.E.F3: privilege_checks_hostname has @.
---echo #
-#      a. CHANGE REPLICATION SOURCE will result in ER_UNKNOWN_ERROR.
---error ER_UNKNOWN_ERROR
-CHANGE REPLICATION SOURCE TO SOURCE_HOST="localhost", SOURCE_PORT=12, PRIVILEGE_CHECKS_USER='replication_applier'@'l@calhost' FOR CHANNEL "" ;
-#      b. server start will result in ER_LOG_WARN_PRIVILEGE_CHECKS_USER_CORRUPT.
---let $sub_testcase = host_name_has_@
---let $slave_server_num = 2
---let $rpl_server_restart_parameters = --skip_replica_start
---source extra/rpl_tests/restart_slave_with_custom_relaylog_repo_file.inc
---let $priv_checks_username = replication_applier
---let $priv_checks_hostname = l@calhost
---source $MYSQL_TMP_DIR/verify_priv_check_user_config_in_repo_file.inc
---source $MYSQL_TMP_DIR/assert_default_channel_invalid_config_with_file_repo.inc
-#      c. SLAVE START will result in failure due to invalid config.
---error ER_REPLICA_AM_INIT_REPOSITORY
-START SLAVE FOR CHANNEL "";
-
-# Restore the correct channel config after error test case.
-RESET SLAVE FOR CHANNEL "";
-CHANGE REPLICATION SOURCE TO SOURCE_HOST="localhost", SOURCE_PORT=10, PRIVILEGE_CHECKS_USER='replication_applier'@'localhost';
-
---echo #
---echo # TC.E.F5. privilege_checks_username is anonymous.
---echo #
-#      a. CHANGE REPLICATION SOURCE will result in ER_CLIENT_PRIVILEGE_CHECKS_USER_CANNOT_BE_ANONYMOUS.
---error ER_CLIENT_PRIVILEGE_CHECKS_USER_CANNOT_BE_ANONYMOUS
-CHANGE REPLICATION SOURCE TO SOURCE_HOST="localhost", SOURCE_PORT=12, PRIVILEGE_CHECKS_USER=''@'localhost' FOR CHANNEL "" ;
-#      b. server start will result in ER_LOG_WARN_PRIVILEGE_CHECKS_USER_CORRUPT.
---let $sub_testcase = anonymous_user
---let $slave_server_num = 2
---let $rpl_server_restart_parameters = --skip_replica_start
---source extra/rpl_tests/restart_slave_with_custom_relaylog_repo_file.inc
---source $MYSQL_TMP_DIR/assert_default_channel_invalid_config_with_file_repo.inc
-#      c. SLAVE START will result in failure due to invalid config.
---error ER_REPLICA_AM_INIT_REPOSITORY
-START SLAVE FOR CHANNEL "";
-
-# Restore the correct channel config after error test case.
-RESET SLAVE FOR CHANNEL "";
-CHANGE REPLICATION SOURCE TO SOURCE_HOST="localhost", SOURCE_PORT=10, PRIVILEGE_CHECKS_USER='replication_applier'@'localhost';
-
---echo #
---echo # TC.E.F6. privilege_checks_user is a non existent user.
---echo #
-#      a. CHANGE REPLICATION SOURCE will result in
-#         ER_CLIENT_PRIVILEGE_CHECKS_USER_DOES_NOT_EXIST.
---error ER_CLIENT_PRIVILEGE_CHECKS_USER_DOES_NOT_EXIST
-CHANGE REPLICATION SOURCE TO SOURCE_HOST="localhost", SOURCE_PORT=12, PRIVILEGE_CHECKS_USER='replication_applier_nonexist'@'localhost' FOR CHANNEL "" ;
-#      b. server start will result in
-#         ER_LOG_WARN_PRIVILEGE_CHECKS_USER_DOES_NOT_EXIST.
---let $sub_testcase = nonexist_user
---let $slave_server_num = 2
---let $rpl_server_restart_parameters = --skip_replica_start
---source extra/rpl_tests/restart_slave_with_custom_relaylog_repo_file.inc
---let $priv_checks_username = replication_applier_nonexist
---let $priv_checks_hostname = localhost
---source $MYSQL_TMP_DIR/verify_priv_check_user_config_in_repo_file.inc
---source $MYSQL_TMP_DIR/assert_default_channel_invalid_config_with_file_repo.inc
-#      c. SLAVE START will result in failure due to invalid config.
---error ER_REPLICA_AM_INIT_REPOSITORY
-START SLAVE FOR CHANNEL "";
-
-# Restore the correct channel config after error test case.
-RESET SLAVE FOR CHANNEL "";
-CHANGE REPLICATION SOURCE TO SOURCE_HOST="localhost", SOURCE_PORT=10, PRIVILEGE_CHECKS_USER='replication_applier'@'localhost';
-
---let $assert_text = Found 4 warning in the error log
---let $assert_file = $MYSQLTEST_VARDIR/tmp/rpl_log_info_repository_persistence.2.err
---let $assert_select = \[Warning\] \[[^]]*\] \[Repl\] Replica SQL for channel '': Invalid, corrupted PRIVILEGE_CHECKS_USER was found.*
---let $assert_count = 4
---source include/assert_grep.inc
-
---let $assert_text = Found 1 warning in the error log
---let $assert_file = $MYSQLTEST_VARDIR/tmp/rpl_log_info_repository_persistence.2.err
---let $assert_select = \[Warning\] \[[^]]*\] \[Repl\] Replica SQL for channel '': PRIVILEGE_CHECKS_USER for replication channel '' was set to `replication_applier_nonexist`@`localhost`, but this is not an existing user
---let $assert_count = 1
---source include/assert_grep.inc
-
-# Restart the slave with relay-log-info-repository=TABLE
+# Restart the replica
 # The debug point tests the execution flow where isn't nullptr
 # that is being passed to set_info but a variable with nullptr value.
 --echo #
