@@ -187,7 +187,7 @@ if ($conflict_test)
 SET @@GLOBAL.DEBUG=@debug_save;
 
 --let $rpl_connection_name= $local_server_connection2
---source include/rpl_connection.inc
+--source include/connection.inc
 SET DEBUG_SYNC='RESET';
 
 --echo ############################################################
