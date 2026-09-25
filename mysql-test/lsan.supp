@@ -44,10 +44,12 @@ leak:/usr/bin/python3.8
 leak:/usr/bin/python3.9
 leak:/usr/bin/python3.10
 leak:/usr/bin/python3.11
+leak:/usr/bin/python3.12
+leak:/usr/bin/dd
 leak:/usr/bin/grep
 leak:/usr/bin/ps
 leak:/usr/bin/*g++-*
-leak:/usr/lib/*cc1plus
+leak:/usr/*/cc1plus
 leak:/lib/*libbfd-*-system.so
 leak:/usr/bin/*ld.bfd
 leak:/usr/lib/*collect2
@@ -97,3 +99,7 @@ leak:ndb_sign_keys
 # Originally reported in "Bug#37977799 Memory leak issue with
 #   router.app_specific_metadata_v_latest test on asan build"
 leak:Source*buildSource
+
+# The following line is needed to suppress memory leaks coming from standard /usr/bin/grep
+# utility on Ubuntu 22.04 Jammy
+leak:re_compile_internal

@@ -105,9 +105,9 @@ def	information_schema	COLUMN_STATISTICS	HISTOGRAM	4	NULL	NO	json	NULL	NULL	NULL
 def	information_schema	COMPRESSION_DICTIONARY	DICT_VERSION	1	NULL	NO	int	NULL	NULL	10	0	NULL	NULL	NULL	int unsigned			select			NULL
 def	information_schema	COMPRESSION_DICTIONARY	DICT_NAME	2	NULL	NO	varchar	64	256	NULL	NULL	NULL	utf8mb4	utf8mb4_general_ci	varchar(64)			select			NULL
 def	information_schema	COMPRESSION_DICTIONARY	DICT_DATA	3	NULL	NO	blob	65535	65535	NULL	NULL	NULL	NULL	NULL	blob			select			NULL
-def	information_schema	COMPRESSION_DICTIONARY_TABLES	TABLE_SCHEMA	1	NULL	NO	varchar	64	192	NULL	NULL	NULL	utf8mb3	utf8_bin	varchar(64)			select			NULL
-def	information_schema	COMPRESSION_DICTIONARY_TABLES	TABLE_NAME	2	NULL	NO	varchar	64	192	NULL	NULL	NULL	utf8mb3	utf8_bin	varchar(64)			select			NULL
-def	information_schema	COMPRESSION_DICTIONARY_TABLES	COLUMN_NAME	3	NULL	NO	varchar	64	192	NULL	NULL	NULL	utf8mb3	utf8_bin	varchar(64)			select			NULL
+def	information_schema	COMPRESSION_DICTIONARY_TABLES	TABLE_SCHEMA	1	NULL	NO	varchar	64	192	NULL	NULL	NULL	utf8mb3	utf8mb3_bin	varchar(64)			select			NULL
+def	information_schema	COMPRESSION_DICTIONARY_TABLES	TABLE_NAME	2	NULL	NO	varchar	64	192	NULL	NULL	NULL	utf8mb3	utf8mb3_bin	varchar(64)			select			NULL
+def	information_schema	COMPRESSION_DICTIONARY_TABLES	COLUMN_NAME	3	NULL	NO	varchar	64	192	NULL	NULL	NULL	utf8mb3	utf8mb3_bin	varchar(64)			select			NULL
 def	information_schema	COMPRESSION_DICTIONARY_TABLES	DICT_NAME	4	NULL	NO	varchar	64	256	NULL	NULL	NULL	utf8mb4	utf8mb4_general_ci	varchar(64)			select			NULL
 def	information_schema	ENABLED_ROLES	ROLE_NAME	1	NULL	YES	varchar	255	1020	NULL	NULL	NULL	utf8mb4	utf8mb4_0900_ai_ci	varchar(255)			select			NULL
 def	information_schema	ENABLED_ROLES	ROLE_HOST	2	NULL	YES	varchar	255	1020	NULL	NULL	NULL	utf8mb4	utf8mb4_0900_ai_ci	varchar(255)			select			NULL
@@ -341,6 +341,9 @@ def	information_schema	PROCESSLIST	COMMAND	5		NO	varchar	5	16	NULL	NULL	NULL	utf
 def	information_schema	PROCESSLIST	TIME	6		NO	int	NULL	NULL	NULL	NULL	NULL	NULL	NULL	int			select			NULL
 def	information_schema	PROCESSLIST	STATE	7		YES	varchar	21	64	NULL	NULL	NULL	utf8mb3	utf8mb3_general_ci	varchar(64)			select			NULL
 def	information_schema	PROCESSLIST	INFO	8		YES	varchar	21845	65535	NULL	NULL	NULL	utf8mb3	utf8mb3_general_ci	varchar(65535)			select			NULL
+def	information_schema	PROCESSLIST	TIME_MS	9		NO	bigint	NULL	NULL	NULL	NULL	NULL	NULL	NULL	bigint			select			NULL
+def	information_schema	PROCESSLIST	ROWS_SENT	10		NO	bigint	NULL	NULL	NULL	NULL	NULL	NULL	NULL	bigint unsigned			select			NULL
+def	information_schema	PROCESSLIST	ROWS_EXAMINED	11		NO	bigint	NULL	NULL	NULL	NULL	NULL	NULL	NULL	bigint unsigned			select			NULL
 def	information_schema	REFERENTIAL_CONSTRAINTS	CONSTRAINT_CATALOG	1	NULL	NO	varchar	64	192	NULL	NULL	NULL	utf8mb3	utf8mb3_bin	varchar(64)			select			NULL
 def	information_schema	REFERENTIAL_CONSTRAINTS	CONSTRAINT_SCHEMA	2	NULL	NO	varchar	64	192	NULL	NULL	NULL	utf8mb3	utf8mb3_bin	varchar(64)			select			NULL
 def	information_schema	REFERENTIAL_CONSTRAINTS	CONSTRAINT_NAME	3	NULL	YES	varchar	64	192	NULL	NULL	NULL	utf8mb3	utf8mb3_bin	varchar(64)			select			NULL
@@ -560,8 +563,8 @@ def	information_schema	THREAD_STATISTICS	LOST_CONNECTIONS	18		NO	bigint	NULL	NUL
 def	information_schema	THREAD_STATISTICS	ACCESS_DENIED	19		NO	bigint	NULL	NULL	NULL	NULL	NULL	NULL	NULL	bigint unsigned			select			NULL
 def	information_schema	THREAD_STATISTICS	EMPTY_QUERIES	20		NO	bigint	NULL	NULL	NULL	NULL	NULL	NULL	NULL	bigint unsigned			select			NULL
 def	information_schema	THREAD_STATISTICS	TOTAL_SSL_CONNECTIONS	21		NO	bigint	NULL	NULL	NULL	NULL	NULL	NULL	NULL	bigint unsigned			select			NULL
-def	information_schema	TRIGGERS	TRIGGER_CATALOG	1	NULL	YES	varchar	64	192	NULL	NULL	NULL	utf8mb3	utf8_bin	varchar(64)			select			NULL
-def	information_schema	TRIGGERS	TRIGGER_SCHEMA	2	NULL	YES	varchar	64	192	NULL	NULL	NULL	utf8mb3	utf8_bin	varchar(64)			select			NULL
+def	information_schema	TRIGGERS	TRIGGER_CATALOG	1	NULL	YES	varchar	64	192	NULL	NULL	NULL	utf8mb3	utf8mb3_bin	varchar(64)			select			NULL
+def	information_schema	TRIGGERS	TRIGGER_SCHEMA	2	NULL	YES	varchar	64	192	NULL	NULL	NULL	utf8mb3	utf8mb3_bin	varchar(64)			select			NULL
 def	information_schema	TRIGGERS	TRIGGER_NAME	3	NULL	NO	varchar	64	192	NULL	NULL	NULL	utf8mb3	utf8mb3_general_ci	varchar(64)			select			NULL
 def	information_schema	TRIGGERS	EVENT_MANIPULATION	4	NULL	NO	enum	6	18	NULL	NULL	NULL	utf8mb3	utf8mb3_bin	enum('INSERT','UPDATE','DELETE')			select			NULL
 def	information_schema	TRIGGERS	EVENT_OBJECT_CATALOG	5	NULL	YES	varchar	64	192	NULL	NULL	NULL	utf8mb3	utf8mb3_bin	varchar(64)			select			NULL
@@ -611,9 +614,9 @@ def	information_schema	USER_STATISTICS	LOST_CONNECTIONS	19		NO	bigint	NULL	NULL	
 def	information_schema	USER_STATISTICS	ACCESS_DENIED	20		NO	bigint	NULL	NULL	NULL	NULL	NULL	NULL	NULL	bigint unsigned			select			NULL
 def	information_schema	USER_STATISTICS	EMPTY_QUERIES	21		NO	bigint	NULL	NULL	NULL	NULL	NULL	NULL	NULL	bigint unsigned			select			NULL
 def	information_schema	USER_STATISTICS	TOTAL_SSL_CONNECTIONS	22		NO	bigint	NULL	NULL	NULL	NULL	NULL	NULL	NULL	bigint unsigned			select			NULL
-def	information_schema	VIEWS	TABLE_CATALOG	1	NULL	YES	varchar	64	192	NULL	NULL	NULL	utf8mb3	utf8_bin	varchar(64)			select			NULL
-def	information_schema	VIEWS	TABLE_SCHEMA	2	NULL	YES	varchar	64	192	NULL	NULL	NULL	utf8mb3	utf8_bin	varchar(64)			select			NULL
-def	information_schema	VIEWS	TABLE_NAME	3	NULL	YES	varchar	64	192	NULL	NULL	NULL	utf8mb3	utf8_bin	varchar(64)			select			NULL
+def	information_schema	VIEWS	TABLE_CATALOG	1	NULL	YES	varchar	64	192	NULL	NULL	NULL	utf8mb3	utf8mb3_bin	varchar(64)			select			NULL
+def	information_schema	VIEWS	TABLE_SCHEMA	2	NULL	YES	varchar	64	192	NULL	NULL	NULL	utf8mb3	utf8mb3_bin	varchar(64)			select			NULL
+def	information_schema	VIEWS	TABLE_NAME	3	NULL	YES	varchar	64	192	NULL	NULL	NULL	utf8mb3	utf8mb3_bin	varchar(64)			select			NULL
 def	information_schema	VIEWS	VIEW_DEFINITION	4	NULL	YES	longtext	4294967295	4294967295	NULL	NULL	NULL	utf8mb3	utf8mb3_bin	longtext			select			NULL
 def	information_schema	VIEWS	CHECK_OPTION	5	NULL	YES	enum	8	24	NULL	NULL	NULL	utf8mb3	utf8mb3_bin	enum('NONE','LOCAL','CASCADED')			select			NULL
 def	information_schema	VIEWS	IS_UPDATABLE	6	NULL	YES	enum	3	9	NULL	NULL	NULL	utf8mb3	utf8mb3_bin	enum('NO','YES')			select			NULL
@@ -819,9 +822,9 @@ NULL	information_schema	COLUMN_STATISTICS	HISTOGRAM	json	NULL	NULL	NULL	NULL	jso
 NULL	information_schema	COMPRESSION_DICTIONARY	DICT_VERSION	int	NULL	NULL	NULL	NULL	int unsigned
 4.0000	information_schema	COMPRESSION_DICTIONARY	DICT_NAME	varchar	64	256	utf8mb4	utf8mb4_general_ci	varchar(64)
 1.0000	information_schema	COMPRESSION_DICTIONARY	DICT_DATA	blob	65535	65535	NULL	NULL	blob
-3.0000	information_schema	COMPRESSION_DICTIONARY_TABLES	TABLE_SCHEMA	varchar	64	192	utf8mb3	utf8_bin	varchar(64)
-3.0000	information_schema	COMPRESSION_DICTIONARY_TABLES	TABLE_NAME	varchar	64	192	utf8mb3	utf8_bin	varchar(64)
-3.0000	information_schema	COMPRESSION_DICTIONARY_TABLES	COLUMN_NAME	varchar	64	192	utf8mb3	utf8_bin	varchar(64)
+3.0000	information_schema	COMPRESSION_DICTIONARY_TABLES	TABLE_SCHEMA	varchar	64	192	utf8mb3	utf8mb3_bin	varchar(64)
+3.0000	information_schema	COMPRESSION_DICTIONARY_TABLES	TABLE_NAME	varchar	64	192	utf8mb3	utf8mb3_bin	varchar(64)
+3.0000	information_schema	COMPRESSION_DICTIONARY_TABLES	COLUMN_NAME	varchar	64	192	utf8mb3	utf8mb3_bin	varchar(64)
 4.0000	information_schema	COMPRESSION_DICTIONARY_TABLES	DICT_NAME	varchar	64	256	utf8mb4	utf8mb4_general_ci	varchar(64)
 4.0000	information_schema	ENABLED_ROLES	ROLE_NAME	varchar	255	1020	utf8mb4	utf8mb4_0900_ai_ci	varchar(255)
 4.0000	information_schema	ENABLED_ROLES	ROLE_HOST	varchar	255	1020	utf8mb4	utf8mb4_0900_ai_ci	varchar(255)
@@ -1055,6 +1058,9 @@ NULL	information_schema	PROCESSLIST	ID	bigint	NULL	NULL	NULL	NULL	bigint unsigne
 NULL	information_schema	PROCESSLIST	TIME	int	NULL	NULL	NULL	NULL	int
 3.0476	information_schema	PROCESSLIST	STATE	varchar	21	64	utf8mb3	utf8mb3_general_ci	varchar(64)
 3.0000	information_schema	PROCESSLIST	INFO	varchar	21845	65535	utf8mb3	utf8mb3_general_ci	varchar(65535)
+NULL	information_schema	PROCESSLIST	TIME_MS	bigint	NULL	NULL	NULL	NULL	bigint
+NULL	information_schema	PROCESSLIST	ROWS_SENT	bigint	NULL	NULL	NULL	NULL	bigint unsigned
+NULL	information_schema	PROCESSLIST	ROWS_EXAMINED	bigint	NULL	NULL	NULL	NULL	bigint unsigned
 3.0000	information_schema	REFERENTIAL_CONSTRAINTS	CONSTRAINT_CATALOG	varchar	64	192	utf8mb3	utf8mb3_bin	varchar(64)
 3.0000	information_schema	REFERENTIAL_CONSTRAINTS	CONSTRAINT_SCHEMA	varchar	64	192	utf8mb3	utf8mb3_bin	varchar(64)
 3.0000	information_schema	REFERENTIAL_CONSTRAINTS	CONSTRAINT_NAME	varchar	64	192	utf8mb3	utf8mb3_bin	varchar(64)
@@ -1274,8 +1280,8 @@ NULL	information_schema	THREAD_STATISTICS	LOST_CONNECTIONS	bigint	NULL	NULL	NULL
 NULL	information_schema	THREAD_STATISTICS	ACCESS_DENIED	bigint	NULL	NULL	NULL	NULL	bigint unsigned
 NULL	information_schema	THREAD_STATISTICS	EMPTY_QUERIES	bigint	NULL	NULL	NULL	NULL	bigint unsigned
 NULL	information_schema	THREAD_STATISTICS	TOTAL_SSL_CONNECTIONS	bigint	NULL	NULL	NULL	NULL	bigint unsigned
-3.0000	information_schema	TRIGGERS	TRIGGER_CATALOG	varchar	64	192	utf8mb3	utf8_bin	varchar(64)
-3.0000	information_schema	TRIGGERS	TRIGGER_SCHEMA	varchar	64	192	utf8mb3	utf8_bin	varchar(64)
+3.0000	information_schema	TRIGGERS	TRIGGER_CATALOG	varchar	64	192	utf8mb3	utf8mb3_bin	varchar(64)
+3.0000	information_schema	TRIGGERS	TRIGGER_SCHEMA	varchar	64	192	utf8mb3	utf8mb3_bin	varchar(64)
 3.0000	information_schema	TRIGGERS	TRIGGER_NAME	varchar	64	192	utf8mb3	utf8mb3_general_ci	varchar(64)
 3.0000	information_schema	TRIGGERS	EVENT_MANIPULATION	enum	6	18	utf8mb3	utf8mb3_bin	enum('INSERT','UPDATE','DELETE')
 3.0000	information_schema	TRIGGERS	EVENT_OBJECT_CATALOG	varchar	64	192	utf8mb3	utf8mb3_bin	varchar(64)
@@ -1325,9 +1331,9 @@ NULL	information_schema	USER_STATISTICS	LOST_CONNECTIONS	bigint	NULL	NULL	NULL	N
 NULL	information_schema	USER_STATISTICS	ACCESS_DENIED	bigint	NULL	NULL	NULL	NULL	bigint unsigned
 NULL	information_schema	USER_STATISTICS	EMPTY_QUERIES	bigint	NULL	NULL	NULL	NULL	bigint unsigned
 NULL	information_schema	USER_STATISTICS	TOTAL_SSL_CONNECTIONS	bigint	NULL	NULL	NULL	NULL	bigint unsigned
-3.0000	information_schema	VIEWS	TABLE_CATALOG	varchar	64	192	utf8mb3	utf8_bin	varchar(64)
-3.0000	information_schema	VIEWS	TABLE_SCHEMA	varchar	64	192	utf8mb3	utf8_bin	varchar(64)
-3.0000	information_schema	VIEWS	TABLE_NAME	varchar	64	192	utf8mb3	utf8_bin	varchar(64)
+3.0000	information_schema	VIEWS	TABLE_CATALOG	varchar	64	192	utf8mb3	utf8mb3_bin	varchar(64)
+3.0000	information_schema	VIEWS	TABLE_SCHEMA	varchar	64	192	utf8mb3	utf8mb3_bin	varchar(64)
+3.0000	information_schema	VIEWS	TABLE_NAME	varchar	64	192	utf8mb3	utf8mb3_bin	varchar(64)
 1.0000	information_schema	VIEWS	VIEW_DEFINITION	longtext	4294967295	4294967295	utf8mb3	utf8mb3_bin	longtext
 3.0000	information_schema	VIEWS	CHECK_OPTION	enum	8	24	utf8mb3	utf8mb3_bin	enum('NONE','LOCAL','CASCADED')
 3.0000	information_schema	VIEWS	IS_UPDATABLE	enum	3	9	utf8mb3	utf8mb3_bin	enum('NO','YES')
