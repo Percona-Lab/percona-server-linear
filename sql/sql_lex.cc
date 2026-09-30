@@ -2319,6 +2319,7 @@ Query_expression::Query_expression(enum_parsing_context parsing_context)
 Query_block::Query_block(MEM_ROOT *mem_root, Item *where, Item *having)
     : fields(mem_root),
       ftfunc_list(&ftfunc_list_alloc),
+      vector_func_list(&vector_func_list_alloc),
       sj_nests(mem_root),
       first_context(&context),
       m_table_nest(mem_root),
@@ -2644,6 +2645,10 @@ bool Query_block::add_grouping_expr(THD *thd, Item *item) {
 
 bool Query_block::add_ftfunc_to_list(Item_func_match *func) {
   return !func || ftfunc_list->push_back(func);  // end of memory?
+}
+
+bool Query_block::add_vector_func_to_list(Item_func_vector_distance *func) {
+  return !func || vector_func_list->push_back(func);  // end of memory?
 }
 
 /**

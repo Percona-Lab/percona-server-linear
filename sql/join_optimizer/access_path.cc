@@ -291,6 +291,8 @@ TABLE *GetBasicTable(const AccessPath *path) {
       return path->pushed_join_ref().table;
     case AccessPath::FULL_TEXT_SEARCH:
       return path->full_text_search().table;
+    case AccessPath::VECTOR_SEARCH:
+      return path->vector_search().table;
     case AccessPath::CONST_TABLE:
       return path->const_table().table;
     case AccessPath::MRR:
@@ -347,6 +349,8 @@ std::string_view AccessPathTypeName(AccessPath::Type type) {
       return "PUSHED_JOIN_REF";
     case AccessPath::FULL_TEXT_SEARCH:
       return "FULL_TEXT_SEARCH";
+    case AccessPath::VECTOR_SEARCH:
+      return "VECTOR_SEARCH";
     case AccessPath::CONST_TABLE:
       return "CONST_TABLE";
     case AccessPath::MRR:
@@ -506,6 +510,7 @@ bool ShouldEnableBatchMode(AccessPath *path) {
     case AccessPath::REF_OR_NULL:
     case AccessPath::PUSHED_JOIN_REF:
     case AccessPath::FULL_TEXT_SEARCH:
+    case AccessPath::VECTOR_SEARCH:
     case AccessPath::DYNAMIC_INDEX_RANGE_SCAN:
       return true;
     case AccessPath::FILTER:
@@ -801,6 +806,13 @@ unique_ptr_destroy_only<RowIterator> CreateIteratorFromAccessPath(
         iterator = NewIterator<FullTextSearchIterator>(
             thd, mem_root, param.table, param.ref, param.ft_func,
             param.use_order, param.use_limit, examined_rows);
+        break;
+      }
+      case AccessPath::VECTOR_SEARCH: {
+        const auto &param = path->vector_search();
+        iterator = NewIterator<VectorSearchIterator>(
+            thd, mem_root, param.table, param.ref, param.item, param.limit,
+            examined_rows);
         break;
       }
       case AccessPath::CONST_TABLE: {
