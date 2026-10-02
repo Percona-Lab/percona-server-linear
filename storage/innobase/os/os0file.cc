@@ -2550,6 +2550,7 @@ dberr_t LinuxAIOHandler::poll(std::function<void(dberr_t)> &callback,
 
 #endif
 
+#ifndef UNIV_HOTBACKUP
 /** Submit buffered AIO requests on the read arrays to the kernel.
 (low level function).
 @param[in] acquire_mutex specifies whether to lock array mutex */
@@ -2565,6 +2566,7 @@ void AIO::os_aio_dispatch_read_array_submit_low(bool acquire_mutex
   }
 #endif
 }
+#endif /* !UNIV_HOTBACKUP */
 
 #if defined(LINUX_NATIVE_AIO)
 /** Submit buffered AIO requests on the array to the kernel.
@@ -2626,7 +2628,9 @@ void AIO::os_aio_dispatch_read_array_submit_low_for_array(
 
 /** Submit buffered AIO requests on the given segment to the kernel. */
 void os_aio_dispatch_read_array_submit() {
+#ifndef UNIV_HOTBACKUP
   AIO::os_aio_dispatch_read_array_submit_low(true);
+#endif /* !UNIV_HOTBACKUP */
 }
 
 #if defined(LINUX_NATIVE_AIO)
