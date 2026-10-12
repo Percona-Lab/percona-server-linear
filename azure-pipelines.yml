@@ -11,7 +11,7 @@
 #   }
 #
 # Omit templateParameters (or pass false) for the five default configs; pass
-# true for all 32. It also appears as a checkbox in the Run pipeline dialog.
+# true for all 38. It also appears as a checkbox in the Run pipeline dialog.
 parameters:
 - name: fullCI
   displayName: 'Build all configs, not just the default five'
@@ -20,10 +20,10 @@ parameters:
 
 # Queue-time parameter that narrows a run to a single toolchain, so a compiler-
 # or platform-specific fix can be verified without paying for the whole matrix
-# (a macOS-only breakage, for instance, needs two legs, not 32).
+# (a macOS-only breakage, for instance, needs two legs, not 38).
 #
 #   default   the historical behaviour: the five default configs, extended to
-#             all 32 by fullCI or by the nightly schedule.
+#             all 38 by fullCI or by the nightly schedule.
 #   all       the same as fullCI.
 #   gcc       every gcc config and nothing else.
 #   clang     every Linux clang config and nothing else.
@@ -56,6 +56,7 @@ parameters:
   - gcc-13
   - gcc-12
   - gcc-11
+  - gcc-10
   - clang-23
   - clang-22
   - clang-21
@@ -64,13 +65,15 @@ parameters:
   - clang-18
   - clang-17
   - clang-16
+  - clang-15
+  - clang-14
 
 schedules:
-- cron: "0 2 * * *"
-  displayName: Daily 2:00 AM UTC build
+- cron: "0 1 * * *"
+  displayName: Daily 1:00 AM UTC build
   branches:
     include:
-    - 9.7
+    - 8.4
 
 trigger: none
 
@@ -100,8 +103,8 @@ jobs:
     fetchDepth: 32
 
   - script: |
-      git fetch origin 9.7
-      CHANGED_FILES=$(git diff --name-only --relative --diff-filter AMR origin/9.7 -- . | tr '\n' ' ')
+      git fetch origin 8.4
+      CHANGED_FILES=$(git diff --name-only --relative --diff-filter AMR origin/8.4 -- . | tr '\n' ' ')
 
       if [ -z "${CHANGED_FILES}" ]; then
           echo --- No changed files
@@ -123,13 +126,13 @@ jobs:
     CCACHE_CPP2: 1
     CCACHE_MAXSIZE: 4G
     OS_NAME: $(Agent.OS)
-    PARENT_BRANCH: 9.7
+    PARENT_BRANCH: 8.4
     BUILD_PARAMS_TYPE: normal
 
   # Two tiers of coverage:
   #
   #   default   the five configs listed first -- built on every pull request.
-  #   extended  the remaining 27, each guarded so they are built only when the
+  #   extended  the remaining 33, each guarded so they are built only when the
   #             fullCI parameter is set (how GitHub Actions asks for a full run)
   #             or on the nightly schedule.
   #
@@ -145,16 +148,14 @@ jobs:
   #
   # The gate keys on the parameter rather than on Build.Reason because a run
   # created through the REST API reports Build.Reason=Manual -- so testing
-  # "not a pull request" would make every GitHub-Actions-queued run build all 32.
+  # "not a pull request" would make every GitHub-Actions-queued run build all 38.
   # Schedule is kept so the nightly still covers everything.
   #
   # It cannot key on the branch, which is what an earlier attempt did. Measured
-  # on a pull request from a branch whose name contained "fullci", the
-  # compile-time values are Build.SourceBranch='refs/pull/<n>/merge',
-  # Build.SourceBranchName='merge' and System.PullRequest.SourceBranch='' -- its
-  # runtime value is the branch, but expansion happens before that is set.
-  #
-  # A runtime condition cannot substitute either:
+  # on a pull request from branch PS-11473-8.4-fullci, the compile-time values
+  # are Build.SourceBranch='refs/pull/<n>/merge', Build.SourceBranchName='merge'
+  # and System.PullRequest.SourceBranch='' (its runtime value is the branch, but
+  # expansion happens before that is set). A runtime condition cannot substitute:
   # job conditions are evaluated before matrix variables are in scope, so a
   # per-leg condition lets every leg through.
   strategy:
@@ -213,7 +214,7 @@ jobs:
           BuildType: Debug
 
 
-      # clang-16 and newer compilers
+      # clang-14 and newer compilers
       ${{ if or(parameters.fullCI, eq(variables['Build.Reason'], 'Schedule'), in(parameters.targets, 'all', 'clang', 'clang-23')) }}:
         clang-23 RelWithDebInfo INVERTED [Ubuntu 24.04 Noble]:
           imageName: 'ubuntu-24.04'
@@ -331,9 +332,36 @@ jobs:
           CompilerVer: 16
           BuildType: Debug
 
+      ${{ if or(parameters.fullCI, eq(variables['Build.Reason'], 'Schedule'), in(parameters.targets, 'all', 'clang', 'clang-15')) }}:
+        clang-15 RelWithDebInfo [Ubuntu 22.04 Jammy]:
+          imageName: 'ubuntu-22.04'
+          Compiler: clang
+          CompilerVer: 15
+          BuildType: RelWithDebInfo
 
-      # gcc-11 and newer compilers
-      # (gcc-16 RelWithDebInfo and gcc-16 Debug are default configs, listed above)
+      ${{ if or(parameters.fullCI, eq(variables['Build.Reason'], 'Schedule'), in(parameters.targets, 'all', 'clang', 'clang-15')) }}:
+        clang-15 Debug [Ubuntu 22.04 Jammy]:
+          imageName: 'ubuntu-22.04'
+          Compiler: clang
+          CompilerVer: 15
+          BuildType: Debug
+
+      ${{ if or(parameters.fullCI, eq(variables['Build.Reason'], 'Schedule'), in(parameters.targets, 'all', 'clang', 'clang-14')) }}:
+        clang-14 RelWithDebInfo [Ubuntu 22.04 Jammy]:
+          imageName: 'ubuntu-22.04'
+          Compiler: clang
+          CompilerVer: 14
+          BuildType: RelWithDebInfo
+
+      ${{ if or(parameters.fullCI, eq(variables['Build.Reason'], 'Schedule'), in(parameters.targets, 'all', 'clang', 'clang-14')) }}:
+        clang-14 Debug [Ubuntu 22.04 Jammy]:
+          imageName: 'ubuntu-22.04'
+          Compiler: clang
+          CompilerVer: 14
+          BuildType: Debug
+
+
+      # gcc-10 and newer compilers
       ${{ if or(parameters.fullCI, eq(variables['Build.Reason'], 'Schedule'), in(parameters.targets, 'all', 'gcc', 'gcc-15')) }}:
         gcc-15 RelWithDebInfo [Ubuntu 24.04 Noble]:
           imageName: 'ubuntu-24.04'
@@ -402,6 +430,20 @@ jobs:
           imageName: 'ubuntu-22.04'
           Compiler: gcc
           CompilerVer: 11
+          BuildType: Debug
+
+      ${{ if or(parameters.fullCI, eq(variables['Build.Reason'], 'Schedule'), in(parameters.targets, 'all', 'gcc', 'gcc-10')) }}:
+        gcc-10 RelWithDebInfo [Ubuntu 22.04 Jammy]:
+          imageName: 'ubuntu-22.04'
+          Compiler: gcc
+          CompilerVer: 10
+          BuildType: RelWithDebInfo
+
+      ${{ if or(parameters.fullCI, eq(variables['Build.Reason'], 'Schedule'), in(parameters.targets, 'all', 'gcc', 'gcc-10')) }}:
+        gcc-10 Debug [Ubuntu 22.04 Jammy]:
+          imageName: 'ubuntu-22.04'
+          Compiler: gcc
+          CompilerVer: 10
           BuildType: Debug
 
   steps:
