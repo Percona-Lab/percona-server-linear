@@ -397,8 +397,7 @@ int Rdb_iterator_base::get(const rocksdb::Slice *key,
                               skip_wait);
   }
 
-  DBUG_EXECUTE_IF(
-      "rocksdb_return_status_corrupted",
+  DBUG_EXECUTE_IF("rocksdb_return_status_corrupted",
                   { s = rocksdb::Status::Corruption(); });
 
   return convert_get_status(*tx, s, value, skip_ttl_check);
