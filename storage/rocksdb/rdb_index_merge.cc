@@ -16,6 +16,7 @@
 
 /* This C++ file's header file */
 #include "./rdb_index_merge.h"
+#include <cinttypes>
 
 // Required for std::numeric_limits<uint32_t>::max() used in DBUG_EXECUTE_IF:
 #ifdef UNIV_DEBUG
@@ -23,8 +24,6 @@
 #endif /* UNIV_DEBUG */
 
 #include "rdb_utils.h"  // LOG_COMPONENT_TAG for includes below
-
-#include <inttypes.h>  // PRIu64
 
 /* MySQL header files */
 #include "my_systime.h"

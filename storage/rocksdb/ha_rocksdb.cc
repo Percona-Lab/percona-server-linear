@@ -43,7 +43,6 @@
 #include <vector>
 
 /* MySQL includes */
-#include <mysqld_error.h>
 #include "my_sys.h"
 #include "mysql/thread_pool_priv.h"
 #include "mysys_err.h"
@@ -9851,7 +9850,7 @@ int ha_rocksdb::index_read_map(uchar *const buf, const uchar *const key,
                                key_part_map keypart_map,
                                enum ha_rkey_function find_flag) {
   DBUG_ENTER_FUNC();
-  HA_STATISTIC_INCREMENT(ha_read_key_count);
+  ha_statistic_increment(&System_status_var::ha_read_key_count);
 
   int rc = index_read_intern(buf, key, keypart_map, find_flag);
 
@@ -10256,7 +10255,7 @@ int ha_rocksdb::index_next(uchar *const buf) {
 
   check_build_decoder();
 
-  HA_STATISTIC_INCREMENT(ha_read_next_count);
+  ha_statistic_increment(&System_status_var::ha_read_next_count);
   DBUG_RETURN(index_next_with_direction_intern(buf, true, false));
 }
 
@@ -10291,7 +10290,7 @@ int ha_rocksdb::index_prev(uchar *const buf) {
 
   check_build_decoder();
 
-  HA_STATISTIC_INCREMENT(ha_read_prev_count);
+  ha_statistic_increment(&System_status_var::ha_read_prev_count);
   DBUG_RETURN(index_next_with_direction_intern(buf, false, false));
 }
 
@@ -10461,7 +10460,7 @@ int ha_rocksdb::index_first(uchar *const buf) {
 
   check_build_decoder();
 
-  HA_STATISTIC_INCREMENT(ha_read_first_count);
+  ha_statistic_increment(&System_status_var::ha_read_first_count);
   DBUG_RETURN(index_read_intern(buf, true /* first */));
 }
 
@@ -10475,7 +10474,7 @@ int ha_rocksdb::index_last(uchar *const buf) {
 
   check_build_decoder();
 
-  HA_STATISTIC_INCREMENT(ha_read_last_count);
+  ha_statistic_increment(&System_status_var::ha_read_last_count);
   DBUG_RETURN(index_read_intern(buf, false /* first */));
 }
 
@@ -10751,7 +10750,7 @@ int ha_rocksdb::write_row(uchar *const buf) {
   assert(buf == table->record[0]);
   assert(m_lock_rows == RDB_LOCK_WRITE);
 
-  HA_STATISTIC_INCREMENT(ha_write_count);
+  ha_statistic_increment(&System_status_var::ha_write_count);
   /*
     Note: "buf == table->record[0]" is copied from innodb. I am not aware of
     any use cases where this condition is not true.
@@ -11832,7 +11831,7 @@ int ha_rocksdb::rnd_next(uchar *const buf) {
   check_build_decoder();
 
   int rc;
-  HA_STATISTIC_INCREMENT(ha_read_rnd_next_count);
+  ha_statistic_increment(&System_status_var::ha_read_rnd_next_count);
 
   /*
     Since order does not matter, the scan will occur go with natural index
@@ -12001,7 +12000,7 @@ int ha_rocksdb::delete_row(const uchar *const buf) {
 
   assert(buf == table->record[0] || buf == table->record[1]);
 
-  HA_STATISTIC_INCREMENT(ha_delete_count);
+  ha_statistic_increment(&System_status_var::ha_delete_count);
   set_last_rowkey(buf);
 
   rocksdb::Slice key_slice(m_last_rowkey.ptr(), m_last_rowkey.length());
@@ -12342,7 +12341,7 @@ int ha_rocksdb::rnd_pos(uchar *const buf, uchar *const pos) {
   int rc;
   size_t len;
 
-  HA_STATISTIC_INCREMENT(ha_read_rnd_count);
+  ha_statistic_increment(&System_status_var::ha_read_rnd_count);
   len = m_pk_descr->key_length(table,
                                rocksdb::Slice((const char *)pos, ref_length));
   if (len == size_t(-1)) {
@@ -12409,7 +12408,7 @@ int ha_rocksdb::update_row(const uchar *const old_data, uchar *const new_data) {
   */
   assert(new_data == table->record[0]);
 
-  HA_STATISTIC_INCREMENT(ha_update_count);
+  ha_statistic_increment(&System_status_var::ha_update_count);
   const int rv = update_write_row(old_data, new_data);
 
   if (rv == 0) {
@@ -14808,7 +14807,7 @@ int ha_rocksdb::fill_virtual_columns() {
     THD *const thd = my_core::thd_get_current_thd();
     int ret = handler::my_eval_gcolumn_expr(
         thd, const_cast<TABLE *>(table), &column_map,
-        const_cast<uchar *>(table->record[0]), nullptr, nullptr, false);
+        const_cast<uchar *>(table->record[0]), nullptr, nullptr);
 
     return ret;
   }
